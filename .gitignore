@@ -1,0 +1,14 @@
+.cache/
+.idea/
+.vs/
+.vscode/
+.xmake/
+build*/
+vs*/
+*.zip
+compile_commands.json
+PLAN.md
+*.ttf
+/dist/package
+/reference
+*.bin
