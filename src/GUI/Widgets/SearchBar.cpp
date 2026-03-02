@@ -10,11 +10,24 @@ namespace ESPExplorerAE
             return false;
         }
 
-        if (!ImGui::InputText(label, buffer, bufferSize)) {
-            return false;
+        bool changed = false;
+
+        if (ImGui::InputText(label, buffer, bufferSize)) {
+            changed = true;
         }
 
-        value = buffer;
-        return true;
+        ImGui::SameLine();
+        const std::string clearLabel = std::string("Clear##") + label;
+        if (ImGui::Button(clearLabel.c_str())) {
+            buffer[0] = '\0';
+            value.clear();
+            changed = true;
+        }
+
+        if (changed) {
+            value = buffer;
+        }
+
+        return changed;
     }
 }

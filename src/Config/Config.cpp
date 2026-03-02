@@ -80,6 +80,7 @@ namespace ESPExplorerAE
         settings.toggleKey = static_cast<std::uint32_t>(ini.GetLongValue("General", "iToggleKey", 0x2D));
         settings.showOnStartup = ini.GetBoolValue("General", "bShowOnStartup", false);
         settings.noPauseOnFocusLoss = ini.GetBoolValue("General", "bNoPauseOnFocusLoss", false);
+        settings.verboseLogging = ini.GetBoolValue("General", "bVerboseLogging", true);
 
         settings.fontSize = static_cast<float>(ini.GetDoubleValue("UI", "fFontSize", 16.0));
         settings.windowAlpha = static_cast<float>(ini.GetDoubleValue("UI", "fWindowAlpha", 0.95));
@@ -133,6 +134,7 @@ namespace ESPExplorerAE
         ini.SetLongValue("General", "iToggleKey", static_cast<long>(settings.toggleKey));
         ini.SetBoolValue("General", "bShowOnStartup", settings.showOnStartup);
         ini.SetBoolValue("General", "bNoPauseOnFocusLoss", settings.noPauseOnFocusLoss);
+        ini.SetBoolValue("General", "bVerboseLogging", settings.verboseLogging);
 
         ini.SetDoubleValue("UI", "fFontSize", settings.fontSize);
         ini.SetDoubleValue("UI", "fWindowAlpha", settings.windowAlpha);

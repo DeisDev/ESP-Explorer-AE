@@ -3,6 +3,7 @@
 #include "Config/Config.h"
 #include "Data/DataManager.h"
 #include "Hooks/Hooks.h"
+#include "Logging/Logger.h"
 #include "Localization/Language.h"
 
 namespace
@@ -12,6 +13,8 @@ namespace
         if (!message) {
             return;
         }
+
+        ESPExplorerAE::Logger::Verbose("Received F4SE message type " + std::to_string(message->type));
 
         switch (message->type) {
         case F4SE::MessagingInterface::kPostPostLoad:
@@ -37,13 +40,18 @@ F4SE_PLUGIN_LOAD(const F4SE::LoadInterface* a_f4se)
     }
 
     const auto& settings = ESPExplorerAE::Config::Get();
+    ESPExplorerAE::Logger::Initialize(settings.verboseLogging);
+    ESPExplorerAE::Logger::Info("Plugin load started");
+
     if (!ESPExplorerAE::Language::Load(settings.language)) {
         REX::WARN("Failed to load language file");
+        ESPExplorerAE::Logger::Warn("Failed to load language file");
     }
 
     if (const auto* messaging = F4SE::GetMessagingInterface()) {
         if (!messaging->RegisterListener(MessageHandler)) {
             REX::WARN("Failed to register F4SE messaging listener");
+            ESPExplorerAE::Logger::Warn("Failed to register F4SE messaging listener");
         }
     }
 
@@ -51,5 +59,6 @@ F4SE_PLUGIN_LOAD(const F4SE::LoadInterface* a_f4se)
     ESPExplorerAE::DataManager::Refresh();
 
     REX::INFO("ESPExplorerAE initialized");
+    ESPExplorerAE::Logger::Info("Plugin initialized");
     return true;
 }

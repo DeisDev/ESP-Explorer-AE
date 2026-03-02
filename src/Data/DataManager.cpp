@@ -1,6 +1,7 @@
 #include "Data/DataManager.h"
 
 #include "Config/Config.h"
+#include "Logging/Logger.h"
 
 #include <concepts>
 #include <cctype>
@@ -12,6 +13,7 @@
 #include <RE/T/TESObjectACTI.h>
 #include <RE/T/TESObjectARMO.h>
 #include <RE/T/TESObjectCONT.h>
+#include <RE/T/TESObjectREFR.h>
 #include <RE/T/TESObjectMISC.h>
 #include <RE/T/TESObjectSTAT.h>
 #include <RE/T/TESObjectWEAP.h>
@@ -84,8 +86,11 @@ namespace ESPExplorerAE
 
     void DataManager::Refresh()
     {
+        Logger::Verbose("Data refresh started");
+
         auto* dataHandler = RE::TESDataHandler::GetSingleton();
         if (!dataHandler) {
+            Logger::Warn("Data refresh aborted: TESDataHandler unavailable");
             return;
         }
 
@@ -93,6 +98,7 @@ namespace ESPExplorerAE
         newPlugins.reserve(dataHandler->compiledFileCollection.files.size() + dataHandler->compiledFileCollection.smallFiles.size());
 
         FormCache newCache{};
+        std::unordered_map<std::uint32_t, std::uint32_t> newPlacedReferenceCounts{};
 
         {
             const auto& [allFormsMap, allFormsLock] = RE::TESForm::GetAllForms();
@@ -104,6 +110,12 @@ namespace ESPExplorerAE
                 for (const auto& [formID, form] : *allFormsMap) {
                     if (!form || formID == 0) {
                         continue;
+                    }
+
+                    if (const auto* refr = form->As<RE::TESObjectREFR>()) {
+                        if (const auto* baseObject = refr->GetObjectReference()) {
+                            ++newPlacedReferenceCounts[baseObject->GetFormID()];
+                        }
                     }
 
                     FormEntry entry{};
@@ -377,9 +389,13 @@ namespace ESPExplorerAE
             std::unique_lock lock(dataMutex);
             plugins = std::move(newPlugins);
             formCache = std::move(newCache);
+            placedReferenceCounts = std::move(newPlacedReferenceCounts);
             counts = newCounts;
             ++dataVersion;
         }
+
+        Logger::Verbose(
+            "Data refresh finished: forms=" + std::to_string(counts.weapons + counts.armors + counts.ammo + counts.misc + counts.npcs + counts.activators + counts.containers + counts.statics + counts.furniture + counts.spells + counts.perks));
     }
 
     DataManager::DataView DataManager::GetDataView()
@@ -416,6 +432,17 @@ namespace ESPExplorerAE
     {
         std::shared_lock lock(dataMutex);
         return formCache;
+    }
+
+    std::uint32_t DataManager::GetPlacedReferenceCount(std::uint32_t formID)
+    {
+        std::shared_lock lock(dataMutex);
+        const auto it = placedReferenceCounts.find(formID);
+        if (it == placedReferenceCounts.end()) {
+            return 0;
+        }
+
+        return it->second;
     }
 
     bool DataManager::PassesFilters(RE::TESForm* form, std::string_view name, bool isPlayable)

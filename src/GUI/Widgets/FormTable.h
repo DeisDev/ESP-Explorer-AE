@@ -27,6 +27,7 @@ namespace ESPExplorerAE
             const FormTableConfig& config,
             const PrimaryAction& primaryAction,
             const QuantityAction& quantityAction = {},
-            std::unordered_set<std::uint32_t>* favorites = nullptr);
+            std::unordered_set<std::uint32_t>* favorites = nullptr,
+            bool* caseSensitiveOverride = nullptr);
     };
 }

@@ -2,7 +2,14 @@
 
 #include "Config/Config.h"
 #include "Data/DataManager.h"
+#include "GUI/Tabs/ItemBrowserTab.h"
+#include "GUI/Tabs/LogViewerTab.h"
+#include "GUI/Tabs/NPCBrowserTab.h"
+#include "GUI/Tabs/ObjectBrowserTab.h"
+#include "GUI/Tabs/PlayerTab.h"
+#include "GUI/Tabs/PluginBrowserTab.h"
 #include "GUI/Tabs/SettingsTab.h"
+#include "GUI/Tabs/SpellPerkBrowserTab.h"
 #include "GUI/Widgets/FormActions.h"
 #include "GUI/Widgets/FormTable.h"
 #include "GUI/Widgets/SearchBar.h"
@@ -29,12 +36,6 @@ namespace ESPExplorerAE
 {
     namespace
     {
-        struct ItemSortState
-        {
-            int column{ 1 };
-            bool ascending{ true };
-        };
-
         std::string pluginSearch{};
         std::string itemSearch{};
         std::string selectedPluginFilter{};
@@ -49,6 +50,10 @@ namespace ESPExplorerAE
         std::string npcSearch{};
         std::string objectSearch{};
         std::string spellPerkSearch{};
+        bool itemSearchCaseSensitive{ false };
+        bool npcSearchCaseSensitive{ false };
+        bool objectSearchCaseSensitive{ false };
+        bool spellPerkSearchCaseSensitive{ false };
 
         std::unordered_set<std::uint32_t> favoriteForms{};
         bool favoritesInitialized{ false };
@@ -187,6 +192,24 @@ namespace ESPExplorerAE
             }
 
             return changed;
+        }
+
+        std::vector<FormEntry> ApplyLocalRecordFilters(std::vector<FormEntry> entries);
+
+        void PersistListFilterSettings()
+        {
+            auto& settings = Config::GetMutable();
+            settings.listShowPlayable = showPlayableRecords;
+            settings.listShowNonPlayable = showNonPlayableRecords;
+            settings.listShowNamed = showNamedRecords;
+            settings.listShowUnnamed = showUnnamedRecords;
+            settings.listShowDeleted = showDeletedRecords;
+            Config::Save();
+        }
+
+        std::vector<FormEntry> ApplyLocalRecordFiltersForTabs(std::vector<FormEntry> entries)
+        {
+            return ApplyLocalRecordFilters(std::move(entries));
         }
 
         void EnsureFavoritesLoaded()
@@ -549,64 +572,16 @@ namespace ESPExplorerAE
 
         void DrawPlayerTab(const FormCache& cache)
         {
-            if (ImGui::Button(L("Player", "sRefillHealth", "Refill Health"))) {
-                FormActions::ExecuteConsoleCommand("player.resethealth");
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button(playerGodModeEnabled ? L("Player", "sGodModeOff", "Godmode: ON") : L("Player", "sGodModeOn", "Godmode: OFF"))) {
-                FormActions::ExecuteConsoleCommand("tgm");
-                playerGodModeEnabled = !playerGodModeEnabled;
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button(playerNoClipEnabled ? L("Player", "sNoClipOff", "Noclip: ON") : L("Player", "sNoClipOn", "Noclip: OFF"))) {
-                FormActions::ExecuteConsoleCommand("tcl");
-                playerNoClipEnabled = !playerNoClipEnabled;
-            }
-
-            ImGui::Separator();
-
-            ImGui::SetNextItemWidth(160.0f);
-            ImGui::InputInt(L("Player", "sCurrentWeaponAmmo", "Current Weapon Ammo"), &playerCurrentWeaponAmmoAmount, 10, 100);
-            if (playerCurrentWeaponAmmoAmount < 1) {
-                playerCurrentWeaponAmmoAmount = 1;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(L("Player", "sAddCurrentAmmo", "Add Ammo For Held Weapon"))) {
-                FormActions::AddAmmoForCurrentWeapon(static_cast<std::uint32_t>(playerCurrentWeaponAmmoAmount));
-            }
-
-            ImGui::SetNextItemWidth(160.0f);
-            ImGui::InputInt(L("Player", "sAllAmmoCount", "All Ammo Count"), &playerAllAmmoAmount, 10, 100);
-            if (playerAllAmmoAmount < 1) {
-                playerAllAmmoAmount = 1;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(L("Player", "sAddAllAmmo", "Add All Ammo Types"))) {
-                for (const auto& ammo : cache.ammo) {
-                    FormActions::GiveToPlayer(ammo.formID, static_cast<std::uint32_t>(playerAllAmmoAmount));
-                }
-            }
-
-            ImGui::Separator();
-
-            if (ImGui::Button(L("Player", "sAddStimpak", "Add Stimpaks"))) {
-                FormEntry entry{};
-                entry.formID = FormActions::kStimpakFormID;
-                entry.name = L("Player", "sItemStimpak", "Stimpak");
-                entry.category = "Aid";
-                OpenItemGrantPopup(entry);
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button(L("Player", "sAddLockpick", "Add Lockpicks"))) {
-                FormEntry entry{};
-                entry.formID = FormActions::kLockpickFormID;
-                entry.name = L("Player", "sItemLockpick", "Lockpick");
-                entry.category = "Misc";
-                OpenItemGrantPopup(entry);
-            }
+            PlayerTab::Draw(
+                cache,
+                playerGodModeEnabled,
+                playerNoClipEnabled,
+                playerCurrentWeaponAmmoAmount,
+                playerAllAmmoAmount,
+                [](const FormEntry& entry) {
+                    OpenItemGrantPopup(entry);
+                },
+                L);
         }
 
         bool CanGiveFromTreeCategory(std::string_view category)
@@ -817,591 +792,52 @@ namespace ESPExplorerAE
 
         void DrawPluginBrowser(const std::vector<PluginInfo>& plugins, const FormCache& cache, std::uint64_t dataVersion)
         {
-            bool listFilterSettingsChanged = false;
-
-            if (ImGui::InputText(L("PluginBrowser", "sSearch", "Plugin Search"), pluginSearchBuffer, sizeof(pluginSearchBuffer))) {
-                pluginSearch = pluginSearchBuffer;
-            }
-            ImGui::SameLine();
-
-            if (ImGui::Button(L("PluginBrowser", "sClearFilter", "Clear Plugin Filter"))) {
-                selectedPluginFilter.clear();
-            }
-
-            if (!selectedPluginFilter.empty()) {
-                ImGui::SameLine();
-                ImGui::Text("%s: %s", L("PluginBrowser", "sActiveFilter", "Active"), selectedPluginFilter.c_str());
-            }
-
-            if (DrawLocalizedFilterToggles("PluginBrowser")) {
-                listFilterSettingsChanged = true;
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Checkbox(L("PluginBrowser", "sShowUnknownCategories", "Show Unknown Categories"), &showUnknownCategories)) {
-                listFilterSettingsChanged = true;
-            }
-
-            ImGui::SameLine();
-            ImGui::Checkbox(L("PluginBrowser", "sGlobalSearch", "Global Search"), &pluginGlobalSearchMode);
-            ImGui::SameLine();
-            ImGui::Checkbox(L("PluginBrowser", "sCaseSensitiveSearch", "Case Sensitive"), &pluginSearchCaseSensitive);
-
-            if (listFilterSettingsChanged) {
-                auto& settings = Config::GetMutable();
-                settings.listShowPlayable = showPlayableRecords;
-                settings.listShowNonPlayable = showNonPlayableRecords;
-                settings.listShowNamed = showNamedRecords;
-                settings.listShowUnnamed = showUnnamedRecords;
-                settings.listShowDeleted = showDeletedRecords;
-                Config::Save();
-            }
-
-            const bool needsCacheRebuild =
-                pluginBrowserCacheVersion != dataVersion ||
-                pluginBrowserCacheSearch != pluginSearch ||
-                pluginBrowserCacheSelectedPlugin != selectedPluginFilter ||
-                pluginBrowserCacheShowPlayable != showPlayableRecords ||
-                pluginBrowserCacheShowNonPlayable != showNonPlayableRecords ||
-                pluginBrowserCacheShowNamed != showNamedRecords ||
-                pluginBrowserCacheShowUnnamed != showUnnamedRecords ||
-                pluginBrowserCacheShowDeleted != showDeletedRecords ||
-                pluginBrowserCacheShowUnknown != showUnknownCategories ||
-                pluginBrowserCacheGlobalSearchMode != pluginGlobalSearchMode ||
-                pluginBrowserCacheSearchCaseSensitive != pluginSearchCaseSensitive;
-
-            if (needsCacheRebuild) {
-                pluginBrowserGroupedRecordsCache.clear();
-                pluginBrowserGroupedRecordsCache.reserve(plugins.size());
-                pluginBrowserGlobalSearchResultsCache.clear();
-                pluginBrowserGlobalSearchResultsCache.reserve(cache.allRecords.size());
-
-                for (const auto& entry : cache.allRecords) {
-                    if (!PassesLocalRecordFilters(entry)) {
-                        continue;
-                    }
-
-                    if (!showUnknownCategories && entry.sourcePlugin.empty()) {
-                        continue;
-                    }
-
-                    if (!showUnknownCategories && IsUnknownCategory(entry.category)) {
-                        continue;
-                    }
-
-                    const std::string pluginName = entry.sourcePlugin.empty() ? std::string(L("General", "sUnknown", "<Unknown>")) : entry.sourcePlugin;
-
-                    const bool searchMatches = MatchesPluginSearch(entry, pluginSearch, pluginSearchCaseSensitive);
-
-                    if (pluginGlobalSearchMode && !pluginSearch.empty() && searchMatches) {
-                        pluginBrowserGlobalSearchResultsCache.push_back(&entry);
-                    }
-
-                    if (!pluginGlobalSearchMode && !selectedPluginFilter.empty() && pluginName != selectedPluginFilter) {
-                        continue;
-                    }
-
-                    if (!pluginSearch.empty() && !searchMatches) {
-                        continue;
-                    }
-
-                    pluginBrowserGroupedRecordsCache[pluginName][entry.category].push_back(&entry);
+            PluginBrowserTabContext context{
+                .pluginSearch = pluginSearch,
+                .pluginSearchBuffer = pluginSearchBuffer,
+                .pluginSearchBufferSize = sizeof(pluginSearchBuffer),
+                .selectedPluginFilter = selectedPluginFilter,
+                .showPlayableRecords = showPlayableRecords,
+                .showNonPlayableRecords = showNonPlayableRecords,
+                .showNamedRecords = showNamedRecords,
+                .showUnnamedRecords = showUnnamedRecords,
+                .showDeletedRecords = showDeletedRecords,
+                .showUnknownCategories = showUnknownCategories,
+                .pluginGlobalSearchMode = pluginGlobalSearchMode,
+                .pluginSearchCaseSensitive = pluginSearchCaseSensitive,
+                .favoriteForms = favoriteForms,
+                .selectedPluginTreeRecordFormID = selectedPluginTreeRecordFormID,
+                .recentPluginRecordFormIDs = recentPluginRecordFormIDs,
+                .pluginBrowserCacheVersion = pluginBrowserCacheVersion,
+                .pluginBrowserCacheSearch = pluginBrowserCacheSearch,
+                .pluginBrowserCacheSelectedPlugin = pluginBrowserCacheSelectedPlugin,
+                .pluginBrowserCacheShowPlayable = pluginBrowserCacheShowPlayable,
+                .pluginBrowserCacheShowNonPlayable = pluginBrowserCacheShowNonPlayable,
+                .pluginBrowserCacheShowNamed = pluginBrowserCacheShowNamed,
+                .pluginBrowserCacheShowUnnamed = pluginBrowserCacheShowUnnamed,
+                .pluginBrowserCacheShowDeleted = pluginBrowserCacheShowDeleted,
+                .pluginBrowserCacheShowUnknown = pluginBrowserCacheShowUnknown,
+                .pluginBrowserCacheGlobalSearchMode = pluginBrowserCacheGlobalSearchMode,
+                .pluginBrowserCacheSearchCaseSensitive = pluginBrowserCacheSearchCaseSensitive,
+                .pluginBrowserGroupedRecordsCache = pluginBrowserGroupedRecordsCache,
+                .pluginBrowserOrderedPluginsCache = pluginBrowserOrderedPluginsCache,
+                .pluginBrowserGlobalSearchResultsCache = pluginBrowserGlobalSearchResultsCache,
+                .localize = L,
+                .persistListFilters = []() {
+                    PersistListFilterSettings();
+                },
+                .openItemGrantPopup = [](const FormEntry& entry) {
+                    OpenItemGrantPopup(entry);
+                },
+                .openGlobalValuePopup = [](std::uint32_t formID) {
+                    OpenGlobalValuePopup(formID);
+                },
+                .requestActionConfirmation = [](std::string title, std::string message, std::function<void()> callback) {
+                    RequestActionConfirmation(std::move(title), std::move(message), std::move(callback));
                 }
+            };
 
-                pluginBrowserOrderedPluginsCache.clear();
-                pluginBrowserOrderedPluginsCache.reserve(pluginBrowserGroupedRecordsCache.size());
-                std::unordered_set<std::string> seenPlugins{};
-                seenPlugins.reserve(pluginBrowserGroupedRecordsCache.size());
-
-                for (const auto& plugin : plugins) {
-                    if (pluginBrowserGroupedRecordsCache.contains(plugin.filename)) {
-                        pluginBrowserOrderedPluginsCache.push_back(plugin.filename);
-                        seenPlugins.insert(plugin.filename);
-                    }
-                }
-
-                for (const auto& [pluginName, _] : pluginBrowserGroupedRecordsCache) {
-                    if (!seenPlugins.contains(pluginName)) {
-                        pluginBrowserOrderedPluginsCache.push_back(pluginName);
-                    }
-                }
-
-                pluginBrowserCacheVersion = dataVersion;
-                pluginBrowserCacheSearch = pluginSearch;
-                pluginBrowserCacheSelectedPlugin = selectedPluginFilter;
-                pluginBrowserCacheShowPlayable = showPlayableRecords;
-                pluginBrowserCacheShowNonPlayable = showNonPlayableRecords;
-                pluginBrowserCacheShowNamed = showNamedRecords;
-                pluginBrowserCacheShowUnnamed = showUnnamedRecords;
-                pluginBrowserCacheShowDeleted = showDeletedRecords;
-                pluginBrowserCacheShowUnknown = showUnknownCategories;
-                pluginBrowserCacheGlobalSearchMode = pluginGlobalSearchMode;
-                pluginBrowserCacheSearchCaseSensitive = pluginSearchCaseSensitive;
-            }
-
-            const float leftWidth = ImGui::GetContentRegionAvail().x * 0.58f;
-
-            if (ImGui::BeginChild("PluginTreeLeft", ImVec2(leftWidth, 0.0f), ImGuiChildFlags_Borders)) {
-                auto drawRecordSelectable = [&](const FormEntry& record, std::string_view idPrefix) {
-                    const auto* displayName = record.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : record.name.c_str();
-                    char recordLabel[512]{};
-                    std::snprintf(recordLabel, sizeof(recordLabel), "%s [%08X]##%s%08X", displayName, record.formID, std::string(idPrefix).c_str(), record.formID);
-                    const bool isSelected = selectedPluginTreeRecordFormID == record.formID;
-                    if (ImGui::Selectable(recordLabel, isSelected)) {
-                        selectedPluginTreeRecordFormID = record.formID;
-                        TrackRecentRecord(record.formID);
-                    }
-                };
-
-                if (pluginGlobalSearchMode && !pluginSearch.empty() && ImGui::CollapsingHeader(L("PluginBrowser", "sGlobalSearchResults", "Global Search Results"), ImGuiTreeNodeFlags_DefaultOpen)) {
-                    for (const auto* record : pluginBrowserGlobalSearchResultsCache) {
-                        if (!record) {
-                            continue;
-                        }
-                        drawRecordSelectable(*record, "GlobalResult");
-                    }
-                }
-
-                if (ImGui::CollapsingHeader(L("General", "sFavorites", "Favorites"), ImGuiTreeNodeFlags_DefaultOpen)) {
-                    for (const auto& entry : cache.allRecords) {
-                        if (!favoriteForms.contains(entry.formID)) {
-                            continue;
-                        }
-                        if (!PassesLocalRecordFilters(entry)) {
-                            continue;
-                        }
-                        if (!showUnknownCategories && (entry.sourcePlugin.empty() || IsUnknownCategory(entry.category))) {
-                            continue;
-                        }
-                        if (!pluginSearch.empty() && !MatchesPluginSearch(entry, pluginSearch, pluginSearchCaseSensitive)) {
-                            continue;
-                        }
-
-                        drawRecordSelectable(entry, "FavoriteRecord");
-                    }
-                }
-
-                if (ImGui::CollapsingHeader(L("PluginBrowser", "sRecentRecords", "Recent Records"), ImGuiTreeNodeFlags_DefaultOpen)) {
-                    for (const auto recentFormID : recentPluginRecordFormIDs) {
-                        const auto* recentEntry = FindRecordByFormID(cache, recentFormID);
-                        if (!recentEntry) {
-                            continue;
-                        }
-                        if (!PassesLocalRecordFilters(*recentEntry)) {
-                            continue;
-                        }
-                        if (!showUnknownCategories && (recentEntry->sourcePlugin.empty() || IsUnknownCategory(recentEntry->category))) {
-                            continue;
-                        }
-                        if (!pluginSearch.empty() && !MatchesPluginSearch(*recentEntry, pluginSearch, pluginSearchCaseSensitive)) {
-                            continue;
-                        }
-
-                        drawRecordSelectable(*recentEntry, "RecentRecord");
-                    }
-                }
-
-                ImGui::Separator();
-
-                for (const auto& pluginName : pluginBrowserOrderedPluginsCache) {
-                    auto pluginIt = pluginBrowserGroupedRecordsCache.find(pluginName);
-                    if (pluginIt == pluginBrowserGroupedRecordsCache.end()) {
-                        continue;
-                    }
-
-                    std::size_t totalRecords = 0;
-                    for (const auto& [_, list] : pluginIt->second) {
-                        totalRecords += list.size();
-                    }
-
-                    const std::string pluginLabel = pluginName + " (" + std::to_string(totalRecords) + ")";
-                    if (ImGui::TreeNode(pluginLabel.c_str())) {
-                        if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
-                            selectedPluginFilter = pluginName;
-                        }
-
-                        std::vector<std::string> categories;
-                        categories.reserve(pluginIt->second.size());
-                        for (const auto& [category, _] : pluginIt->second) {
-                            categories.push_back(category);
-                        }
-                        std::ranges::sort(categories);
-
-                        for (const auto& category : categories) {
-                            auto categoryIt = pluginIt->second.find(category);
-                            if (categoryIt == pluginIt->second.end()) {
-                                continue;
-                            }
-
-                            const auto displayCategory = CategoryDisplayName(category);
-                            std::string categoryLabel{};
-                            if (displayCategory == category) {
-                                categoryLabel = std::string(displayCategory) + " (" + std::to_string(categoryIt->second.size()) + ")";
-                            } else {
-                                categoryLabel = std::string(displayCategory) + " [" + category + "] (" + std::to_string(categoryIt->second.size()) + ")";
-                            }
-                            ImGui::PushStyleColor(ImGuiCol_Text, CategoryColor(category));
-                            if (ImGui::TreeNode(categoryLabel.c_str())) {
-                                for (const auto* record : categoryIt->second) {
-                                    if (!record) {
-                                        continue;
-                                    }
-
-                                    const auto* displayName = record->name.empty() ? L("General", "sUnnamed", "<Unnamed>") : record->name.c_str();
-                                    char recordLabel[512]{};
-                                    std::snprintf(recordLabel, sizeof(recordLabel), "%s [%08X]##TreeRecord%08X", displayName, record->formID, record->formID);
-
-                                    const bool isSelected = selectedPluginTreeRecordFormID == record->formID;
-                                    if (ImGui::Selectable(recordLabel, isSelected)) {
-                                        selectedPluginTreeRecordFormID = record->formID;
-                                        TrackRecentRecord(record->formID);
-                                    }
-
-                                    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && CanGiveFromTreeCategory(record->category)) {
-                                        OpenItemGrantPopup(*record);
-                                    }
-                                }
-
-                                ImGui::TreePop();
-                            }
-                            ImGui::PopStyleColor();
-                        }
-
-                        ImGui::TreePop();
-                    }
-                }
-            }
-            ImGui::EndChild();
-
-            ImGui::SameLine();
-
-            if (ImGui::BeginChild("PluginTreeDetails", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders)) {
-                const FormEntry* selectedRecord = nullptr;
-                if (selectedPluginTreeRecordFormID != 0) {
-                    for (const auto& entry : cache.allRecords) {
-                        if (entry.formID == selectedPluginTreeRecordFormID) {
-                            selectedRecord = &entry;
-                            break;
-                        }
-                    }
-                }
-
-                if (!selectedRecord) {
-                    ImGui::TextUnformatted(L("PluginBrowser", "sSelectRecordHint", "Select a record to view details."));
-                } else {
-                    ImGui::TextUnformatted(selectedRecord->name.empty() ? L("General", "sUnnamed", "<Unnamed>") : selectedRecord->name.c_str());
-                    ImGui::TextDisabled("%08X", selectedRecord->formID);
-                    ImGui::Separator();
-
-                    ImGui::Text("%s: %s", L("General", "sPlugin", "Plugin"), selectedRecord->sourcePlugin.c_str());
-                    const auto displayCategory = CategoryDisplayName(selectedRecord->category);
-                    if (displayCategory == selectedRecord->category) {
-                        ImGui::Text("%s: %s", L("General", "sCategory", "Category"), selectedRecord->category.c_str());
-                    } else {
-                        ImGui::Text("%s: %s [%s]", L("General", "sCategory", "Category"), displayCategory.data(), selectedRecord->category.c_str());
-                    }
-                    ImGui::Text("%s: %s", L("General", "sPlayable", "Playable"), selectedRecord->isPlayable ? L("General", "sYes", "Yes") : L("General", "sNo", "No"));
-                    ImGui::Text("%s: %s", L("General", "sDeleted", "Deleted"), selectedRecord->isDeleted ? L("General", "sYes", "Yes") : L("General", "sNo", "No"));
-
-                    auto* form = RE::TESForm::GetFormByID(selectedRecord->formID);
-                    if (form) {
-                        const auto* editorID = form->GetFormEditorID();
-                        ImGui::Text("%s: %s", L("General", "sEditorID", "EditorID"), (editorID && editorID[0] != '\0') ? editorID : L("General", "sNone", "None"));
-                        ImGui::Text("%s: %s", L("General", "sType", "Type"), form->GetFormTypeString());
-                        ImGui::Text("%s: %u", L("General", "sReferenceCount", "Reference Count"), form->GetRefCount());
-
-                        if (const auto* valueForm = form->As<RE::TESValueForm>()) {
-                            ImGui::Text("%s: %d", L("General", "sValue", "Value"), valueForm->GetFormValue());
-                        }
-
-                        if (const auto* weightForm = form->As<RE::TESWeightForm>()) {
-                            ImGui::Text("%s: %.2f", L("General", "sWeight", "Weight"), weightForm->GetFormWeight());
-                        }
-
-                        if (const auto* weaponForm = form->As<RE::TESObjectWEAP>()) {
-                            ImGui::Text("%s: %u", L("General", "sDamage", "Damage"), weaponForm->weaponData.attackDamage);
-                            if (weaponForm->weaponData.attackSeconds > 0.0f) {
-                                ImGui::Text("%s: %.2f", L("General", "sFireRate", "Fire Rate"), 1.0f / weaponForm->weaponData.attackSeconds);
-                            }
-                            if (weaponForm->weaponData.ammo) {
-                                const auto ammoFormID = weaponForm->weaponData.ammo->GetFormID();
-                                auto* ammoForm = RE::TESForm::GetFormByID(ammoFormID);
-                                std::string ammoName{};
-                                if (ammoForm) {
-                                    const auto maybeName = RE::TESFullName::GetFullName(*ammoForm);
-                                    if (!maybeName.empty()) {
-                                        ammoName = std::string(maybeName);
-                                    }
-                                }
-                                if (!ammoName.empty()) {
-                                    ImGui::Text("%s: %s", L("Items", "sAmmo", "Ammo"), ammoName.c_str());
-                                } else {
-                                    ImGui::Text("%s: %08X", L("Items", "sAmmo", "Ammo"), ammoFormID);
-                                }
-                            }
-                        }
-
-                        if (const auto* armorForm = form->As<RE::TESObjectARMO>()) {
-                            ImGui::Text("%s: %u", L("General", "sArmorRating", "Armor Rating"), armorForm->armorData.rating);
-                        }
-
-                        if (const auto* npcForm = form->As<RE::TESNPC>()) {
-                            ImGui::Text("%s: %d", L("General", "sLevel", "Level"), npcForm->GetLevel());
-                            if (const auto* raceForm = npcForm->GetFormRace()) {
-                                const auto raceName = RE::TESFullName::GetFullName(*raceForm);
-                                if (!raceName.empty()) {
-                                    const std::string raceNameString{ raceName };
-                                    ImGui::Text("%s: %s", L("General", "sRace", "Race"), raceNameString.c_str());
-                                }
-                            }
-                        }
-
-                        if (const auto* soundForm = form->As<RE::TESSound>()) {
-                            if (soundForm->descriptor) {
-                                const auto* descriptorEditorID = soundForm->descriptor->GetFormEditorID();
-                                if (descriptorEditorID && descriptorEditorID[0] != '\0') {
-                                    ImGui::Text("%s: %s", L("General", "sDescriptor", "Descriptor"), descriptorEditorID);
-                                } else {
-                                    ImGui::Text("%s: %08X", L("General", "sDescriptor", "Descriptor"), soundForm->descriptor->GetFormID());
-                                }
-                            } else {
-                                ImGui::TextDisabled("%s: %s", L("General", "sDescriptor", "Descriptor"), L("General", "sNone", "None"));
-                            }
-                        }
-
-                        if (const auto keywordForm = form->As<RE::BGSKeywordForm>()) {
-                            ImGui::Separator();
-                            ImGui::TextUnformatted(L("General", "sKeywords", "Keywords"));
-                            int displayed = 0;
-                            keywordForm->ForEachKeyword([&displayed](RE::BGSKeyword* keyword) {
-                                if (!keyword || displayed >= 40) {
-                                    return displayed >= 40 ? RE::BSContainer::ForEachResult::kStop : RE::BSContainer::ForEachResult::kContinue;
-                                }
-                                const auto text = keyword->formEditorID.c_str();
-                                ImGui::BulletText("%s", (text && text[0] != '\0') ? text : L("General", "sUnnamedKeyword", "<UnnamedKeyword>"));
-                                ++displayed;
-                                return RE::BSContainer::ForEachResult::kContinue;
-                            });
-                            if (displayed == 0) {
-                                ImGui::TextDisabled("%s", L("General", "sNoKeywords", "<No keywords>"));
-                            }
-                        }
-                    }
-
-                    ImGui::Separator();
-                    const bool canSpawn = CanSpawnFromTreeCategory(selectedRecord->category);
-                    const bool canTeleport = CanTeleportFromTreeCategory(selectedRecord->category);
-                    const bool isQuest = IsQuestCategory(selectedRecord->category);
-                    const bool isPerk = IsPerkCategory(selectedRecord->category);
-                    const bool isSpellLike = IsSpellLikeCategory(selectedRecord->category);
-                    const bool isWeather = IsWeatherCategory(selectedRecord->category);
-                    const bool isSound = IsSoundCategory(selectedRecord->category);
-                    const bool isGlobal = IsGlobalCategory(selectedRecord->category);
-                    const bool isOutfit = IsOutfitCategory(selectedRecord->category);
-                    const bool isConstructible = IsConstructibleCategory(selectedRecord->category);
-                    const bool isEquippable = selectedRecord->category == "WEAP" || selectedRecord->category == "Weapon" || selectedRecord->category == "ARMO" || selectedRecord->category == "Armor";
-
-                    const bool isFavorite = favoriteForms.contains(selectedRecord->formID);
-                    if (ImGui::Button(isFavorite ? L("General", "sRemoveFavorite", "Remove Favorite") : L("General", "sAddFavorite", "Add Favorite"))) {
-                        if (isFavorite) {
-                            favoriteForms.erase(selectedRecord->formID);
-                        } else {
-                            favoriteForms.insert(selectedRecord->formID);
-                        }
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button(L("General", "sCopyFormID", "Copy FormID"))) {
-                        FormActions::CopyFormID(selectedRecord->formID);
-                    }
-
-                    ImGui::Separator();
-
-                    bool hasActionOnRow = false;
-                    if (CanGiveFromTreeCategory(selectedRecord->category)) {
-                        if (ImGui::Button(L("Items", "sGiveItem", "Give Item"))) {
-                            OpenItemGrantPopup(*selectedRecord);
-                        }
-                        hasActionOnRow = true;
-                    }
-
-                    if (canSpawn) {
-                        if (hasActionOnRow) {
-                            ImGui::SameLine();
-                        }
-                        if (ImGui::Button(L("NPCs", "sSpawnAtPlayer", "Spawn At Player"))) {
-                            const auto formID = selectedRecord->formID;
-                            const std::string name = selectedRecord->name;
-                            RequestActionConfirmation(
-                                L("General", "sConfirmSpawnTitle", "Confirm Spawn"),
-                                std::string(L("General", "sConfirmSpawnMessage", "Spawn selected record at player?")) + "\n" + (name.empty() ? L("General", "sUnnamed", "<Unnamed>") : name),
-                                [formID]() {
-                                    FormActions::SpawnAtPlayer(formID, 1);
-                                });
-                        }
-                        hasActionOnRow = true;
-                    }
-
-                    if (isQuest) {
-                        if (hasActionOnRow) {
-                            ImGui::SameLine();
-                        }
-                        if (ImGui::Button(L("General", "sStartQuest", "Start Quest"))) {
-                            const auto formID = selectedRecord->formID;
-                            RequestActionConfirmation(
-                                L("General", "sConfirmQuestTitle", "Confirm Quest Action"),
-                                L("General", "sConfirmStartQuest", "Start selected quest?"),
-                                [formID]() {
-                                    char command[64]{};
-                                    std::snprintf(command, sizeof(command), "startquest %08X", formID);
-                                    FormActions::ExecuteConsoleCommand(command);
-                                });
-                        }
-                        ImGui::SameLine();
-                        if (ImGui::Button(L("General", "sCompleteQuest", "Complete Quest"))) {
-                            const auto formID = selectedRecord->formID;
-                            RequestActionConfirmation(
-                                L("General", "sConfirmQuestTitle", "Confirm Quest Action"),
-                                L("General", "sConfirmCompleteQuest", "Complete selected quest?"),
-                                [formID]() {
-                                    char command[64]{};
-                                    std::snprintf(command, sizeof(command), "completequest %08X", formID);
-                                    FormActions::ExecuteConsoleCommand(command);
-                                });
-                        }
-                        hasActionOnRow = true;
-                    }
-
-                    if (isPerk) {
-                        if (hasActionOnRow) {
-                            ImGui::SameLine();
-                        }
-                        if (ImGui::Button(L("General", "sAddPerk", "Add Perk"))) {
-                            FormActions::AddPerkToPlayer(selectedRecord->formID);
-                        }
-                        ImGui::SameLine();
-                        if (ImGui::Button(L("General", "sRemovePerk", "Remove Perk"))) {
-                            FormActions::RemovePerkFromPlayer(selectedRecord->formID);
-                        }
-                        hasActionOnRow = true;
-                    }
-
-                    if (isSpellLike) {
-                        if (hasActionOnRow) {
-                            ImGui::SameLine();
-                        }
-                        if (ImGui::Button(L("General", "sAddSpellEffect", "Add Spell/Effect"))) {
-                            FormActions::AddSpellToPlayer(selectedRecord->formID);
-                        }
-                        ImGui::SameLine();
-                        if (ImGui::Button(L("General", "sRemoveSpellEffect", "Remove Spell/Effect"))) {
-                            FormActions::RemoveSpellFromPlayer(selectedRecord->formID);
-                        }
-                        hasActionOnRow = true;
-                    }
-
-                    if (isWeather) {
-                        if (hasActionOnRow) {
-                            ImGui::SameLine();
-                        }
-                        if (ImGui::Button(L("General", "sSetWeather", "Set Weather"))) {
-                            const auto formID = selectedRecord->formID;
-                            RequestActionConfirmation(
-                                L("General", "sConfirmWeatherTitle", "Confirm Weather Change"),
-                                L("General", "sConfirmWeather", "Set current weather to selected weather record?"),
-                                [formID]() {
-                                    char command[64]{};
-                                    std::snprintf(command, sizeof(command), "fw %08X", formID);
-                                    FormActions::ExecuteConsoleCommand(command);
-                                });
-                        }
-                        hasActionOnRow = true;
-                    }
-
-                    if (isSound) {
-                        if (hasActionOnRow) {
-                            ImGui::SameLine();
-                        }
-                        if (ImGui::Button(L("General", "sPlaySound", "Play Sound"))) {
-                            if (const char* editorID = TryGetEditorID(selectedRecord->formID)) {
-                                std::string command = std::string("playsound ") + editorID;
-                                FormActions::ExecuteConsoleCommand(command);
-                            }
-                        }
-                        hasActionOnRow = true;
-                    }
-
-                    if (isGlobal) {
-                        if (hasActionOnRow) {
-                            ImGui::SameLine();
-                        }
-                        if (ImGui::Button(L("General", "sSetGlobal", "Set Global"))) {
-                            OpenGlobalValuePopup(selectedRecord->formID);
-                        }
-                        hasActionOnRow = true;
-                    }
-
-                    if (isOutfit) {
-                        if (hasActionOnRow) {
-                            ImGui::SameLine();
-                        }
-                        if (ImGui::Button(L("General", "sAddOutfitItems", "Add Outfit Items"))) {
-                            FormActions::AddOutfitItemsToPlayer(selectedRecord->formID);
-                        }
-                        hasActionOnRow = true;
-                    }
-
-                    if (isConstructible) {
-                        if (hasActionOnRow) {
-                            ImGui::SameLine();
-                        }
-                        if (ImGui::Button(L("General", "sAddCraftedItem", "Add Crafted Item"))) {
-                            FormActions::AddConstructedItemToPlayer(selectedRecord->formID);
-                        }
-                        hasActionOnRow = true;
-                    }
-
-                    if (isEquippable) {
-                        if (hasActionOnRow) {
-                            ImGui::SameLine();
-                        }
-                        if (ImGui::Button(L("General", "sEquipItem", "Equip Item"))) {
-                            char command[64]{};
-                            std::snprintf(command, sizeof(command), "player.equipitem %08X", selectedRecord->formID);
-                            FormActions::ExecuteConsoleCommand(command);
-                        }
-                        hasActionOnRow = true;
-                    }
-
-                    if (canTeleport) {
-                        if (hasActionOnRow) {
-                            ImGui::SameLine();
-                        }
-
-                        auto* teleportForm = RE::TESForm::GetFormByID(selectedRecord->formID);
-                        const char* editorID = teleportForm ? teleportForm->GetFormEditorID() : nullptr;
-                        const bool canUseCoc = editorID && editorID[0] != '\0';
-
-                        if (canUseCoc) {
-                            if (ImGui::Button(L("General", "sTeleportCOC", "Teleport (COC)"))) {
-                                const auto editorIDCopy = std::string(editorID);
-                                RequestActionConfirmation(
-                                    L("General", "sConfirmTeleportTitle", "Confirm Teleport"),
-                                    L("General", "sConfirmTeleport", "Teleport to selected destination?"),
-                                    [editorIDCopy]() {
-                                        std::string command = std::string("coc ") + editorIDCopy;
-                                        FormActions::ExecuteConsoleCommand(command);
-                                    });
-                            }
-                        } else {
-                            ImGui::BeginDisabled(true);
-                            ImGui::Button(L("General", "sTeleportCOC", "Teleport (COC)"));
-                            ImGui::EndDisabled();
-                        }
-                        hasActionOnRow = true;
-                    }
-                }
-            }
-            ImGui::EndChild();
+            PluginBrowserTab::Draw(plugins, cache, dataVersion, context);
         }
 
         void DrawItemTable(std::string_view tableId, std::vector<FormEntry> items)
@@ -1598,219 +1034,111 @@ namespace ESPExplorerAE
 
         void DrawItemBrowser(const FormCache& cache)
         {
-            auto& settings = Config::GetMutable();
-            bool listFilterSettingsChanged = false;
-
-            if (DrawLocalizedFilterToggles("ItemBrowser")) {
-                listFilterSettingsChanged = true;
-            }
-
-            if (listFilterSettingsChanged) {
-                settings.listShowPlayable = showPlayableRecords;
-                settings.listShowNonPlayable = showNonPlayableRecords;
-                settings.listShowNamed = showNamedRecords;
-                settings.listShowUnnamed = showUnnamedRecords;
-                settings.listShowDeleted = showDeletedRecords;
-                Config::Save();
-            }
-
-            if (ImGui::InputText(L("Items", "sSearch", "Item Search"), itemSearchBuffer, sizeof(itemSearchBuffer))) {
-                itemSearch = itemSearchBuffer;
-            }
-
-            DrawPluginFilterStatus();
-
-            if (ImGui::BeginTabBar("ItemCategories")) {
-                if (ImGui::BeginTabItem(L("Items", "sWeapons", "Weapons"))) {
-                    DrawItemTable("ItemTableWeapons", cache.weapons);
-                    ImGui::EndTabItem();
+            ItemBrowserTabContext context{
+                .selectedPluginFilter = selectedPluginFilter,
+                .itemSearch = itemSearch,
+                .itemSearchBuffer = itemSearchBuffer,
+                .itemSearchBufferSize = sizeof(itemSearchBuffer),
+                .searchCaseSensitive = itemSearchCaseSensitive,
+                .showPlayableRecords = showPlayableRecords,
+                .showNonPlayableRecords = showNonPlayableRecords,
+                .showNamedRecords = showNamedRecords,
+                .showUnnamedRecords = showUnnamedRecords,
+                .showDeletedRecords = showDeletedRecords,
+                .itemSort = itemSort,
+                .selectedItemRows = selectedItemRows,
+                .favoriteForms = favoriteForms,
+                .localize = L,
+                .drawPluginFilterStatus = []() {
+                    DrawPluginFilterStatus();
+                },
+                .persistListFilters = []() {
+                    PersistListFilterSettings();
+                },
+                .openItemGrantPopup = [](const FormEntry& entry) {
+                    OpenItemGrantPopup(entry);
+                },
+                .tryGetEditorID = [](std::uint32_t formID) {
+                    return TryGetEditorID(formID);
                 }
-                if (ImGui::BeginTabItem(L("Items", "sArmor", "Armor"))) {
-                    DrawItemTable("ItemTableArmor", cache.armors);
-                    ImGui::EndTabItem();
-                }
-                if (ImGui::BeginTabItem(L("Items", "sAmmo", "Ammo"))) {
-                    DrawItemTable("ItemTableAmmo", cache.ammo);
-                    ImGui::EndTabItem();
-                }
-                if (ImGui::BeginTabItem(L("Items", "sMisc", "Misc"))) {
-                    DrawItemTable("ItemTableMisc", cache.misc);
-                    ImGui::EndTabItem();
-                }
+            };
 
-                ImGui::EndTabBar();
-            }
+            ItemBrowserTab::Draw(cache, context);
         }
 
         void DrawNPCBrowser(const FormCache& cache)
         {
-            SearchBar::Draw(L("NPCs", "sSearch", "NPC Search"), npcSearchBuffer, sizeof(npcSearchBuffer), npcSearch);
-
-            const FormTableConfig tableConfig{
-                .tableId = "NPCTable",
-                .primaryActionLabel = L("NPCs", "sSpawnNPC", "Spawn"),
-                .quantityActionLabel = L("NPCs", "sSpawnAtPlayer", "Spawn At Player"),
-                .allowFavorites = true
-            };
-
-            FormTable::Draw(
-                ApplyLocalRecordFilters(cache.npcs),
+            NPCBrowserTab::Draw(
+                cache,
+                npcSearchBuffer,
+                sizeof(npcSearchBuffer),
                 npcSearch,
+                npcSearchCaseSensitive,
                 selectedPluginFilter,
-                tableConfig,
-                [](const FormEntry& entry) {
-                    FormActions::SpawnAtPlayer(entry.formID, 1);
+                showPlayableRecords,
+                showNonPlayableRecords,
+                showNamedRecords,
+                showUnnamedRecords,
+                showDeletedRecords,
+                favoriteForms,
+                []() {
+                    DrawPluginFilterStatus();
                 },
-                [](const FormEntry& entry, int quantity) {
-                    FormActions::SpawnAtPlayer(entry.formID, static_cast<std::uint32_t>(quantity));
+                []() {
+                    PersistListFilterSettings();
                 },
-                &favoriteForms);
+                ApplyLocalRecordFiltersForTabs,
+                L);
         }
 
         void DrawObjectBrowser(const FormCache& cache)
         {
-            SearchBar::Draw(L("Objects", "sSearch", "Object Search"), objectSearchBuffer, sizeof(objectSearchBuffer), objectSearch);
-
-            if (ImGui::BeginTabBar("ObjectCategories")) {
-                const FormTableConfig activatorConfig{
-                    .tableId = "ObjectTableActivators",
-                    .primaryActionLabel = L("Objects", "sPlace", "Place"),
-                    .quantityActionLabel = L("Objects", "sPlaceAtPlayer", "Place At Player"),
-                    .allowFavorites = true
-                };
-                const FormTableConfig containerConfig{
-                    .tableId = "ObjectTableContainers",
-                    .primaryActionLabel = L("Objects", "sPlace", "Place"),
-                    .quantityActionLabel = L("Objects", "sPlaceAtPlayer", "Place At Player"),
-                    .allowFavorites = true
-                };
-                const FormTableConfig staticConfig{
-                    .tableId = "ObjectTableStatics",
-                    .primaryActionLabel = L("Objects", "sPlace", "Place"),
-                    .quantityActionLabel = L("Objects", "sPlaceAtPlayer", "Place At Player"),
-                    .allowFavorites = true
-                };
-                const FormTableConfig furnitureConfig{
-                    .tableId = "ObjectTableFurniture",
-                    .primaryActionLabel = L("Objects", "sPlace", "Place"),
-                    .quantityActionLabel = L("Objects", "sPlaceAtPlayer", "Place At Player"),
-                    .allowFavorites = true
-                };
-
-                if (ImGui::BeginTabItem(L("Objects", "sActivators", "Activators"))) {
-                    FormTable::Draw(
-                        ApplyLocalRecordFilters(cache.activators),
-                        objectSearch,
-                        selectedPluginFilter,
-                        activatorConfig,
-                        [](const FormEntry& entry) {
-                            FormActions::PlaceAtPlayer(entry.formID, 1);
-                        },
-                        [](const FormEntry& entry, int quantity) {
-                            FormActions::PlaceAtPlayer(entry.formID, static_cast<std::uint32_t>(quantity));
-                        },
-                        &favoriteForms);
-                    ImGui::EndTabItem();
-                }
-
-                if (ImGui::BeginTabItem(L("Objects", "sContainers", "Containers"))) {
-                    FormTable::Draw(
-                        ApplyLocalRecordFilters(cache.containers),
-                        objectSearch,
-                        selectedPluginFilter,
-                        containerConfig,
-                        [](const FormEntry& entry) {
-                            FormActions::PlaceAtPlayer(entry.formID, 1);
-                        },
-                        [](const FormEntry& entry, int quantity) {
-                            FormActions::PlaceAtPlayer(entry.formID, static_cast<std::uint32_t>(quantity));
-                        },
-                        &favoriteForms);
-                    ImGui::EndTabItem();
-                }
-
-                if (ImGui::BeginTabItem(L("Objects", "sStatics", "Statics"))) {
-                    FormTable::Draw(
-                        ApplyLocalRecordFilters(cache.statics),
-                        objectSearch,
-                        selectedPluginFilter,
-                        staticConfig,
-                        [](const FormEntry& entry) {
-                            FormActions::PlaceAtPlayer(entry.formID, 1);
-                        },
-                        [](const FormEntry& entry, int quantity) {
-                            FormActions::PlaceAtPlayer(entry.formID, static_cast<std::uint32_t>(quantity));
-                        },
-                        &favoriteForms);
-                    ImGui::EndTabItem();
-                }
-
-                if (ImGui::BeginTabItem(L("Objects", "sFurniture", "Furniture"))) {
-                    FormTable::Draw(
-                        ApplyLocalRecordFilters(cache.furniture),
-                        objectSearch,
-                        selectedPluginFilter,
-                        furnitureConfig,
-                        [](const FormEntry& entry) {
-                            FormActions::PlaceAtPlayer(entry.formID, 1);
-                        },
-                        [](const FormEntry& entry, int quantity) {
-                            FormActions::PlaceAtPlayer(entry.formID, static_cast<std::uint32_t>(quantity));
-                        },
-                        &favoriteForms);
-                    ImGui::EndTabItem();
-                }
-
-                ImGui::EndTabBar();
-            }
+            ObjectBrowserTab::Draw(
+                cache,
+                objectSearchBuffer,
+                sizeof(objectSearchBuffer),
+                objectSearch,
+                objectSearchCaseSensitive,
+                selectedPluginFilter,
+                showPlayableRecords,
+                showNonPlayableRecords,
+                showNamedRecords,
+                showUnnamedRecords,
+                showDeletedRecords,
+                favoriteForms,
+                []() {
+                    DrawPluginFilterStatus();
+                },
+                []() {
+                    PersistListFilterSettings();
+                },
+                ApplyLocalRecordFiltersForTabs,
+                L);
         }
 
         void DrawSpellPerkBrowser(const FormCache& cache)
         {
-            SearchBar::Draw(L("Spells", "sSearch", "Spell/Perk Search"), spellPerkSearchBuffer, sizeof(spellPerkSearchBuffer), spellPerkSearch);
-
-            if (ImGui::BeginTabBar("SpellPerkCategories")) {
-                const FormTableConfig spellConfig{
-                    .tableId = "SpellTable",
-                    .primaryActionLabel = L("Spells", "sAddSpell", "Add Spell"),
-                    .allowFavorites = true
-                };
-                const FormTableConfig perkConfig{
-                    .tableId = "PerkTable",
-                    .primaryActionLabel = L("Spells", "sAddPerk", "Add Perk"),
-                    .allowFavorites = true
-                };
-
-                if (ImGui::BeginTabItem(L("Spells", "sSpells", "Spells"))) {
-                    FormTable::Draw(
-                        ApplyLocalRecordFilters(cache.spells),
-                        spellPerkSearch,
-                        selectedPluginFilter,
-                        spellConfig,
-                        [](const FormEntry& entry) {
-                            FormActions::AddSpellToPlayer(entry.formID);
-                        },
-                        {},
-                        &favoriteForms);
-                    ImGui::EndTabItem();
-                }
-
-                if (ImGui::BeginTabItem(L("Spells", "sPerks", "Perks"))) {
-                    FormTable::Draw(
-                        ApplyLocalRecordFilters(cache.perks),
-                        spellPerkSearch,
-                        selectedPluginFilter,
-                        perkConfig,
-                        [](const FormEntry& entry) {
-                            FormActions::AddPerkToPlayer(entry.formID);
-                        },
-                        {},
-                        &favoriteForms);
-                    ImGui::EndTabItem();
-                }
-
-                ImGui::EndTabBar();
-            }
+            SpellPerkBrowserTab::Draw(
+                cache,
+                spellPerkSearchBuffer,
+                sizeof(spellPerkSearchBuffer),
+                spellPerkSearch,
+                spellPerkSearchCaseSensitive,
+                selectedPluginFilter,
+                showPlayableRecords,
+                showNonPlayableRecords,
+                showNamedRecords,
+                showUnnamedRecords,
+                showDeletedRecords,
+                favoriteForms,
+                []() {
+                    DrawPluginFilterStatus();
+                },
+                []() {
+                    PersistListFilterSettings();
+                },
+                ApplyLocalRecordFiltersForTabs,
+                L);
         }
     }
 
@@ -1871,6 +1199,10 @@ namespace ESPExplorerAE
             std::snprintf(objectTabLabel, sizeof(objectTabLabel), "%s (%zu)###MainTabObject", L("Objects", "sBrowserTab", "Object Browser"), counts.activators + counts.containers + counts.statics + counts.furniture);
             std::snprintf(spellPerkTabLabel, sizeof(spellPerkTabLabel), "%s (%zu)###MainTabSpells", L("Spells", "sBrowserTab", "Spells & Perks"), counts.spells + counts.perks);
 
+            if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z) && FormActions::CanUndoLastAction()) {
+                FormActions::UndoLastAction();
+            }
+
             const auto& style = ImGui::GetStyle();
             const float footerHeight = ImGui::GetTextLineHeightWithSpacing() + ImGui::GetFrameHeightWithSpacing() + style.ItemSpacing.y + style.WindowPadding.y + 8.0f;
             if (ImGui::BeginChild("MainContentRegion", ImVec2(0.0f, -footerHeight), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
@@ -1926,7 +1258,6 @@ namespace ESPExplorerAE
                     if (ImGui::BeginTabItem(npcTabLabel)) {
                         activeMainTab = "NPC Browser";
                         ImGui::Text("%s: %zu", L("NPCs", "sTabName", "NPCs"), counts.npcs);
-                        DrawPluginFilterStatus();
                         DrawNPCBrowser(cache);
                         ImGui::EndTabItem();
                     }
@@ -1942,7 +1273,6 @@ namespace ESPExplorerAE
                             counts.statics,
                             L("Objects", "sFurniture", "Furniture"),
                             counts.furniture);
-                        DrawPluginFilterStatus();
                         DrawObjectBrowser(cache);
                         ImGui::EndTabItem();
                     }
@@ -1950,7 +1280,6 @@ namespace ESPExplorerAE
                     if (ImGui::BeginTabItem(spellPerkTabLabel)) {
                         activeMainTab = "Spells & Perks";
                         ImGui::Text("%s: %zu  %s: %zu", L("Spells", "sSpells", "Spells"), counts.spells, L("Spells", "sPerks", "Perks"), counts.perks);
-                        DrawPluginFilterStatus();
                         DrawSpellPerkBrowser(cache);
                         ImGui::EndTabItem();
                     }
@@ -1960,6 +1289,12 @@ namespace ESPExplorerAE
                     if (ImGui::BeginTabItem(settingsLabel)) {
                         activeMainTab = "Settings";
                         SettingsTab::Draw();
+                        ImGui::EndTabItem();
+                    }
+
+                    if (ImGui::BeginTabItem(L("Logs", "sTabName", "Logs"))) {
+                        activeMainTab = "Logs";
+                        LogViewerTab::Draw(L);
                         ImGui::EndTabItem();
                     }
 
@@ -1985,18 +1320,29 @@ namespace ESPExplorerAE
                     L("General", "sFavorites", "Favorites"),
                     favoriteForms.size());
 
-                ImGui::SameLine();
+                const float resetWidth = CalcButtonWidth(L("General", "sResetFilters", "Reset Filters"));
+                const float undoWidth = CalcButtonWidth(L("General", "sUndoLastAction", "Undo Last Action"));
+                const float actionsWidth = resetWidth + style.ItemSpacing.x + undoWidth;
+                const float actionStartX = ImGui::GetWindowContentRegionMax().x - actionsWidth;
+                if (actionStartX > ImGui::GetCursorPosX()) {
+                    ImGui::SameLine(actionStartX);
+                } else {
+                    ImGui::SameLine();
+                }
+
                 if (ImGui::Button(L("General", "sResetFilters", "Reset Filters"))) {
                     ResetQuickFilters();
                 }
-
                 ImGui::SameLine();
-                if (ImGui::Button(L("General", "sUndoLastAction", "Undo Last Action")) && FormActions::CanUndoLastAction()) {
+                const bool canUndo = FormActions::CanUndoLastAction();
+                if (!canUndo) {
+                    ImGui::BeginDisabled(true);
+                }
+                if (ImGui::Button(L("General", "sUndoLastAction", "Undo Last Action")) && canUndo) {
                     FormActions::UndoLastAction();
                 }
-
-                if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z) && FormActions::CanUndoLastAction()) {
-                    FormActions::UndoLastAction();
+                if (!canUndo) {
+                    ImGui::EndDisabled();
                 }
 
                 if (settings.showFPSInStatus) {

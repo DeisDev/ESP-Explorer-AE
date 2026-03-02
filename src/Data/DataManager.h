@@ -77,6 +77,7 @@ namespace ESPExplorerAE
         static std::vector<PluginInfo> GetPlugins();
         static FormCategoryCounts GetCounts();
         static FormCache GetFormCache();
+        static std::uint32_t GetPlacedReferenceCount(std::uint32_t formID);
 
     private:
         static bool PassesFilters(RE::TESForm* form, std::string_view name, bool isPlayable);
@@ -86,6 +87,7 @@ namespace ESPExplorerAE
 
         static inline std::vector<PluginInfo> plugins{};
         static inline FormCache formCache{};
+        static inline std::unordered_map<std::uint32_t, std::uint32_t> placedReferenceCounts{};
         static inline FormCategoryCounts counts{};
         static inline std::uint64_t dataVersion{ 0 };
         static inline std::shared_mutex dataMutex{};

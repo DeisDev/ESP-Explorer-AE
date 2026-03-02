@@ -3,6 +3,7 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <fstream>
 
 namespace ESPExplorerAE
 {
@@ -20,7 +21,20 @@ namespace ESPExplorerAE
             const ImWchar* glyphRanges,
             bool mergeMode)
         {
+            if (!atlas || atlas->Locked) {
+                return nullptr;
+            }
+
+            if (mergeMode && atlas->Fonts.empty()) {
+                return nullptr;
+            }
+
             if (!std::filesystem::exists(fontPath)) {
+                return nullptr;
+            }
+
+            std::ifstream stream(fontPath, std::ios::binary);
+            if (!stream.good()) {
                 return nullptr;
             }
 
@@ -44,6 +58,10 @@ namespace ESPExplorerAE
     bool FontManager::Build(float fontSize, std::string_view languageCode)
     {
         auto& io = ImGui::GetIO();
+        if (!io.Fonts || io.Fonts->Locked) {
+            return false;
+        }
+
         io.Fonts->Clear();
 
         const auto fontsDir = ResolveFontsDirectory();
@@ -105,7 +123,6 @@ namespace ESPExplorerAE
             AddFont(io.Fonts, notoSans, fontSize, io.Fonts->GetGlyphRangesCyrillic(), true);
         }
 
-        io.Fonts->Build();
         return font != nullptr;
     }
 }

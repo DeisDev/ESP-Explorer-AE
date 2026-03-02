@@ -3,6 +3,7 @@
 #include "Config/Config.h"
 #include "GUI/ImGuiRenderer.h"
 #include "GUI/MainWindow.h"
+#include "Logging/Logger.h"
 
 #include <RE/B/BSGraphics.h>
 
@@ -215,6 +216,7 @@ namespace ESPExplorerAE
         auto* rendererWindow = RE::BSGraphics::GetCurrentRendererWindow();
         if (!rendererWindow || !rendererWindow->swapChain) {
             REX::WARN("Renderer window not ready for Present hook");
+            Logger::Warn("Renderer window not ready for Present hook");
             return;
         }
 
@@ -231,6 +233,7 @@ namespace ESPExplorerAE
         DWORD oldProtect = 0;
         if (!VirtualProtect(&vtable[8], sizeof(void*), PAGE_EXECUTE_READWRITE, &oldProtect)) {
             REX::WARN("Failed to change vtable memory protection");
+            Logger::Error("Failed to change vtable memory protection");
             originalPresent = nullptr;
             return;
         }
@@ -241,6 +244,7 @@ namespace ESPExplorerAE
         VirtualProtect(&vtable[8], sizeof(void*), oldProtect, &restoreProtect);
 
         REX::INFO("Present hook installed");
+        Logger::Info("Present hook installed");
     }
 
     HRESULT __stdcall Hooks::PresentHook(IDXGISwapChain* swapChain, UINT syncInterval, UINT flags)
@@ -281,6 +285,7 @@ namespace ESPExplorerAE
             const auto& settings = Config::Get();
             if (wParam == settings.toggleKey) {
                 menuVisible = !menuVisible;
+                Logger::Verbose(std::string("Menu visibility toggled: ") + (menuVisible ? "visible" : "hidden"));
                 UpdateMenuInputState();
                 return 1;
             }

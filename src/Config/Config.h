@@ -10,6 +10,7 @@ namespace ESPExplorerAE
         std::uint32_t toggleKey{ 0x2D };
         bool showOnStartup{ false };
         bool noPauseOnFocusLoss{ false };
+        bool verboseLogging{ true };
         bool hideNonPlayable{ true };
         bool hideDeleted{ true };
         bool hideNoName{ true };

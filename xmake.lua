@@ -34,4 +34,4 @@ target("ESPExplorerAE")
 
     add_includedirs("lib/simpleini")
 
-    add_syslinks("d3d11", "dxgi", "d3dcompiler")
+    add_syslinks("d3d11", "dxgi", "d3dcompiler", "comdlg32")

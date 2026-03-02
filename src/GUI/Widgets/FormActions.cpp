@@ -1,5 +1,7 @@
 #include "GUI/Widgets/FormActions.h"
 
+#include "Logging/Logger.h"
+
 #include <imgui.h>
 
 #include <RE/B/BGSEquipIndex.h>
@@ -23,6 +25,7 @@ namespace ESPExplorerAE
         {
             char command[128]{};
             std::snprintf(command, sizeof(command), "player.%s %08X %u", commandName, formID, count);
+            Logger::Verbose(std::string("Execute command: ") + command);
             RE::Console::ExecuteCommand(command);
         }
 
@@ -30,6 +33,7 @@ namespace ESPExplorerAE
         {
             char command[96]{};
             std::snprintf(command, sizeof(command), "player.%s %08X", commandName, formID);
+            Logger::Verbose(std::string("Execute command: ") + command);
             RE::Console::ExecuteCommand(command);
         }
     }
@@ -39,6 +43,7 @@ namespace ESPExplorerAE
         char formIDBuffer[16]{};
         std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", formID);
         ImGui::SetClipboardText(formIDBuffer);
+        Logger::Verbose(std::string("Copied FormID: ") + formIDBuffer);
     }
 
     void FormActions::GiveToPlayer(std::uint32_t formID, std::uint32_t count)
@@ -63,6 +68,7 @@ namespace ESPExplorerAE
         }
 
         player->AddInventoryItem(object, nullptr, count, nullptr, nullptr, nullptr);
+        Logger::Verbose("Gave item to player form=" + std::to_string(formID) + " count=" + std::to_string(count));
 
         char undoCommand[128]{};
         std::snprintf(undoCommand, sizeof(undoCommand), "player.removeitem %08X %u", formID, count);
@@ -110,6 +116,7 @@ namespace ESPExplorerAE
         }
 
         GiveToPlayer(ammo->GetFormID(), ammoCount);
+        Logger::Verbose("Added ammo for current weapon count=" + std::to_string(ammoCount));
         return true;
     }
 
@@ -120,6 +127,7 @@ namespace ESPExplorerAE
         }
 
         ExecutePlayerCommand("placeatme", formID, count);
+        Logger::Verbose("Spawn at player form=" + std::to_string(formID) + " count=" + std::to_string(count));
         lastUndoCommand.clear();
     }
 
@@ -130,6 +138,7 @@ namespace ESPExplorerAE
         }
 
         ExecutePlayerCommand("placeatme", formID, count);
+        Logger::Verbose("Place at player form=" + std::to_string(formID) + " count=" + std::to_string(count));
         lastUndoCommand.clear();
     }
 
@@ -221,6 +230,7 @@ namespace ESPExplorerAE
             return;
         }
 
+        Logger::Verbose(std::string("Execute console command: ") + std::string(command));
         RE::Console::ExecuteCommand(std::string(command).c_str());
     }
 
@@ -236,6 +246,7 @@ namespace ESPExplorerAE
         }
 
         RE::Console::ExecuteCommand(lastUndoCommand.c_str());
+        Logger::Verbose(std::string("Undo command executed: ") + lastUndoCommand);
         lastUndoCommand.clear();
     }
 }

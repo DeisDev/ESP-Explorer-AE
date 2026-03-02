@@ -129,7 +129,8 @@ namespace ESPExplorerAE
         const FormTableConfig& config,
         const PrimaryAction& primaryAction,
         const QuantityAction& quantityAction,
-        std::unordered_set<std::uint32_t>* favorites)
+        std::unordered_set<std::uint32_t>* favorites,
+        bool* caseSensitiveOverride)
     {
         if (!pluginFilter.empty()) {
             entries.erase(std::remove_if(entries.begin(), entries.end(), [&](const FormEntry& entry) {
@@ -139,10 +140,10 @@ namespace ESPExplorerAE
 
         auto& sortState = sortStates[config.tableId ? config.tableId : "FormTable"];
         auto& selected = selectedRows[config.tableId ? config.tableId : "FormTable"];
-        auto& caseSensitive = searchCaseSensitive[config.tableId ? config.tableId : "FormTable"];
-
-        if (ImGui::Checkbox(L("General", "sCaseSensitiveSearch", "Case Sensitive"), &caseSensitive)) {
-            selected.clear();
+        auto& tableCaseSensitive = searchCaseSensitive[config.tableId ? config.tableId : "FormTable"];
+        bool caseSensitive = caseSensitiveOverride ? *caseSensitiveOverride : tableCaseSensitive;
+        if (caseSensitiveOverride) {
+            tableCaseSensitive = *caseSensitiveOverride;
         }
 
         if (!searchText.empty()) {
@@ -200,6 +201,9 @@ namespace ESPExplorerAE
 
         bool firstActionInRow = true;
 
+        ImGui::Text("%s: %zu  %s: %zu", L("General", "sSelected", "Selected"), selected.size(), L("General", "sVisible", "Visible"), entries.size());
+        ImGui::Spacing();
+
         if (drawWrappedButton(L("General", "sSelectVisible", "Select Visible"), firstActionInRow)) {
             selected.clear();
             for (const auto& entry : entries) {
@@ -212,6 +216,10 @@ namespace ESPExplorerAE
         }
 
         const std::string bulkButtonLabel = std::string(config.primaryActionLabel ? config.primaryActionLabel : "Action") + " " + L("General", "sSelected", "Selected");
+        const bool hasSelection = !selected.empty();
+        if (!hasSelection) {
+            ImGui::BeginDisabled(true);
+        }
         if (drawWrappedButton(bulkButtonLabel.c_str(), firstActionInRow)) {
             for (const auto& entry : entries) {
                 if (selected.contains(entry.formID) && primaryAction) {
@@ -219,26 +227,19 @@ namespace ESPExplorerAE
                 }
             }
         }
-
-        if (config.allowFavorites && favorites) {
-            if (drawWrappedButton(L("General", "sToggleFavoritesSelected", "Toggle Favorites (Selected)"), firstActionInRow)) {
-                for (const auto& entry : entries) {
-                    if (!selected.contains(entry.formID)) {
-                        continue;
-                    }
-
-                    if (favorites->contains(entry.formID)) {
-                        favorites->erase(entry.formID);
-                    } else {
-                        favorites->insert(entry.formID);
-                    }
-                }
-            }
+        if (!hasSelection) {
+            ImGui::EndDisabled();
         }
 
         if (quantityAction && config.quantityActionLabel) {
+            if (!hasSelection) {
+                ImGui::BeginDisabled(true);
+            }
             if (drawWrappedButton(config.quantityActionLabel, firstActionInRow)) {
                 ImGui::OpenPopup("BulkQuantityPopup");
+            }
+            if (!hasSelection) {
+                ImGui::EndDisabled();
             }
 
             if (ImGui::BeginPopup("BulkQuantityPopup")) {
@@ -261,6 +262,28 @@ namespace ESPExplorerAE
                 }
 
                 ImGui::EndPopup();
+            }
+        }
+
+        if (config.allowFavorites && favorites) {
+            if (!hasSelection) {
+                ImGui::BeginDisabled(true);
+            }
+            if (drawWrappedButton(L("General", "sToggleFavoritesSelected", "Toggle Favorites (Selected)"), firstActionInRow)) {
+                for (const auto& entry : entries) {
+                    if (!selected.contains(entry.formID)) {
+                        continue;
+                    }
+
+                    if (favorites->contains(entry.formID)) {
+                        favorites->erase(entry.formID);
+                    } else {
+                        favorites->insert(entry.formID);
+                    }
+                }
+            }
+            if (!hasSelection) {
+                ImGui::EndDisabled();
             }
         }
 
@@ -291,6 +314,7 @@ namespace ESPExplorerAE
 
             const std::string rowPopupId = "RowContext##" + std::to_string(entry.formID) + std::string(config.tableId);
             const bool rowIsSelected = selected.contains(entry.formID);
+            const bool isFavoriteRow = config.allowFavorites && favorites && favorites->contains(entry.formID);
 
             ImGui::TableSetColumnIndex(0);
             const std::string rowSelectableId = "##row" + std::to_string(entry.formID) + std::string(config.tableId);
@@ -311,22 +335,32 @@ namespace ESPExplorerAE
 
             ImGui::TableSetColumnIndex(0);
             std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", entry.formID);
-            if (ImGui::Selectable(formIDBuffer, false)) {
+            ImGui::TextUnformatted(formIDBuffer);
+            if (ImGui::IsItemClicked()) {
                 ImGui::SetClipboardText(formIDBuffer);
             }
             ImGui::OpenPopupOnItemClick(rowPopupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
 
             ImGui::TableSetColumnIndex(1);
-            ImGui::TextUnformatted(entry.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : entry.name.c_str());
+            const auto* displayName = entry.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : entry.name.c_str();
+            if (isFavoriteRow) {
+                std::string favoriteName = std::string("★ ") + displayName;
+                ImGui::TextUnformatted(favoriteName.c_str());
+            } else {
+                ImGui::TextUnformatted(displayName);
+            }
             ImGui::OpenPopupOnItemClick(rowPopupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
 
             if (ImGui::IsItemHovered()) {
                 ImGui::BeginTooltip();
-                ImGui::Text("%s: %s", L("General", "sName", "Name"), entry.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : entry.name.c_str());
+                ImGui::Text("%s: %s", L("General", "sName", "Name"), displayName);
                 ImGui::Text("%s: %s", L("General", "sCategory", "Category"), entry.category.c_str());
                 ImGui::Text("%s: %s", L("General", "sPlugin", "Plugin"), entry.sourcePlugin.c_str());
                 ImGui::Text("%s: %s", L("General", "sDeleted", "Deleted"), entry.isDeleted ? L("General", "sYes", "Yes") : L("General", "sNo", "No"));
                 ImGui::Text("%s: %s", L("General", "sPlayable", "Playable"), entry.isPlayable ? L("General", "sYes", "Yes") : L("General", "sNo", "No"));
+                if (config.allowFavorites && favorites) {
+                    ImGui::Text("%s: %s", L("General", "sFavorite", "Favorite"), isFavoriteRow ? L("General", "sYes", "Yes") : L("General", "sNo", "No"));
+                }
                 ImGui::EndTooltip();
             }
 
@@ -335,6 +369,16 @@ namespace ESPExplorerAE
             ImGui::OpenPopupOnItemClick(rowPopupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
 
             if (ImGui::BeginPopup(rowPopupId.c_str())) {
+                if (ImGui::MenuItem(rowIsSelected ? L("General", "sDeselect", "Deselect") : L("General", "sSelect", "Select"))) {
+                    if (rowIsSelected) {
+                        selected.erase(entry.formID);
+                    } else {
+                        selected.insert(entry.formID);
+                    }
+                }
+
+                ImGui::Separator();
+
                 if (primaryAction) {
                     const char* actionLabel = config.primaryActionLabel ? config.primaryActionLabel : "Action";
                     if (ImGui::MenuItem(actionLabel)) {
@@ -359,7 +403,7 @@ namespace ESPExplorerAE
                 }
 
                 if (IsSpellCategory(entry.category)) {
-                    if (ImGui::MenuItem(L("General", "sAddSpell", "Add Spell"))) {
+                    if (!primaryAction && ImGui::MenuItem(L("General", "sAddSpell", "Add Spell"))) {
                         FormActions::AddSpellToPlayer(entry.formID);
                     }
                     if (ImGui::MenuItem(L("General", "sRemoveSpell", "Remove Spell"))) {
@@ -368,7 +412,7 @@ namespace ESPExplorerAE
                 }
 
                 if (IsPerkCategory(entry.category)) {
-                    if (ImGui::MenuItem(L("General", "sAddPerk", "Add Perk"))) {
+                    if (!primaryAction && ImGui::MenuItem(L("General", "sAddPerk", "Add Perk"))) {
                         FormActions::AddPerkToPlayer(entry.formID);
                     }
                     if (ImGui::MenuItem(L("General", "sRemovePerk", "Remove Perk"))) {
@@ -416,6 +460,10 @@ namespace ESPExplorerAE
 
                 if (ImGui::MenuItem(L("General", "sCopyRecordSource", "Copy Record Source"))) {
                     ImGui::SetClipboardText(entry.sourcePlugin.c_str());
+                }
+
+                if (ImGui::MenuItem(L("General", "sCopyName", "Copy Name"))) {
+                    ImGui::SetClipboardText(displayName);
                 }
 
                 if (config.allowFavorites && favorites) {
