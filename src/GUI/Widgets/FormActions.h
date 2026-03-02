@@ -21,6 +21,8 @@ namespace ESPExplorerAE
         static void RemoveSpellFromPlayer(std::uint32_t formID);
         static void AddPerkToPlayer(std::uint32_t formID);
         static void RemovePerkFromPlayer(std::uint32_t formID);
+        static int AddOutfitItemsToPlayer(std::uint32_t formID);
+        static bool AddConstructedItemToPlayer(std::uint32_t formID);
         static void ExecuteConsoleCommand(std::string_view command);
         static bool CanUndoLastAction();
         static void UndoLastAction();

@@ -22,6 +22,8 @@
 #include <cctype>
 #include <cstdio>
 #include <algorithm>
+#include <deque>
+#include <functional>
 
 namespace ESPExplorerAE
 {
@@ -74,6 +76,9 @@ namespace ESPExplorerAE
         bool showNamedRecords{ true };
         bool showUnnamedRecords{ true };
         bool showDeletedRecords{ true };
+        bool showUnknownCategories{ false };
+        bool pluginGlobalSearchMode{ false };
+        bool pluginSearchCaseSensitive{ false };
         std::unordered_map<std::string, std::uint32_t> selectedItemRows{};
         std::uint64_t pluginBrowserCacheVersion{ 0 };
         std::string pluginBrowserCacheSearch{};
@@ -83,8 +88,36 @@ namespace ESPExplorerAE
         bool pluginBrowserCacheShowNamed{ true };
         bool pluginBrowserCacheShowUnnamed{ true };
         bool pluginBrowserCacheShowDeleted{ true };
+        bool pluginBrowserCacheShowUnknown{ false };
+        bool pluginBrowserCacheGlobalSearchMode{ false };
+        bool pluginBrowserCacheSearchCaseSensitive{ false };
         std::unordered_map<std::string, std::unordered_map<std::string, std::vector<const FormEntry*>>> pluginBrowserGroupedRecordsCache{};
         std::vector<std::string> pluginBrowserOrderedPluginsCache{};
+        std::vector<const FormEntry*> pluginBrowserGlobalSearchResultsCache{};
+        std::deque<std::uint32_t> recentPluginRecordFormIDs{};
+        bool refreshDataRequested{ false };
+        bool refreshDataInProgress{ false };
+
+        struct ConfirmActionState
+        {
+            bool openRequested{ false };
+            bool visible{ false };
+            std::string title{};
+            std::string message{};
+            std::function<void()> callback{};
+        };
+
+        struct GlobalValuePopupState
+        {
+            bool openRequested{ false };
+            bool visible{ false };
+            std::uint32_t formID{ 0 };
+            std::string editorID{};
+            float value{ 0.0f };
+        };
+
+        ConfirmActionState confirmAction{};
+        GlobalValuePopupState globalValuePopup{};
 
         const char* L(std::string_view section, std::string_view key, const char* fallback)
         {
@@ -181,6 +214,8 @@ namespace ESPExplorerAE
             Config::Save();
         }
 
+        const char* TryGetEditorID(std::uint32_t formID);
+
         bool ContainsCaseInsensitive(std::string_view text, std::string_view query)
         {
             if (query.empty()) {
@@ -198,6 +233,165 @@ namespace ESPExplorerAE
             });
 
             return textLower.find(queryLower) != std::string::npos;
+        }
+
+        bool ContainsByMode(std::string_view text, std::string_view query, bool caseSensitive)
+        {
+            if (query.empty()) {
+                return true;
+            }
+
+            if (caseSensitive) {
+                return text.find(query) != std::string::npos;
+            }
+
+            return ContainsCaseInsensitive(text, query);
+        }
+
+        bool MatchesPluginSearch(const FormEntry& entry, std::string_view query, bool caseSensitive)
+        {
+            if (query.empty()) {
+                return true;
+            }
+
+            char formIDBuffer[16]{};
+            std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", entry.formID);
+
+            if (ContainsByMode(entry.name, query, caseSensitive) ||
+                ContainsByMode(entry.category, query, caseSensitive) ||
+                ContainsByMode(entry.sourcePlugin, query, caseSensitive) ||
+                ContainsByMode(formIDBuffer, query, caseSensitive)) {
+                return true;
+            }
+
+            const char* editorID = TryGetEditorID(entry.formID);
+            return editorID && ContainsByMode(editorID, query, caseSensitive);
+        }
+
+        const FormEntry* FindRecordByFormID(const FormCache& cache, std::uint32_t formID)
+        {
+            for (const auto& entry : cache.allRecords) {
+                if (entry.formID == formID) {
+                    return &entry;
+                }
+            }
+
+            return nullptr;
+        }
+
+        void TrackRecentRecord(std::uint32_t formID)
+        {
+            if (formID == 0) {
+                return;
+            }
+
+            recentPluginRecordFormIDs.erase(
+                std::remove(recentPluginRecordFormIDs.begin(), recentPluginRecordFormIDs.end(), formID),
+                recentPluginRecordFormIDs.end());
+            recentPluginRecordFormIDs.push_front(formID);
+
+            constexpr std::size_t kMaxRecentRecords = 50;
+            while (recentPluginRecordFormIDs.size() > kMaxRecentRecords) {
+                recentPluginRecordFormIDs.pop_back();
+            }
+        }
+
+        void RequestActionConfirmation(std::string title, std::string message, std::function<void()> callback)
+        {
+            confirmAction.title = std::move(title);
+            confirmAction.message = std::move(message);
+            confirmAction.callback = std::move(callback);
+            confirmAction.openRequested = true;
+            confirmAction.visible = true;
+        }
+
+        void OpenGlobalValuePopup(std::uint32_t formID)
+        {
+            auto* form = RE::TESForm::GetFormByID(formID);
+            if (!form) {
+                return;
+            }
+
+            const auto* editorID = form->GetFormEditorID();
+            if (!editorID || editorID[0] == '\0') {
+                return;
+            }
+
+            globalValuePopup.formID = formID;
+            globalValuePopup.editorID = editorID;
+            globalValuePopup.value = 0.0f;
+            globalValuePopup.openRequested = true;
+            globalValuePopup.visible = true;
+        }
+
+        void RenderConfirmActionPopup()
+        {
+            if (confirmAction.openRequested) {
+                ImGui::OpenPopup("Confirm Action");
+                confirmAction.openRequested = false;
+            }
+
+            ImGui::SetNextWindowSize(ImVec2(460.0f, 180.0f), ImGuiCond_Appearing);
+            if (!ImGui::BeginPopupModal("Confirm Action", &confirmAction.visible)) {
+                return;
+            }
+
+            ImGui::TextUnformatted(confirmAction.title.empty() ? "Confirm Action" : confirmAction.title.c_str());
+            ImGui::Separator();
+            ImGui::TextWrapped("%s", confirmAction.message.c_str());
+            ImGui::Spacing();
+
+            if (ImGui::Button(L("General", "sConfirm", "Confirm"), ImVec2(110.0f, 0.0f))) {
+                if (confirmAction.callback) {
+                    confirmAction.callback();
+                }
+                confirmAction.callback = {};
+                confirmAction.visible = false;
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button(L("General", "sCancel", "Cancel"), ImVec2(110.0f, 0.0f))) {
+                confirmAction.callback = {};
+                confirmAction.visible = false;
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
+        }
+
+        void RenderGlobalValuePopup()
+        {
+            if (globalValuePopup.openRequested) {
+                ImGui::OpenPopup("Set Global Value");
+                globalValuePopup.openRequested = false;
+            }
+
+            ImGui::SetNextWindowSize(ImVec2(430.0f, 180.0f), ImGuiCond_Appearing);
+            if (!ImGui::BeginPopupModal("Set Global Value", &globalValuePopup.visible)) {
+                return;
+            }
+
+            ImGui::Text("%s: %s", L("General", "sEditorID", "EditorID"), globalValuePopup.editorID.c_str());
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::InputFloat(L("General", "sValue", "Value"), &globalValuePopup.value, 1.0f, 10.0f, "%.3f");
+            ImGui::Spacing();
+
+            if (ImGui::Button(L("General", "sApply", "Apply"), ImVec2(100.0f, 0.0f))) {
+                char command[256]{};
+                std::snprintf(command, sizeof(command), "set %s to %.3f", globalValuePopup.editorID.c_str(), globalValuePopup.value);
+                FormActions::ExecuteConsoleCommand(command);
+                globalValuePopup.visible = false;
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button(L("General", "sCancel", "Cancel"), ImVec2(100.0f, 0.0f))) {
+                globalValuePopup.visible = false;
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
         }
 
         const char* PluginTypeColorTag(std::string_view type)
@@ -451,6 +645,50 @@ namespace ESPExplorerAE
             return category == "KYWD" || category == "FLST" || category == "GLOB" || category == "COBJ";
         }
 
+        bool IsUnknownCategory(std::string_view category)
+        {
+            if (category.empty()) {
+                return true;
+            }
+
+            std::string lowered(category.begin(), category.end());
+            std::ranges::transform(lowered, lowered.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::tolower(ch));
+            });
+
+            return lowered == "unknown" || lowered == "<unknown>";
+        }
+
+        bool IsSpellLikeCategory(std::string_view category)
+        {
+            return category == "SPEL" || category == "Spell" || category == "MGEF" || category == "Effect";
+        }
+
+        bool IsWeatherCategory(std::string_view category)
+        {
+            return category == "WTHR" || category == "Weather";
+        }
+
+        bool IsSoundCategory(std::string_view category)
+        {
+            return category == "SOUN" || category == "SNDR";
+        }
+
+        bool IsGlobalCategory(std::string_view category)
+        {
+            return category == "GLOB";
+        }
+
+        bool IsOutfitCategory(std::string_view category)
+        {
+            return category == "OTFT";
+        }
+
+        bool IsConstructibleCategory(std::string_view category)
+        {
+            return category == "COBJ";
+        }
+
         std::string CategoryDisplayName(std::string_view category)
         {
             if (category == "WEAP" || category == "Weapon") {
@@ -599,6 +837,16 @@ namespace ESPExplorerAE
                 listFilterSettingsChanged = true;
             }
 
+            ImGui::SameLine();
+            if (ImGui::Checkbox(L("PluginBrowser", "sShowUnknownCategories", "Show Unknown Categories"), &showUnknownCategories)) {
+                listFilterSettingsChanged = true;
+            }
+
+            ImGui::SameLine();
+            ImGui::Checkbox(L("PluginBrowser", "sGlobalSearch", "Global Search"), &pluginGlobalSearchMode);
+            ImGui::SameLine();
+            ImGui::Checkbox(L("PluginBrowser", "sCaseSensitiveSearch", "Case Sensitive"), &pluginSearchCaseSensitive);
+
             if (listFilterSettingsChanged) {
                 auto& settings = Config::GetMutable();
                 settings.listShowPlayable = showPlayableRecords;
@@ -617,27 +865,43 @@ namespace ESPExplorerAE
                 pluginBrowserCacheShowNonPlayable != showNonPlayableRecords ||
                 pluginBrowserCacheShowNamed != showNamedRecords ||
                 pluginBrowserCacheShowUnnamed != showUnnamedRecords ||
-                pluginBrowserCacheShowDeleted != showDeletedRecords;
+                pluginBrowserCacheShowDeleted != showDeletedRecords ||
+                pluginBrowserCacheShowUnknown != showUnknownCategories ||
+                pluginBrowserCacheGlobalSearchMode != pluginGlobalSearchMode ||
+                pluginBrowserCacheSearchCaseSensitive != pluginSearchCaseSensitive;
 
             if (needsCacheRebuild) {
                 pluginBrowserGroupedRecordsCache.clear();
                 pluginBrowserGroupedRecordsCache.reserve(plugins.size());
+                pluginBrowserGlobalSearchResultsCache.clear();
+                pluginBrowserGlobalSearchResultsCache.reserve(cache.allRecords.size());
 
                 for (const auto& entry : cache.allRecords) {
                     if (!PassesLocalRecordFilters(entry)) {
                         continue;
                     }
 
-                    const std::string pluginName = entry.sourcePlugin.empty() ? std::string(L("General", "sUnknown", "<Unknown>")) : entry.sourcePlugin;
-
-                    if (!selectedPluginFilter.empty() && pluginName != selectedPluginFilter) {
+                    if (!showUnknownCategories && entry.sourcePlugin.empty()) {
                         continue;
                     }
 
-                    if (!pluginSearch.empty() &&
-                        !ContainsCaseInsensitive(pluginName, pluginSearch) &&
-                        !ContainsCaseInsensitive(entry.name, pluginSearch) &&
-                        !ContainsCaseInsensitive(entry.category, pluginSearch)) {
+                    if (!showUnknownCategories && IsUnknownCategory(entry.category)) {
+                        continue;
+                    }
+
+                    const std::string pluginName = entry.sourcePlugin.empty() ? std::string(L("General", "sUnknown", "<Unknown>")) : entry.sourcePlugin;
+
+                    const bool searchMatches = MatchesPluginSearch(entry, pluginSearch, pluginSearchCaseSensitive);
+
+                    if (pluginGlobalSearchMode && !pluginSearch.empty() && searchMatches) {
+                        pluginBrowserGlobalSearchResultsCache.push_back(&entry);
+                    }
+
+                    if (!pluginGlobalSearchMode && !selectedPluginFilter.empty() && pluginName != selectedPluginFilter) {
+                        continue;
+                    }
+
+                    if (!pluginSearch.empty() && !searchMatches) {
                         continue;
                     }
 
@@ -670,11 +934,75 @@ namespace ESPExplorerAE
                 pluginBrowserCacheShowNamed = showNamedRecords;
                 pluginBrowserCacheShowUnnamed = showUnnamedRecords;
                 pluginBrowserCacheShowDeleted = showDeletedRecords;
+                pluginBrowserCacheShowUnknown = showUnknownCategories;
+                pluginBrowserCacheGlobalSearchMode = pluginGlobalSearchMode;
+                pluginBrowserCacheSearchCaseSensitive = pluginSearchCaseSensitive;
             }
 
             const float leftWidth = ImGui::GetContentRegionAvail().x * 0.58f;
 
             if (ImGui::BeginChild("PluginTreeLeft", ImVec2(leftWidth, 0.0f), ImGuiChildFlags_Borders)) {
+                auto drawRecordSelectable = [&](const FormEntry& record, std::string_view idPrefix) {
+                    const auto* displayName = record.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : record.name.c_str();
+                    char recordLabel[512]{};
+                    std::snprintf(recordLabel, sizeof(recordLabel), "%s [%08X]##%s%08X", displayName, record.formID, std::string(idPrefix).c_str(), record.formID);
+                    const bool isSelected = selectedPluginTreeRecordFormID == record.formID;
+                    if (ImGui::Selectable(recordLabel, isSelected)) {
+                        selectedPluginTreeRecordFormID = record.formID;
+                        TrackRecentRecord(record.formID);
+                    }
+                };
+
+                if (pluginGlobalSearchMode && !pluginSearch.empty() && ImGui::CollapsingHeader(L("PluginBrowser", "sGlobalSearchResults", "Global Search Results"), ImGuiTreeNodeFlags_DefaultOpen)) {
+                    for (const auto* record : pluginBrowserGlobalSearchResultsCache) {
+                        if (!record) {
+                            continue;
+                        }
+                        drawRecordSelectable(*record, "GlobalResult");
+                    }
+                }
+
+                if (ImGui::CollapsingHeader(L("General", "sFavorites", "Favorites"), ImGuiTreeNodeFlags_DefaultOpen)) {
+                    for (const auto& entry : cache.allRecords) {
+                        if (!favoriteForms.contains(entry.formID)) {
+                            continue;
+                        }
+                        if (!PassesLocalRecordFilters(entry)) {
+                            continue;
+                        }
+                        if (!showUnknownCategories && (entry.sourcePlugin.empty() || IsUnknownCategory(entry.category))) {
+                            continue;
+                        }
+                        if (!pluginSearch.empty() && !MatchesPluginSearch(entry, pluginSearch, pluginSearchCaseSensitive)) {
+                            continue;
+                        }
+
+                        drawRecordSelectable(entry, "FavoriteRecord");
+                    }
+                }
+
+                if (ImGui::CollapsingHeader(L("PluginBrowser", "sRecentRecords", "Recent Records"), ImGuiTreeNodeFlags_DefaultOpen)) {
+                    for (const auto recentFormID : recentPluginRecordFormIDs) {
+                        const auto* recentEntry = FindRecordByFormID(cache, recentFormID);
+                        if (!recentEntry) {
+                            continue;
+                        }
+                        if (!PassesLocalRecordFilters(*recentEntry)) {
+                            continue;
+                        }
+                        if (!showUnknownCategories && (recentEntry->sourcePlugin.empty() || IsUnknownCategory(recentEntry->category))) {
+                            continue;
+                        }
+                        if (!pluginSearch.empty() && !MatchesPluginSearch(*recentEntry, pluginSearch, pluginSearchCaseSensitive)) {
+                            continue;
+                        }
+
+                        drawRecordSelectable(*recentEntry, "RecentRecord");
+                    }
+                }
+
+                ImGui::Separator();
+
                 for (const auto& pluginName : pluginBrowserOrderedPluginsCache) {
                     auto pluginIt = pluginBrowserGroupedRecordsCache.find(pluginName);
                     if (pluginIt == pluginBrowserGroupedRecordsCache.end()) {
@@ -726,6 +1054,7 @@ namespace ESPExplorerAE
                                     const bool isSelected = selectedPluginTreeRecordFormID == record->formID;
                                     if (ImGui::Selectable(recordLabel, isSelected)) {
                                         selectedPluginTreeRecordFormID = record->formID;
+                                        TrackRecentRecord(record->formID);
                                     }
 
                                     if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && CanGiveFromTreeCategory(record->category)) {
@@ -864,6 +1193,28 @@ namespace ESPExplorerAE
                     const bool canTeleport = CanTeleportFromTreeCategory(selectedRecord->category);
                     const bool isQuest = IsQuestCategory(selectedRecord->category);
                     const bool isPerk = IsPerkCategory(selectedRecord->category);
+                    const bool isSpellLike = IsSpellLikeCategory(selectedRecord->category);
+                    const bool isWeather = IsWeatherCategory(selectedRecord->category);
+                    const bool isSound = IsSoundCategory(selectedRecord->category);
+                    const bool isGlobal = IsGlobalCategory(selectedRecord->category);
+                    const bool isOutfit = IsOutfitCategory(selectedRecord->category);
+                    const bool isConstructible = IsConstructibleCategory(selectedRecord->category);
+                    const bool isEquippable = selectedRecord->category == "WEAP" || selectedRecord->category == "Weapon" || selectedRecord->category == "ARMO" || selectedRecord->category == "Armor";
+
+                    const bool isFavorite = favoriteForms.contains(selectedRecord->formID);
+                    if (ImGui::Button(isFavorite ? L("General", "sRemoveFavorite", "Remove Favorite") : L("General", "sAddFavorite", "Add Favorite"))) {
+                        if (isFavorite) {
+                            favoriteForms.erase(selectedRecord->formID);
+                        } else {
+                            favoriteForms.insert(selectedRecord->formID);
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button(L("General", "sCopyFormID", "Copy FormID"))) {
+                        FormActions::CopyFormID(selectedRecord->formID);
+                    }
+
+                    ImGui::Separator();
 
                     bool hasActionOnRow = false;
                     if (CanGiveFromTreeCategory(selectedRecord->category)) {
@@ -878,7 +1229,14 @@ namespace ESPExplorerAE
                             ImGui::SameLine();
                         }
                         if (ImGui::Button(L("NPCs", "sSpawnAtPlayer", "Spawn At Player"))) {
-                            FormActions::SpawnAtPlayer(selectedRecord->formID, 1);
+                            const auto formID = selectedRecord->formID;
+                            const std::string name = selectedRecord->name;
+                            RequestActionConfirmation(
+                                L("General", "sConfirmSpawnTitle", "Confirm Spawn"),
+                                std::string(L("General", "sConfirmSpawnMessage", "Spawn selected record at player?")) + "\n" + (name.empty() ? L("General", "sUnnamed", "<Unnamed>") : name),
+                                [formID]() {
+                                    FormActions::SpawnAtPlayer(formID, 1);
+                                });
                         }
                         hasActionOnRow = true;
                     }
@@ -888,15 +1246,27 @@ namespace ESPExplorerAE
                             ImGui::SameLine();
                         }
                         if (ImGui::Button(L("General", "sStartQuest", "Start Quest"))) {
-                            char command[64]{};
-                            std::snprintf(command, sizeof(command), "startquest %08X", selectedRecord->formID);
-                            FormActions::ExecuteConsoleCommand(command);
+                            const auto formID = selectedRecord->formID;
+                            RequestActionConfirmation(
+                                L("General", "sConfirmQuestTitle", "Confirm Quest Action"),
+                                L("General", "sConfirmStartQuest", "Start selected quest?"),
+                                [formID]() {
+                                    char command[64]{};
+                                    std::snprintf(command, sizeof(command), "startquest %08X", formID);
+                                    FormActions::ExecuteConsoleCommand(command);
+                                });
                         }
                         ImGui::SameLine();
                         if (ImGui::Button(L("General", "sCompleteQuest", "Complete Quest"))) {
-                            char command[64]{};
-                            std::snprintf(command, sizeof(command), "completequest %08X", selectedRecord->formID);
-                            FormActions::ExecuteConsoleCommand(command);
+                            const auto formID = selectedRecord->formID;
+                            RequestActionConfirmation(
+                                L("General", "sConfirmQuestTitle", "Confirm Quest Action"),
+                                L("General", "sConfirmCompleteQuest", "Complete selected quest?"),
+                                [formID]() {
+                                    char command[64]{};
+                                    std::snprintf(command, sizeof(command), "completequest %08X", formID);
+                                    FormActions::ExecuteConsoleCommand(command);
+                                });
                         }
                         hasActionOnRow = true;
                     }
@@ -915,6 +1285,93 @@ namespace ESPExplorerAE
                         hasActionOnRow = true;
                     }
 
+                    if (isSpellLike) {
+                        if (hasActionOnRow) {
+                            ImGui::SameLine();
+                        }
+                        if (ImGui::Button(L("General", "sAddSpellEffect", "Add Spell/Effect"))) {
+                            FormActions::AddSpellToPlayer(selectedRecord->formID);
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button(L("General", "sRemoveSpellEffect", "Remove Spell/Effect"))) {
+                            FormActions::RemoveSpellFromPlayer(selectedRecord->formID);
+                        }
+                        hasActionOnRow = true;
+                    }
+
+                    if (isWeather) {
+                        if (hasActionOnRow) {
+                            ImGui::SameLine();
+                        }
+                        if (ImGui::Button(L("General", "sSetWeather", "Set Weather"))) {
+                            const auto formID = selectedRecord->formID;
+                            RequestActionConfirmation(
+                                L("General", "sConfirmWeatherTitle", "Confirm Weather Change"),
+                                L("General", "sConfirmWeather", "Set current weather to selected weather record?"),
+                                [formID]() {
+                                    char command[64]{};
+                                    std::snprintf(command, sizeof(command), "fw %08X", formID);
+                                    FormActions::ExecuteConsoleCommand(command);
+                                });
+                        }
+                        hasActionOnRow = true;
+                    }
+
+                    if (isSound) {
+                        if (hasActionOnRow) {
+                            ImGui::SameLine();
+                        }
+                        if (ImGui::Button(L("General", "sPlaySound", "Play Sound"))) {
+                            if (const char* editorID = TryGetEditorID(selectedRecord->formID)) {
+                                std::string command = std::string("playsound ") + editorID;
+                                FormActions::ExecuteConsoleCommand(command);
+                            }
+                        }
+                        hasActionOnRow = true;
+                    }
+
+                    if (isGlobal) {
+                        if (hasActionOnRow) {
+                            ImGui::SameLine();
+                        }
+                        if (ImGui::Button(L("General", "sSetGlobal", "Set Global"))) {
+                            OpenGlobalValuePopup(selectedRecord->formID);
+                        }
+                        hasActionOnRow = true;
+                    }
+
+                    if (isOutfit) {
+                        if (hasActionOnRow) {
+                            ImGui::SameLine();
+                        }
+                        if (ImGui::Button(L("General", "sAddOutfitItems", "Add Outfit Items"))) {
+                            FormActions::AddOutfitItemsToPlayer(selectedRecord->formID);
+                        }
+                        hasActionOnRow = true;
+                    }
+
+                    if (isConstructible) {
+                        if (hasActionOnRow) {
+                            ImGui::SameLine();
+                        }
+                        if (ImGui::Button(L("General", "sAddCraftedItem", "Add Crafted Item"))) {
+                            FormActions::AddConstructedItemToPlayer(selectedRecord->formID);
+                        }
+                        hasActionOnRow = true;
+                    }
+
+                    if (isEquippable) {
+                        if (hasActionOnRow) {
+                            ImGui::SameLine();
+                        }
+                        if (ImGui::Button(L("General", "sEquipItem", "Equip Item"))) {
+                            char command[64]{};
+                            std::snprintf(command, sizeof(command), "player.equipitem %08X", selectedRecord->formID);
+                            FormActions::ExecuteConsoleCommand(command);
+                        }
+                        hasActionOnRow = true;
+                    }
+
                     if (canTeleport) {
                         if (hasActionOnRow) {
                             ImGui::SameLine();
@@ -926,8 +1383,14 @@ namespace ESPExplorerAE
 
                         if (canUseCoc) {
                             if (ImGui::Button(L("General", "sTeleportCOC", "Teleport (COC)"))) {
-                                std::string command = std::string("coc ") + editorID;
-                                FormActions::ExecuteConsoleCommand(command);
+                                const auto editorIDCopy = std::string(editorID);
+                                RequestActionConfirmation(
+                                    L("General", "sConfirmTeleportTitle", "Confirm Teleport"),
+                                    L("General", "sConfirmTeleport", "Teleport to selected destination?"),
+                                    [editorIDCopy]() {
+                                        std::string command = std::string("coc ") + editorIDCopy;
+                                        FormActions::ExecuteConsoleCommand(command);
+                                    });
                             }
                         } else {
                             ImGui::BeginDisabled(true);
@@ -935,13 +1398,6 @@ namespace ESPExplorerAE
                             ImGui::EndDisabled();
                         }
                         hasActionOnRow = true;
-                    }
-
-                    if (hasActionOnRow) {
-                        ImGui::SameLine();
-                    }
-                    if (ImGui::Button(L("General", "sCopyFormID", "Copy FormID"))) {
-                        FormActions::CopyFormID(selectedRecord->formID);
                     }
                 }
             }
@@ -1091,25 +1547,50 @@ namespace ESPExplorerAE
             });
 
             if (selectedIt != items.end()) {
-                if (ImGui::Button(L("Items", "sGiveItem", "Give Item"))) {
+                auto drawWrappedButton = [](const char* label, bool& firstInRow) {
+                    const auto& style = ImGui::GetStyle();
+                    const float buttonWidth = ImGui::CalcTextSize(label).x + style.FramePadding.x * 2.0f;
+
+                    if (!firstInRow) {
+                        const float needed = style.ItemSpacing.x + buttonWidth;
+                        if (ImGui::GetContentRegionAvail().x >= needed) {
+                            ImGui::SameLine();
+                        } else {
+                            firstInRow = true;
+                        }
+                    }
+
+                    const bool pressed = ImGui::Button(label);
+                    firstInRow = false;
+                    return pressed;
+                };
+
+                bool firstActionInRow = true;
+                if (drawWrappedButton(L("Items", "sGiveItem", "Give Item"), firstActionInRow)) {
                     OpenItemGrantPopup(*selectedIt);
                 }
-                ImGui::SameLine();
-                if (ImGui::Button(L("NPCs", "sSpawnAtPlayer", "Spawn At Player"))) {
+                if (drawWrappedButton(L("NPCs", "sSpawnAtPlayer", "Spawn At Player"), firstActionInRow)) {
                     FormActions::SpawnAtPlayer(selectedIt->formID, 1);
                 }
-                ImGui::SameLine();
-                if (ImGui::Button(L("General", "sCopyFormID", "Copy FormID"))) {
+
+                const bool isFavorite = favoriteForms.contains(selectedIt->formID);
+                if (drawWrappedButton(isFavorite ? L("General", "sRemoveFavorite", "Remove Favorite") : L("General", "sAddFavorite", "Add Favorite"), firstActionInRow)) {
+                    if (isFavorite) {
+                        favoriteForms.erase(selectedIt->formID);
+                    } else {
+                        favoriteForms.insert(selectedIt->formID);
+                    }
+                }
+
+                if (drawWrappedButton(L("General", "sCopyFormID", "Copy FormID"), firstActionInRow)) {
                     FormActions::CopyFormID(selectedIt->formID);
                 }
                 if (const char* editorID = TryGetEditorID(selectedIt->formID)) {
-                    ImGui::SameLine();
-                    if (ImGui::Button(L("General", "sCopyEditorID", "Copy EditorID"))) {
+                    if (drawWrappedButton(L("General", "sCopyEditorID", "Copy EditorID"), firstActionInRow)) {
                         ImGui::SetClipboardText(editorID);
                     }
                 }
-                ImGui::SameLine();
-                if (ImGui::Button(L("General", "sCopyRecordSource", "Copy Record Source"))) {
+                if (drawWrappedButton(L("General", "sCopyRecordSource", "Copy Record Source"), firstActionInRow)) {
                     ImGui::SetClipboardText(selectedIt->sourcePlugin.c_str());
                 }
             }
@@ -1338,6 +1819,13 @@ namespace ESPExplorerAE
         EnsureFavoritesLoaded();
         const auto favoritesBefore = favoriteForms;
 
+        if (refreshDataRequested && !refreshDataInProgress) {
+            refreshDataInProgress = true;
+            DataManager::Refresh();
+            refreshDataInProgress = false;
+            refreshDataRequested = false;
+        }
+
         const auto& settings = Config::Get();
 
         ImGui::SetNextWindowPos(ImVec2(settings.windowX, settings.windowY), ImGuiCond_FirstUseEver);
@@ -1389,9 +1877,22 @@ namespace ESPExplorerAE
                 if (ImGui::BeginTabBar("MainTabs")) {
                     if (ImGui::BeginTabItem(L("PluginBrowser", "sBrowserTab", "Plugin Browser"))) {
                         activeMainTab = "Plugin Browser";
-                        if (ImGui::Button(L("General", "sRefreshData", "Refresh Data"))) {
-                            DataManager::Refresh();
+
+                        if (refreshDataInProgress) {
+                            ImGui::BeginDisabled(true);
+                            ImGui::Button(L("General", "sRefreshData", "Refresh Data"));
+                            ImGui::EndDisabled();
+                        } else {
+                            if (ImGui::Button(L("General", "sRefreshData", "Refresh Data"))) {
+                                refreshDataRequested = true;
+                            }
                         }
+
+                        if (refreshDataRequested || refreshDataInProgress) {
+                            ImGui::SameLine();
+                            ImGui::TextUnformatted(L("General", "sRefreshingData", "Refreshing..."));
+                        }
+
                         ImGui::SameLine();
                         ImGui::Text("%s: %zu", L("PluginBrowser", "sPluginsCount", "Plugins"), plugins.size());
                         DrawPluginFilterStatus();
@@ -1463,6 +1964,8 @@ namespace ESPExplorerAE
                     }
 
                     RenderItemGrantPopup();
+                    RenderConfirmActionPopup();
+                    RenderGlobalValuePopup();
 
                     ImGui::EndTabBar();
                 }

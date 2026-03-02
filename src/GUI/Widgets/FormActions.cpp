@@ -3,6 +3,8 @@
 #include <imgui.h>
 
 #include <RE/B/BGSEquipIndex.h>
+#include <RE/B/BGSConstructibleObject.h>
+#include <RE/B/BGSOutfit.h>
 #include <RE/C/Console.h>
 #include <RE/P/PlayerCharacter.h>
 #include <RE/T/TESBoundObject.h>
@@ -165,6 +167,52 @@ namespace ESPExplorerAE
         char undoCommand[96]{};
         std::snprintf(undoCommand, sizeof(undoCommand), "player.addperk %08X", formID);
         lastUndoCommand = undoCommand;
+    }
+
+    int FormActions::AddOutfitItemsToPlayer(std::uint32_t formID)
+    {
+        auto* form = RE::TESForm::GetFormByID(formID);
+        if (!form) {
+            return 0;
+        }
+
+        auto* outfit = form->As<RE::BGSOutfit>();
+        if (!outfit) {
+            return 0;
+        }
+
+        int addedCount = 0;
+        for (const auto& item : outfit->outfitItems) {
+            if (!item) {
+                continue;
+            }
+
+            GiveToPlayer(item->GetFormID(), 1);
+            ++addedCount;
+        }
+
+        return addedCount;
+    }
+
+    bool FormActions::AddConstructedItemToPlayer(std::uint32_t formID)
+    {
+        auto* form = RE::TESForm::GetFormByID(formID);
+        if (!form) {
+            return false;
+        }
+
+        auto* constructible = form->As<RE::BGSConstructibleObject>();
+        if (!constructible) {
+            return false;
+        }
+
+        auto* created = constructible->GetCreatedItem();
+        if (!created) {
+            return false;
+        }
+
+        GiveToPlayer(created->GetFormID(), 1);
+        return true;
     }
 
     void FormActions::ExecuteConsoleCommand(std::string_view command)
