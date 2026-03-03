@@ -134,6 +134,12 @@ namespace ESPExplorerAE
             return;
         }
 
+        if (FontManager::HasPendingRebuild()) {
+            ImGui_ImplDX11_InvalidateDeviceObjects();
+            FontManager::ProcessPendingRebuild();
+            ImGui_ImplDX11_CreateDeviceObjects();
+        }
+
         const auto& settings = Config::Get();
         ApplyTheme(settings);
 

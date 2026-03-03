@@ -326,9 +326,6 @@ namespace ESPExplorerAE
             ImGui::TreePop();
         }
 
-        ImGui::Spacing();
-        ImGui::SeparatorText(L("Settings", "sAboutSection", "About"));
-
         if (ImGui::TreeNodeEx(std::string(L("Settings", "sControllerSection", "Controller") + std::string("##SettingsControllerSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
             changed = ImGui::Checkbox(L("Settings", "sEnableGamepadNav", "Enable Gamepad Navigation"), &settings.enableGamepadNav) || changed;
             ImGui::TextDisabled("%s: %s", L("Settings", "sGamepadStatus", "Gamepad"), GamepadInput::IsGamepadConnected() ? L("Settings", "sConnected", "Connected") : L("Settings", "sDisconnected", "Disconnected"));
@@ -354,7 +351,7 @@ namespace ESPExplorerAE
             Language::Load(settings.language);
         }
         if (fontChanged || languageChanged) {
-            FontManager::Build(settings.fontSize, settings.language);
+            FontManager::RequestRebuild(settings.fontSize, settings.language);
         }
     }
 }

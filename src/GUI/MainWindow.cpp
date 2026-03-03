@@ -472,9 +472,14 @@ namespace ESPExplorerAE
 
             ImGui::TextUnformatted(L("Items", "sQuantity", "Quantity"));
             ImGui::SetNextItemWidth(-1.0f);
-            ImGui::DragInt("##ItemQtyDrag", &itemGrantPopup.quantity, 0.25f, 1, 9999, "%d");
+            ImGui::SliderInt("##ItemQtySlider", &itemGrantPopup.quantity, 1, 100, "%d");
+            ImGui::SetNextItemWidth(-1.0f);
+            ImGui::InputInt("##ItemQtyInput", &itemGrantPopup.quantity, 1, 10);
             if (itemGrantPopup.quantity < 1) {
                 itemGrantPopup.quantity = 1;
+            }
+            if (itemGrantPopup.quantity > 9999) {
+                itemGrantPopup.quantity = 9999;
             }
 
             if (ImGui::Button("1##ItemQtyPreset")) {
@@ -503,9 +508,14 @@ namespace ESPExplorerAE
                 ImGui::Separator();
                 ImGui::TextUnformatted(L("Items", "sAmmoQuantity", "Ammo Quantity"));
                 ImGui::SetNextItemWidth(-1.0f);
-                ImGui::DragInt("##AmmoQtyDrag", &itemGrantPopup.ammoQuantity, 1.0f, 0, 50000, "%d");
+                ImGui::SliderInt("##AmmoQtySlider", &itemGrantPopup.ammoQuantity, 0, 500, "%d");
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::InputInt("##AmmoQtyInput", &itemGrantPopup.ammoQuantity, 10, 100);
                 if (itemGrantPopup.ammoQuantity < 0) {
                     itemGrantPopup.ammoQuantity = 0;
+                }
+                if (itemGrantPopup.ammoQuantity > 50000) {
+                    itemGrantPopup.ammoQuantity = 50000;
                 }
 
                 if (ImGui::Button("0##AmmoQtyPreset")) {
@@ -1024,7 +1034,7 @@ namespace ESPExplorerAE
             const float footerHeight = ImGui::GetTextLineHeightWithSpacing() + ImGui::GetFrameHeightWithSpacing() + style.ItemSpacing.y + style.WindowPadding.y + 8.0f;
             if (ImGui::BeginChild("MainContentRegion", ImVec2(0.0f, -footerHeight), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
                 if (ImGui::BeginTabBar("MainTabs")) {
-                    std::string requestedTab{};
+                    static std::string requestedTab{};
                     if (Config::Get().enableGamepadNav && (GamepadInput::WasTabNextPressed() || GamepadInput::WasTabPrevPressed())) {
                         constexpr std::array<std::string_view, 8> tabOrder{
                             "Plugin Browser",
@@ -1053,9 +1063,20 @@ namespace ESPExplorerAE
                         requestedTab = tabOrder[currentIndex];
                     }
 
+                    auto tabFlags = [&](const char* tabName) -> ImGuiTabItemFlags {
+                        return requestedTab == tabName ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
+                    };
+                    auto focusTabIfRequested = [&](const char* tabName) {
+                        if (requestedTab == tabName) {
+                            ImGui::SetKeyboardFocusHere(-1);
+                            requestedTab.clear();
+                        }
+                    };
+
                     if (ImGui::BeginTabItem(L("PluginBrowser", "sBrowserTab", "Plugin Browser"), nullptr,
-                        requestedTab == "Plugin Browser" ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
+                        tabFlags("Plugin Browser"))) {
                         activeMainTab = "Plugin Browser";
+                        focusTabIfRequested("Plugin Browser");
 
                         if (refreshDataInProgress) {
                             ImGui::BeginDisabled(true);
@@ -1082,36 +1103,41 @@ namespace ESPExplorerAE
                     }
 
                     if (ImGui::BeginTabItem(L("Player", "sTabName", "Player"), nullptr,
-                        requestedTab == "Player" ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
+                        tabFlags("Player"))) {
                         activeMainTab = "Player";
+                        focusTabIfRequested("Player");
                         DrawPlayerTab(cache);
                         ImGui::EndTabItem();
                     }
 
                     if (ImGui::BeginTabItem(itemTabLabel, nullptr,
-                        requestedTab == "Item Browser" ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
+                        tabFlags("Item Browser"))) {
                         activeMainTab = "Item Browser";
+                        focusTabIfRequested("Item Browser");
                         DrawItemBrowser(cache);
                         ImGui::EndTabItem();
                     }
 
                     if (ImGui::BeginTabItem(npcTabLabel, nullptr,
-                        requestedTab == "NPC Browser" ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
+                        tabFlags("NPC Browser"))) {
                         activeMainTab = "NPC Browser";
+                        focusTabIfRequested("NPC Browser");
                         DrawNPCBrowser(cache);
                         ImGui::EndTabItem();
                     }
 
                     if (ImGui::BeginTabItem(objectTabLabel, nullptr,
-                        requestedTab == "Object Browser" ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
+                        tabFlags("Object Browser"))) {
                         activeMainTab = "Object Browser";
+                        focusTabIfRequested("Object Browser");
                         DrawObjectBrowser(cache);
                         ImGui::EndTabItem();
                     }
 
                     if (ImGui::BeginTabItem(spellPerkTabLabel, nullptr,
-                        requestedTab == "Spells & Perks" ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
+                        tabFlags("Spells & Perks"))) {
                         activeMainTab = "Spells & Perks";
+                        focusTabIfRequested("Spells & Perks");
                         DrawSpellPerkBrowser(cache);
                         ImGui::EndTabItem();
                     }
@@ -1119,15 +1145,17 @@ namespace ESPExplorerAE
                     const auto settingsTabName = Language::Get("Settings", "sTabName");
                     const auto* settingsLabel = settingsTabName.empty() ? "Settings" : settingsTabName.data();
                     if (ImGui::BeginTabItem(settingsLabel, nullptr,
-                        requestedTab == "Settings" ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
+                        tabFlags("Settings"))) {
                         activeMainTab = "Settings";
+                        focusTabIfRequested("Settings");
                         SettingsTab::Draw();
                         ImGui::EndTabItem();
                     }
 
                     if (ImGui::BeginTabItem(L("Logs", "sTabName", "Logs"), nullptr,
-                        requestedTab == "Logs" ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
+                        tabFlags("Logs"))) {
                         activeMainTab = "Logs";
+                        focusTabIfRequested("Logs");
                         LogViewerTab::Draw(L);
                         ImGui::EndTabItem();
                     }

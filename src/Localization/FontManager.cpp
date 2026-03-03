@@ -125,4 +125,26 @@ namespace ESPExplorerAE
 
         return font != nullptr;
     }
+
+    void FontManager::RequestRebuild(float fontSize, std::string_view languageCode)
+    {
+        pendingFontSize = fontSize;
+        pendingLanguageCode = std::string(languageCode);
+        pendingRebuild = true;
+    }
+
+    bool FontManager::HasPendingRebuild()
+    {
+        return pendingRebuild;
+    }
+
+    bool FontManager::ProcessPendingRebuild()
+    {
+        if (!pendingRebuild) {
+            return false;
+        }
+
+        pendingRebuild = false;
+        return Build(pendingFontSize, pendingLanguageCode);
+    }
 }

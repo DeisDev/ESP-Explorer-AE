@@ -444,13 +444,14 @@ namespace ESPExplorerAE
                             pendingQuantity = 1;
                         }
 
+                        if (ImGui::MenuItem(config.quantityActionLabel)) {
+                            quantityAction(entry, pendingQuantity);
+                        }
+
+                        ImGui::SetNextItemWidth(120.0f);
                         ImGui::InputInt(L("General", "sQuantity", "Quantity"), &pendingQuantity, 1, 10);
                         if (pendingQuantity < 1) {
                             pendingQuantity = 1;
-                        }
-
-                        if (ImGui::MenuItem(config.quantityActionLabel)) {
-                            quantityAction(entry, pendingQuantity);
                         }
                     }
 
@@ -460,13 +461,14 @@ namespace ESPExplorerAE
                             pendingQuantity = 1;
                         }
 
+                        if (ImGui::MenuItem(L("NPCs", "sSpawnAtPlayer", "Spawn At Player"))) {
+                            FormActions::SpawnAtPlayer(entry.formID, static_cast<std::uint32_t>(pendingQuantity));
+                        }
+
+                        ImGui::SetNextItemWidth(120.0f);
                         ImGui::InputInt(L("General", "sQuantity", "Quantity"), &pendingQuantity, 1, 10);
                         if (pendingQuantity < 1) {
                             pendingQuantity = 1;
-                        }
-
-                        if (ImGui::MenuItem(L("NPCs", "sSpawnAtPlayer", "Spawn At Player"))) {
-                            FormActions::SpawnAtPlayer(entry.formID, static_cast<std::uint32_t>(pendingQuantity));
                         }
                     }
 
@@ -574,17 +576,14 @@ namespace ESPExplorerAE
             }
 
             if (quantityAction && config.quantityActionLabel) {
-                if (!firstSelectedActionInRow) {
-                    ImGui::SameLine();
+                if (drawWrappedButton(config.quantityActionLabel, firstSelectedActionInRow)) {
+                    quantityAction(*selectedEntry, pendingQuantity);
                 }
-                ImGui::SetNextItemWidth(80.0f);
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(100.0f);
                 ImGui::InputInt("##SelectedQty", &pendingQuantity, 1, 10);
                 if (pendingQuantity < 1) {
                     pendingQuantity = 1;
-                }
-                ImGui::SameLine();
-                if (ImGui::Button(config.quantityActionLabel)) {
-                    quantityAction(*selectedEntry, pendingQuantity);
                 }
                 firstSelectedActionInRow = false;
             }

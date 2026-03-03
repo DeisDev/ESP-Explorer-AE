@@ -19,11 +19,11 @@ namespace ESPExplorerAE
             changed = true;
         }
 
-        if (ImGui::IsItemActivated() && GamepadInput::IsUsingGamepad()) {
+        if (ImGui::IsItemActivated() && GamepadInput::IsUsingGamepad() && !GamepadInput::IsSteamKeyboardOpen()) {
             GamepadInput::ShowSteamKeyboard();
         }
 
-        if (GamepadInput::IsSteamKeyboardOpen() && ImGui::IsItemActive()) {
+        if (GamepadInput::IsSteamKeyboardOpen()) {
             GamepadInput::CheckSteamKeyboardResult(buffer, bufferSize, value);
             changed = true;
         }

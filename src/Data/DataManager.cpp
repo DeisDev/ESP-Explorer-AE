@@ -18,6 +18,7 @@
 #include <RE/T/TESObjectSTAT.h>
 #include <RE/T/TESObjectWEAP.h>
 #include <RE/T/TESNPC.h>
+#include <RE/T/TESRace.h>
 
 #include <RE/B/BGSPerk.h>
 #include <RE/B/BGSKeywordForm.h>
@@ -253,11 +254,23 @@ namespace ESPExplorerAE
 
             FormEntry entry{};
             entry.formID = form->GetFormID();
-            entry.category = "NPC";
             entry.name = GetFormName(form);
             entry.sourcePlugin = GetSourcePluginName(form);
             entry.isDeleted = form->IsDeleted();
             entry.isPlayable = IsPlayable(form);
+
+            const auto* race = form->GetFormRace();
+            if (race) {
+                const auto* raceName = race->GetFullName();
+                if (raceName && raceName[0] != '\0') {
+                    entry.category = raceName;
+                } else {
+                    const auto* raceEditorID = race->GetFormEditorID();
+                    entry.category = (raceEditorID && raceEditorID[0] != '\0') ? raceEditorID : "NPC";
+                }
+            } else {
+                entry.category = "NPC";
+            }
 
             if (PassesFilters(form, entry.name, entry.isPlayable)) {
                 newCache.npcs.push_back(entry);

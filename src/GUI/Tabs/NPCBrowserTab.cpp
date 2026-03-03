@@ -143,6 +143,24 @@ namespace ESPExplorerAE
         });
 
         if (ImGui::BeginTabBar("NPCCategories")) {
+            const std::string allTabLabel = std::string(localize("General", "sAll", "All")) + " (" + std::to_string(filteredNPCs.size()) + ")";
+            if (ImGui::BeginTabItem(allTabLabel.c_str())) {
+                FormTable::Draw(
+                    filteredNPCs,
+                    searchText,
+                    selectedPluginFilter,
+                    tableConfig,
+                    [](const FormEntry& entry) {
+                        FormActions::SpawnAtPlayer(entry.formID, 1);
+                    },
+                    [](const FormEntry& entry, int quantity) {
+                        FormActions::SpawnAtPlayer(entry.formID, static_cast<std::uint32_t>(quantity));
+                    },
+                    &favoriteForms,
+                    &searchCaseSensitive);
+                ImGui::EndTabItem();
+            }
+
             for (const auto& category : categories) {
                 const char* displayCategory = category.empty() ? localize("General", "sUnknown", "Unknown") : category.c_str();
                 std::size_t categoryCount = 0;

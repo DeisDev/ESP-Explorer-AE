@@ -281,15 +281,15 @@ namespace ESPExplorerAE
             const auto preview = state.selectedFile.empty() ? localize("Logs", "sNoLogSelected", "No file") : state.selectedFile.filename().string().c_str();
             const auto& style = ImGui::GetStyle();
 
-            auto buttonWidth = [&](const char* text) {
-                return ImGui::CalcTextSize(text).x + style.FramePadding.x * 2.0f;
-            };
-
-            auto wrappedSameLineFor = [&](float width) {
-                if (ImGui::GetCursorPosX() > 0.0f && ImGui::GetContentRegionAvail().x < width) {
-                    return;
+            auto wrappedButton = [&](const char* label, bool startOfRow = false) -> bool {
+                const float buttonWidth = ImGui::CalcTextSize(label).x + style.FramePadding.x * 2.0f;
+                if (!startOfRow) {
+                    const float needed = style.ItemSpacing.x + buttonWidth;
+                    if (ImGui::GetContentRegionAvail().x >= needed) {
+                        ImGui::SameLine();
+                    }
                 }
-                ImGui::SameLine();
+                return ImGui::Button(label);
             };
 
             ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.4f);
@@ -310,15 +310,14 @@ namespace ESPExplorerAE
             }
 
             const char* refreshLabel = localize("Logs", "sRefreshFiles", "Refresh Files");
-            wrappedSameLineFor(buttonWidth(refreshLabel));
-            if (ImGui::Button(refreshLabel)) {
+            if (wrappedButton(refreshLabel)) {
                 RefreshFileList();
                 if (!state.selectedFile.empty()) {
                     ReadInitialFileContents(state.selectedFile);
                 }
             }
 
-            ImGui::NewLine();
+            ImGui::Spacing();
 
             const char* openFileLabel = localize("Logs", "sOpenFile", "Open File");
             if (ImGui::Button(openFileLabel) && !state.selectedFile.empty()) {
@@ -327,38 +326,32 @@ namespace ESPExplorerAE
             }
 
             const char* openFolderLabel = localize("Logs", "sOpenFolder", "Open Folder");
-            wrappedSameLineFor(buttonWidth(openFolderLabel));
-            if (ImGui::Button(openFolderLabel)) {
+            if (wrappedButton(openFolderLabel)) {
                 const auto folder = Logger::GetLogDirectory().string();
                 ShellExecuteA(nullptr, "open", folder.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
             }
 
-            ImGui::NewLine();
-
             const char* copySelectedLabel = localize("Logs", "sCopySelected", "Copy Selected");
-            if (ImGui::Button(copySelectedLabel)) {
+            if (wrappedButton(copySelectedLabel)) {
                 CopySelectedLines();
             }
 
             const char* copyVisibleLabel = localize("Logs", "sCopyVisible", "Copy Visible");
-            wrappedSameLineFor(buttonWidth(copyVisibleLabel));
-            if (ImGui::Button(copyVisibleLabel)) {
+            if (wrappedButton(copyVisibleLabel)) {
                 CopyVisibleLines();
             }
 
             const char* exportLabel = localize("Logs", "sExportFile", "Export File");
-            wrappedSameLineFor(buttonWidth(exportLabel));
-            if (ImGui::Button(exportLabel)) {
+            if (wrappedButton(exportLabel)) {
                 ExportSelectedFile();
             }
 
             const char* clearSelLabel = localize("Logs", "sClearSelection", "Clear Selection");
-            wrappedSameLineFor(buttonWidth(clearSelLabel));
-            if (ImGui::Button(clearSelLabel)) {
+            if (wrappedButton(clearSelLabel)) {
                 state.selectedLineIndexes.clear();
             }
 
-            ImGui::NewLine();
+            ImGui::Spacing();
 
             const char* autoScrollLabel = localize("Logs", "sAutoScroll", "Auto Scroll");
             ImGui::Checkbox(autoScrollLabel, &state.autoScroll);
