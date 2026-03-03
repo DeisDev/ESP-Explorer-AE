@@ -77,6 +77,11 @@ namespace ESPExplorerAE
 
             colors[ImGuiCol_NavHighlight] = MulColor(accent, 1.0f);
             colors[ImGuiCol_DragDropTarget] = MulColor(accent, 1.0f);
+
+            style.TabBorderSize = 1.0f;
+            style.FrameRounding = 4.0f;
+            style.GrabRounding = 4.0f;
+            style.TabRounding = 4.0f;
         }
     }
 
@@ -101,6 +106,13 @@ namespace ESPExplorerAE
         ImGui::StyleColorsDark();
 
         const auto& settings = Config::Get();
+
+        ImGuiIO& io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        if (settings.enableGamepadNav) {
+            io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+        }
+
         ApplyTheme(settings);
         FontManager::Build(settings.fontSize, Language::GetCurrentLanguageCode());
 
@@ -122,7 +134,15 @@ namespace ESPExplorerAE
             return;
         }
 
-        ApplyTheme(Config::Get());
+        const auto& settings = Config::Get();
+        ApplyTheme(settings);
+
+        ImGuiIO& io = ImGui::GetIO();
+        if (settings.enableGamepadNav) {
+            io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+        } else {
+            io.ConfigFlags &= ~ImGuiConfigFlags_NavEnableGamepad;
+        }
 
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();

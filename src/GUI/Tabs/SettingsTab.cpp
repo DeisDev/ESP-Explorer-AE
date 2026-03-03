@@ -1,6 +1,7 @@
 #include "GUI/Tabs/SettingsTab.h"
 
 #include "Config/Config.h"
+#include "Input/GamepadInput.h"
 #include "Logging/Logger.h"
 #include "Localization/FontManager.h"
 #include "Localization/Language.h"
@@ -322,6 +323,19 @@ namespace ESPExplorerAE
             if (ImGui::Button(L("Settings", "sReloadLanguage", "Reload Language"))) {
                 Language::Load(settings.language);
             }
+            ImGui::TreePop();
+        }
+
+        ImGui::Spacing();
+        ImGui::SeparatorText(L("Settings", "sAboutSection", "About"));
+
+        if (ImGui::TreeNodeEx(std::string(L("Settings", "sControllerSection", "Controller") + std::string("##SettingsControllerSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+            changed = ImGui::Checkbox(L("Settings", "sEnableGamepadNav", "Enable Gamepad Navigation"), &settings.enableGamepadNav) || changed;
+            ImGui::TextDisabled("%s: %s", L("Settings", "sGamepadStatus", "Gamepad"), GamepadInput::IsGamepadConnected() ? L("Settings", "sConnected", "Connected") : L("Settings", "sDisconnected", "Disconnected"));
+            ImGui::TextDisabled("%s: RB + X", L("Settings", "sControllerToggle", "Toggle Menu"));
+            ImGui::TextDisabled("%s: %s / %s", L("Settings", "sNavigation", "Navigate"), "D-Pad", "Left Stick");
+            ImGui::TextDisabled("%s: A  |  %s: B", L("Settings", "sConfirm", "Select"), L("Settings", "sGoBack", "Back"));
+            ImGui::TextDisabled("%s: LB / RB", L("Settings", "sTabSwitch", "Switch Tabs"));
             ImGui::TreePop();
         }
 

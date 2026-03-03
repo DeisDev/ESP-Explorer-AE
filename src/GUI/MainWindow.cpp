@@ -13,6 +13,7 @@
 #include "GUI/Widgets/FormActions.h"
 #include "GUI/Widgets/FormTable.h"
 #include "GUI/Widgets/SearchBar.h"
+#include "Input/GamepadInput.h"
 #include "Localization/Language.h"
 
 #include <imgui.h>
@@ -29,6 +30,7 @@
 #include <cctype>
 #include <cstdio>
 #include <algorithm>
+#include <array>
 #include <deque>
 #include <functional>
 
@@ -1022,7 +1024,37 @@ namespace ESPExplorerAE
             const float footerHeight = ImGui::GetTextLineHeightWithSpacing() + ImGui::GetFrameHeightWithSpacing() + style.ItemSpacing.y + style.WindowPadding.y + 8.0f;
             if (ImGui::BeginChild("MainContentRegion", ImVec2(0.0f, -footerHeight), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
                 if (ImGui::BeginTabBar("MainTabs")) {
-                    if (ImGui::BeginTabItem(L("PluginBrowser", "sBrowserTab", "Plugin Browser"))) {
+                    std::string requestedTab{};
+                    if (Config::Get().enableGamepadNav && (GamepadInput::WasTabNextPressed() || GamepadInput::WasTabPrevPressed())) {
+                        constexpr std::array<std::string_view, 8> tabOrder{
+                            "Plugin Browser",
+                            "Player",
+                            "Item Browser",
+                            "NPC Browser",
+                            "Object Browser",
+                            "Spells & Perks",
+                            "Settings",
+                            "Logs"
+                        };
+
+                        std::size_t currentIndex = 0;
+                        for (std::size_t i = 0; i < tabOrder.size(); ++i) {
+                            if (activeMainTab == tabOrder[i]) {
+                                currentIndex = i;
+                                break;
+                            }
+                        }
+
+                        if (GamepadInput::WasTabNextPressed()) {
+                            currentIndex = (currentIndex + 1) % tabOrder.size();
+                        } else {
+                            currentIndex = (currentIndex + tabOrder.size() - 1) % tabOrder.size();
+                        }
+                        requestedTab = tabOrder[currentIndex];
+                    }
+
+                    if (ImGui::BeginTabItem(L("PluginBrowser", "sBrowserTab", "Plugin Browser"), nullptr,
+                        requestedTab == "Plugin Browser" ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
                         activeMainTab = "Plugin Browser";
 
                         if (refreshDataInProgress) {
@@ -1049,31 +1081,36 @@ namespace ESPExplorerAE
                         ImGui::EndTabItem();
                     }
 
-                    if (ImGui::BeginTabItem(L("Player", "sTabName", "Player"))) {
+                    if (ImGui::BeginTabItem(L("Player", "sTabName", "Player"), nullptr,
+                        requestedTab == "Player" ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
                         activeMainTab = "Player";
                         DrawPlayerTab(cache);
                         ImGui::EndTabItem();
                     }
 
-                    if (ImGui::BeginTabItem(itemTabLabel)) {
+                    if (ImGui::BeginTabItem(itemTabLabel, nullptr,
+                        requestedTab == "Item Browser" ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
                         activeMainTab = "Item Browser";
                         DrawItemBrowser(cache);
                         ImGui::EndTabItem();
                     }
 
-                    if (ImGui::BeginTabItem(npcTabLabel)) {
+                    if (ImGui::BeginTabItem(npcTabLabel, nullptr,
+                        requestedTab == "NPC Browser" ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
                         activeMainTab = "NPC Browser";
                         DrawNPCBrowser(cache);
                         ImGui::EndTabItem();
                     }
 
-                    if (ImGui::BeginTabItem(objectTabLabel)) {
+                    if (ImGui::BeginTabItem(objectTabLabel, nullptr,
+                        requestedTab == "Object Browser" ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
                         activeMainTab = "Object Browser";
                         DrawObjectBrowser(cache);
                         ImGui::EndTabItem();
                     }
 
-                    if (ImGui::BeginTabItem(spellPerkTabLabel)) {
+                    if (ImGui::BeginTabItem(spellPerkTabLabel, nullptr,
+                        requestedTab == "Spells & Perks" ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
                         activeMainTab = "Spells & Perks";
                         DrawSpellPerkBrowser(cache);
                         ImGui::EndTabItem();
@@ -1081,13 +1118,15 @@ namespace ESPExplorerAE
 
                     const auto settingsTabName = Language::Get("Settings", "sTabName");
                     const auto* settingsLabel = settingsTabName.empty() ? "Settings" : settingsTabName.data();
-                    if (ImGui::BeginTabItem(settingsLabel)) {
+                    if (ImGui::BeginTabItem(settingsLabel, nullptr,
+                        requestedTab == "Settings" ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
                         activeMainTab = "Settings";
                         SettingsTab::Draw();
                         ImGui::EndTabItem();
                     }
 
-                    if (ImGui::BeginTabItem(L("Logs", "sTabName", "Logs"))) {
+                    if (ImGui::BeginTabItem(L("Logs", "sTabName", "Logs"), nullptr,
+                        requestedTab == "Logs" ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
                         activeMainTab = "Logs";
                         LogViewerTab::Draw(L);
                         ImGui::EndTabItem();
@@ -1124,6 +1163,13 @@ namespace ESPExplorerAE
                         totalForms,
                         L("General", "sFavorites", "Favorites"),
                         favoriteForms.size());
+                }
+
+                if (GamepadInput::IsGamepadConnected()) {
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("|");
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("[Gamepad]");
                 }
 
                 const float resetWidth = CalcButtonWidth(L("General", "sResetFilters", "Reset Filters"));

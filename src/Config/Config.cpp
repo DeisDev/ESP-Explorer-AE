@@ -121,6 +121,8 @@ namespace ESPExplorerAE
         settings.objectSearchCaseSensitive = ini.GetBoolValue("Filters", "bObjectSearchCaseSensitive", false);
         settings.spellPerkSearchCaseSensitive = ini.GetBoolValue("Filters", "bSpellPerkSearchCaseSensitive", false);
 
+        settings.enableGamepadNav = ini.GetBoolValue("Controller", "bEnableGamepadNav", true);
+
         settings.favorites = ParseFavorites(ini.GetValue("Favorites", "sFormIDs", ""));
 
         return true;
@@ -181,6 +183,8 @@ namespace ESPExplorerAE
         ini.SetBoolValue("Filters", "bNPCSearchCaseSensitive", settings.npcSearchCaseSensitive);
         ini.SetBoolValue("Filters", "bObjectSearchCaseSensitive", settings.objectSearchCaseSensitive);
         ini.SetBoolValue("Filters", "bSpellPerkSearchCaseSensitive", settings.spellPerkSearchCaseSensitive);
+
+        ini.SetBoolValue("Controller", "bEnableGamepadNav", settings.enableGamepadNav);
 
         const auto favorites = SerializeFavorites(settings.favorites);
         ini.SetValue("Favorites", "sFormIDs", favorites.c_str());

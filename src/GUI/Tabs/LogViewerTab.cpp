@@ -279,6 +279,18 @@ namespace ESPExplorerAE
         {
             const auto comboLabel = localize("Logs", "sLogFile", "Log File");
             const auto preview = state.selectedFile.empty() ? localize("Logs", "sNoLogSelected", "No file") : state.selectedFile.filename().string().c_str();
+            const auto& style = ImGui::GetStyle();
+
+            auto buttonWidth = [&](const char* text) {
+                return ImGui::CalcTextSize(text).x + style.FramePadding.x * 2.0f;
+            };
+
+            auto wrappedSameLineFor = [&](float width) {
+                if (ImGui::GetCursorPosX() > 0.0f && ImGui::GetContentRegionAvail().x < width) {
+                    return;
+                }
+                ImGui::SameLine();
+            };
 
             ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.4f);
             if (ImGui::BeginCombo(comboLabel, preview)) {
@@ -297,15 +309,8 @@ namespace ESPExplorerAE
                 ImGui::EndCombo();
             }
 
-            auto wrappedSameLine = [](const char* nextLabel) {
-                float nextWidth = ImGui::CalcTextSize(nextLabel).x + ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetStyle().ItemSpacing.x;
-                if (ImGui::GetContentRegionAvail().x >= nextWidth) {
-                    ImGui::SameLine();
-                }
-            };
-
             const char* refreshLabel = localize("Logs", "sRefreshFiles", "Refresh Files");
-            wrappedSameLine(refreshLabel);
+            wrappedSameLineFor(buttonWidth(refreshLabel));
             if (ImGui::Button(refreshLabel)) {
                 RefreshFileList();
                 if (!state.selectedFile.empty()) {
@@ -313,48 +318,49 @@ namespace ESPExplorerAE
                 }
             }
 
+            ImGui::NewLine();
+
             const char* openFileLabel = localize("Logs", "sOpenFile", "Open File");
-            wrappedSameLine(openFileLabel);
             if (ImGui::Button(openFileLabel) && !state.selectedFile.empty()) {
                 const auto target = state.selectedFile.string();
                 ShellExecuteA(nullptr, "open", target.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
             }
 
             const char* openFolderLabel = localize("Logs", "sOpenFolder", "Open Folder");
-            wrappedSameLine(openFolderLabel);
+            wrappedSameLineFor(buttonWidth(openFolderLabel));
             if (ImGui::Button(openFolderLabel)) {
                 const auto folder = Logger::GetLogDirectory().string();
                 ShellExecuteA(nullptr, "open", folder.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
             }
 
+            ImGui::NewLine();
+
             const char* copySelectedLabel = localize("Logs", "sCopySelected", "Copy Selected");
-            wrappedSameLine("|");
-            ImGui::TextDisabled("|");
-            wrappedSameLine(copySelectedLabel);
             if (ImGui::Button(copySelectedLabel)) {
                 CopySelectedLines();
             }
 
             const char* copyVisibleLabel = localize("Logs", "sCopyVisible", "Copy Visible");
-            wrappedSameLine(copyVisibleLabel);
+            wrappedSameLineFor(buttonWidth(copyVisibleLabel));
             if (ImGui::Button(copyVisibleLabel)) {
                 CopyVisibleLines();
             }
 
             const char* exportLabel = localize("Logs", "sExportFile", "Export File");
-            wrappedSameLine(exportLabel);
+            wrappedSameLineFor(buttonWidth(exportLabel));
             if (ImGui::Button(exportLabel)) {
                 ExportSelectedFile();
             }
 
             const char* clearSelLabel = localize("Logs", "sClearSelection", "Clear Selection");
-            wrappedSameLine(clearSelLabel);
+            wrappedSameLineFor(buttonWidth(clearSelLabel));
             if (ImGui::Button(clearSelLabel)) {
                 state.selectedLineIndexes.clear();
             }
 
+            ImGui::NewLine();
+
             const char* autoScrollLabel = localize("Logs", "sAutoScroll", "Auto Scroll");
-            wrappedSameLine(autoScrollLabel);
             ImGui::Checkbox(autoScrollLabel, &state.autoScroll);
         }
 

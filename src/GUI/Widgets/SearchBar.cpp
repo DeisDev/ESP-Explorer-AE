@@ -1,5 +1,7 @@
 #include "GUI/Widgets/SearchBar.h"
 
+#include "Input/GamepadInput.h"
+
 #include <imgui.h>
 
 namespace ESPExplorerAE
@@ -14,6 +16,15 @@ namespace ESPExplorerAE
 
         ImGui::SetNextItemWidth(-ImGui::CalcTextSize("X").x - ImGui::GetStyle().FramePadding.x * 2.0f - ImGui::GetStyle().ItemSpacing.x);
         if (ImGui::InputTextWithHint(std::string(std::string("##") + label).c_str(), label, buffer, bufferSize)) {
+            changed = true;
+        }
+
+        if (ImGui::IsItemActivated() && GamepadInput::IsUsingGamepad()) {
+            GamepadInput::ShowSteamKeyboard();
+        }
+
+        if (GamepadInput::IsSteamKeyboardOpen() && ImGui::IsItemActive()) {
+            GamepadInput::CheckSteamKeyboardResult(buffer, bufferSize, value);
             changed = true;
         }
 

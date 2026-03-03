@@ -26,6 +26,7 @@ namespace ESPExplorerAE
         bool npcSearchCaseSensitive{ false };
         bool objectSearchCaseSensitive{ false };
         bool spellPerkSearchCaseSensitive{ false };
+        bool enableGamepadNav{ true };
         bool showFPSInStatus{ true };
         bool rememberWindowPos{ true };
         float fontSize{ 16.0f };

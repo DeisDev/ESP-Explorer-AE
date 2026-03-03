@@ -3,6 +3,7 @@
 #include "Config/Config.h"
 #include "GUI/ImGuiRenderer.h"
 #include "GUI/MainWindow.h"
+#include "Input/GamepadInput.h"
 #include "Logging/Logger.h"
 
 #include <RE/B/BSGraphics.h>
@@ -192,7 +193,12 @@ namespace ESPExplorerAE
         }
 
         ImGuiIO& io = ImGui::GetIO();
-        io.MouseDrawCursor = menuVisible;
+
+        if (GamepadInput::IsUsingGamepad() && menuVisible) {
+            io.MouseDrawCursor = false;
+        } else {
+            io.MouseDrawCursor = menuVisible;
+        }
 
         if (menuVisible) {
             ClipCursor(nullptr);
@@ -257,6 +263,16 @@ namespace ESPExplorerAE
                     AttachWindowHook(gameWindow);
                     ImGuiRenderer::Initialize(swapChain, gameWindow);
                 }
+            }
+        }
+
+        if (ImGuiRenderer::IsInitialized()) {
+            GamepadInput::Poll();
+
+            if (GamepadInput::WasMenuTogglePressed()) {
+                menuVisible = !menuVisible;
+                Logger::Verbose(std::string("Menu toggled via controller: ") + (menuVisible ? "visible" : "hidden"));
+                UpdateMenuInputState();
             }
         }
 
