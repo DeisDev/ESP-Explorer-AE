@@ -113,6 +113,13 @@ namespace ESPExplorerAE
         settings.listShowNamed = ini.GetBoolValue("Filters", "bListShowNamed", true);
         settings.listShowUnnamed = ini.GetBoolValue("Filters", "bListShowUnnamed", true);
         settings.listShowDeleted = ini.GetBoolValue("Filters", "bListShowDeleted", true);
+        settings.pluginGlobalSearchMode = ini.GetBoolValue("Filters", "bPluginGlobalSearchMode", false);
+        settings.pluginShowUnknownCategories = ini.GetBoolValue("Filters", "bPluginShowUnknownCategories", false);
+        settings.pluginSearchCaseSensitive = ini.GetBoolValue("Filters", "bPluginSearchCaseSensitive", false);
+        settings.itemSearchCaseSensitive = ini.GetBoolValue("Filters", "bItemSearchCaseSensitive", false);
+        settings.npcSearchCaseSensitive = ini.GetBoolValue("Filters", "bNPCSearchCaseSensitive", false);
+        settings.objectSearchCaseSensitive = ini.GetBoolValue("Filters", "bObjectSearchCaseSensitive", false);
+        settings.spellPerkSearchCaseSensitive = ini.GetBoolValue("Filters", "bSpellPerkSearchCaseSensitive", false);
 
         settings.favorites = ParseFavorites(ini.GetValue("Favorites", "sFormIDs", ""));
 
@@ -167,6 +174,13 @@ namespace ESPExplorerAE
         ini.SetBoolValue("Filters", "bListShowNamed", settings.listShowNamed);
         ini.SetBoolValue("Filters", "bListShowUnnamed", settings.listShowUnnamed);
         ini.SetBoolValue("Filters", "bListShowDeleted", settings.listShowDeleted);
+        ini.SetBoolValue("Filters", "bPluginGlobalSearchMode", settings.pluginGlobalSearchMode);
+        ini.SetBoolValue("Filters", "bPluginShowUnknownCategories", settings.pluginShowUnknownCategories);
+        ini.SetBoolValue("Filters", "bPluginSearchCaseSensitive", settings.pluginSearchCaseSensitive);
+        ini.SetBoolValue("Filters", "bItemSearchCaseSensitive", settings.itemSearchCaseSensitive);
+        ini.SetBoolValue("Filters", "bNPCSearchCaseSensitive", settings.npcSearchCaseSensitive);
+        ini.SetBoolValue("Filters", "bObjectSearchCaseSensitive", settings.objectSearchCaseSensitive);
+        ini.SetBoolValue("Filters", "bSpellPerkSearchCaseSensitive", settings.spellPerkSearchCaseSensitive);
 
         const auto favorites = SerializeFavorites(settings.favorites);
         ini.SetValue("Favorites", "sFormIDs", favorites.c_str());

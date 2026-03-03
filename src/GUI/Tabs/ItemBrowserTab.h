@@ -31,6 +31,7 @@ namespace ESPExplorerAE
         std::function<const char*(std::string_view, std::string_view, const char*)> localize;
         std::function<void()> drawPluginFilterStatus;
         std::function<void()> persistListFilters;
+        std::function<void()> persistFilterCheckboxes;
         std::function<void(const FormEntry&)> openItemGrantPopup;
         std::function<const char*(std::uint32_t)> tryGetEditorID;
     };

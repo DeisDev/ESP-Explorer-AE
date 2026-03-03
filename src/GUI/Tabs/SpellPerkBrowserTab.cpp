@@ -9,6 +9,54 @@
 
 namespace ESPExplorerAE
 {
+    namespace
+    {
+        struct LocalFilterCache
+        {
+            const std::vector<FormEntry>* source{ nullptr };
+            std::size_t sourceSize{ 0 };
+            bool showPlayable{ true };
+            bool showNonPlayable{ true };
+            bool showNamed{ true };
+            bool showUnnamed{ true };
+            bool showDeleted{ true };
+            std::vector<FormEntry> filtered{};
+        };
+
+        const std::vector<FormEntry>& GetFilteredEntries(
+            LocalFilterCache& cacheState,
+            const std::vector<FormEntry>& source,
+            bool showPlayable,
+            bool showNonPlayable,
+            bool showNamed,
+            bool showUnnamed,
+            bool showDeleted,
+            const SpellPerkBrowserTab::FilterEntriesFn& filterEntries)
+        {
+            const bool needsRebuild =
+                cacheState.source != &source ||
+                cacheState.sourceSize != source.size() ||
+                cacheState.showPlayable != showPlayable ||
+                cacheState.showNonPlayable != showNonPlayable ||
+                cacheState.showNamed != showNamed ||
+                cacheState.showUnnamed != showUnnamed ||
+                cacheState.showDeleted != showDeleted;
+
+            if (needsRebuild) {
+                cacheState.filtered = filterEntries(source);
+                cacheState.source = &source;
+                cacheState.sourceSize = source.size();
+                cacheState.showPlayable = showPlayable;
+                cacheState.showNonPlayable = showNonPlayable;
+                cacheState.showNamed = showNamed;
+                cacheState.showUnnamed = showUnnamed;
+                cacheState.showDeleted = showDeleted;
+            }
+
+            return cacheState.filtered;
+        }
+    }
+
     void SpellPerkBrowserTab::Draw(
         const FormCache& cache,
         char* searchBuffer,
@@ -24,6 +72,7 @@ namespace ESPExplorerAE
         std::unordered_set<std::uint32_t>& favoriteForms,
         const std::function<void()>& drawPluginFilterStatus,
         const std::function<void()>& persistListFilters,
+        const std::function<void()>& persistFilterCheckboxes,
         const FilterEntriesFn& filterEntries,
         const LocalizeFn& localize)
     {
@@ -46,13 +95,37 @@ namespace ESPExplorerAE
             ImGui::TableNextColumn();
             SearchBar::Draw(localize("Spells", "sSearch", "Spell/Perk Search"), searchBuffer, searchBufferSize, searchText);
             ImGui::TableNextColumn();
-            ImGui::Checkbox(localize("General", "sCaseSensitiveSearch", "Case Sensitive"), &searchCaseSensitive);
+            if (ImGui::Checkbox(localize("General", "sCaseSensitiveSearch", "Case Sensitive"), &searchCaseSensitive)) {
+                persistFilterCheckboxes();
+            }
             ImGui::EndTable();
         }
         drawPluginFilterStatus();
         ImGui::Separator();
 
         if (ImGui::BeginTabBar("SpellPerkCategories")) {
+            static LocalFilterCache spellFilterCache{};
+            static LocalFilterCache perkFilterCache{};
+
+            const auto& filteredSpells = GetFilteredEntries(
+                spellFilterCache,
+                cache.spells,
+                showPlayableRecords,
+                showNonPlayableRecords,
+                showNamedRecords,
+                showUnnamedRecords,
+                showDeletedRecords,
+                filterEntries);
+            const auto& filteredPerks = GetFilteredEntries(
+                perkFilterCache,
+                cache.perks,
+                showPlayableRecords,
+                showNonPlayableRecords,
+                showNamedRecords,
+                showUnnamedRecords,
+                showDeletedRecords,
+                filterEntries);
+
             const FormTableConfig spellConfig{
                 .tableId = "SpellTable",
                 .primaryActionLabel = localize("Spells", "sAddSpell", "Add Spell"),
@@ -66,7 +139,7 @@ namespace ESPExplorerAE
 
             if (ImGui::BeginTabItem(localize("Spells", "sSpells", "Spells"))) {
                 FormTable::Draw(
-                    filterEntries(cache.spells),
+                    filteredSpells,
                     searchText,
                     selectedPluginFilter,
                     spellConfig,
@@ -81,7 +154,7 @@ namespace ESPExplorerAE
 
             if (ImGui::BeginTabItem(localize("Spells", "sPerks", "Perks"))) {
                 FormTable::Draw(
-                    filterEntries(cache.perks),
+                    filteredPerks,
                     searchText,
                     selectedPluginFilter,
                     perkConfig,

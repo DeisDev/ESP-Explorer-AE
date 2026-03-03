@@ -14,6 +14,7 @@ namespace ESPExplorerAE
     namespace
     {
         bool waitingForToggleKey{ false };
+        constexpr auto kNexusModsUrl = "https://www.nexusmods.com/fallout4/mods/00000";
 
         const char* L(std::string_view section, std::string_view key, const char* fallback)
         {
@@ -229,7 +230,7 @@ namespace ESPExplorerAE
                 waitingForToggleKey = true;
             }
             ImGui::SameLine();
-            if (ImGui::Button(L("Settings", "sResetKeyInsert", "Reset"))) {
+            if (ImGui::Button(L("Settings", "sResetKeyDefault", "Reset Key"))) {
                 settings.toggleKey = 0x2D;
                 waitingForToggleKey = false;
                 changed = true;
@@ -283,7 +284,7 @@ namespace ESPExplorerAE
                 changed = true;
             }
 
-            if (ImGui::Button(L("Settings", "sResetThemeFalloutGreen", "Reset"))) {
+            if (ImGui::Button(L("Settings", "sResetTheme", "Reset Theme"))) {
                 settings.themeAccentR = 0.27f;
                 settings.themeAccentG = 0.94f;
                 settings.themeAccentB = 0.38f;
@@ -324,8 +325,15 @@ namespace ESPExplorerAE
             ImGui::TreePop();
         }
 
+        ImGui::Spacing();
+        ImGui::SeparatorText(L("Settings", "sAboutSection", "About"));
         ImGui::TextDisabled("%s: %s", L("Settings", "sGameVersion", "Game Version"), GetGameVersionText().c_str());
         ImGui::TextDisabled("%s: %s", L("Settings", "sModVersion", "Mod Version"), GetModVersionText().c_str());
+        ImGui::Spacing();
+        ImGui::TextDisabled("%s", kNexusModsUrl);
+        if (ImGui::Button(L("Settings", "sOpenNexusMods", "Open Nexus Mods Page"))) {
+            ShellExecuteA(nullptr, "open", kNexusModsUrl, nullptr, nullptr, SW_SHOWNORMAL);
+        }
 
         AutoPersist(changed);
         if (languageChanged) {

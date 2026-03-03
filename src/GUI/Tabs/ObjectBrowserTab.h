@@ -10,7 +10,7 @@ namespace ESPExplorerAE
     {
     public:
         using LocalizeFn = std::function<const char*(std::string_view, std::string_view, const char*)>;
-        using FilterEntriesFn = std::function<std::vector<FormEntry>(std::vector<FormEntry>)>;
+        using FilterEntriesFn = std::function<std::vector<FormEntry>(const std::vector<FormEntry>&)>;
 
         static void Draw(
             const FormCache& cache,
@@ -27,6 +27,7 @@ namespace ESPExplorerAE
             std::unordered_set<std::uint32_t>& favoriteForms,
             const std::function<void()>& drawPluginFilterStatus,
             const std::function<void()>& persistListFilters,
+            const std::function<void()>& persistFilterCheckboxes,
             const FilterEntriesFn& filterEntries,
             const LocalizeFn& localize);
     };

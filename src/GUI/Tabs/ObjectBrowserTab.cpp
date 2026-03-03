@@ -9,6 +9,54 @@
 
 namespace ESPExplorerAE
 {
+    namespace
+    {
+        struct LocalFilterCache
+        {
+            const std::vector<FormEntry>* source{ nullptr };
+            std::size_t sourceSize{ 0 };
+            bool showPlayable{ true };
+            bool showNonPlayable{ true };
+            bool showNamed{ true };
+            bool showUnnamed{ true };
+            bool showDeleted{ true };
+            std::vector<FormEntry> filtered{};
+        };
+
+        const std::vector<FormEntry>& GetFilteredEntries(
+            LocalFilterCache& cacheState,
+            const std::vector<FormEntry>& source,
+            bool showPlayable,
+            bool showNonPlayable,
+            bool showNamed,
+            bool showUnnamed,
+            bool showDeleted,
+            const ObjectBrowserTab::FilterEntriesFn& filterEntries)
+        {
+            const bool needsRebuild =
+                cacheState.source != &source ||
+                cacheState.sourceSize != source.size() ||
+                cacheState.showPlayable != showPlayable ||
+                cacheState.showNonPlayable != showNonPlayable ||
+                cacheState.showNamed != showNamed ||
+                cacheState.showUnnamed != showUnnamed ||
+                cacheState.showDeleted != showDeleted;
+
+            if (needsRebuild) {
+                cacheState.filtered = filterEntries(source);
+                cacheState.source = &source;
+                cacheState.sourceSize = source.size();
+                cacheState.showPlayable = showPlayable;
+                cacheState.showNonPlayable = showNonPlayable;
+                cacheState.showNamed = showNamed;
+                cacheState.showUnnamed = showUnnamed;
+                cacheState.showDeleted = showDeleted;
+            }
+
+            return cacheState.filtered;
+        }
+    }
+
     void ObjectBrowserTab::Draw(
         const FormCache& cache,
         char* searchBuffer,
@@ -24,6 +72,7 @@ namespace ESPExplorerAE
         std::unordered_set<std::uint32_t>& favoriteForms,
         const std::function<void()>& drawPluginFilterStatus,
         const std::function<void()>& persistListFilters,
+        const std::function<void()>& persistFilterCheckboxes,
         const FilterEntriesFn& filterEntries,
         const LocalizeFn& localize)
     {
@@ -46,13 +95,57 @@ namespace ESPExplorerAE
             ImGui::TableNextColumn();
             SearchBar::Draw(localize("Objects", "sSearch", "Object Search"), searchBuffer, searchBufferSize, searchText);
             ImGui::TableNextColumn();
-            ImGui::Checkbox(localize("General", "sCaseSensitiveSearch", "Case Sensitive"), &searchCaseSensitive);
+            if (ImGui::Checkbox(localize("General", "sCaseSensitiveSearch", "Case Sensitive"), &searchCaseSensitive)) {
+                persistFilterCheckboxes();
+            }
             ImGui::EndTable();
         }
         drawPluginFilterStatus();
         ImGui::Separator();
 
         if (ImGui::BeginTabBar("ObjectCategories")) {
+            static LocalFilterCache activatorFilterCache{};
+            static LocalFilterCache containerFilterCache{};
+            static LocalFilterCache staticFilterCache{};
+            static LocalFilterCache furnitureFilterCache{};
+
+            const auto& filteredActivators = GetFilteredEntries(
+                activatorFilterCache,
+                cache.activators,
+                showPlayableRecords,
+                showNonPlayableRecords,
+                showNamedRecords,
+                showUnnamedRecords,
+                showDeletedRecords,
+                filterEntries);
+            const auto& filteredContainers = GetFilteredEntries(
+                containerFilterCache,
+                cache.containers,
+                showPlayableRecords,
+                showNonPlayableRecords,
+                showNamedRecords,
+                showUnnamedRecords,
+                showDeletedRecords,
+                filterEntries);
+            const auto& filteredStatics = GetFilteredEntries(
+                staticFilterCache,
+                cache.statics,
+                showPlayableRecords,
+                showNonPlayableRecords,
+                showNamedRecords,
+                showUnnamedRecords,
+                showDeletedRecords,
+                filterEntries);
+            const auto& filteredFurniture = GetFilteredEntries(
+                furnitureFilterCache,
+                cache.furniture,
+                showPlayableRecords,
+                showNonPlayableRecords,
+                showNamedRecords,
+                showUnnamedRecords,
+                showDeletedRecords,
+                filterEntries);
+
             const FormTableConfig activatorConfig{
                 .tableId = "ObjectTableActivators",
                 .primaryActionLabel = localize("Objects", "sPlace", "Place"),
@@ -80,7 +173,7 @@ namespace ESPExplorerAE
 
             if (ImGui::BeginTabItem(localize("Objects", "sActivators", "Activators"))) {
                 FormTable::Draw(
-                    filterEntries(cache.activators),
+                    filteredActivators,
                     searchText,
                     selectedPluginFilter,
                     activatorConfig,
@@ -97,7 +190,7 @@ namespace ESPExplorerAE
 
             if (ImGui::BeginTabItem(localize("Objects", "sContainers", "Containers"))) {
                 FormTable::Draw(
-                    filterEntries(cache.containers),
+                    filteredContainers,
                     searchText,
                     selectedPluginFilter,
                     containerConfig,
@@ -114,7 +207,7 @@ namespace ESPExplorerAE
 
             if (ImGui::BeginTabItem(localize("Objects", "sStatics", "Statics"))) {
                 FormTable::Draw(
-                    filterEntries(cache.statics),
+                    filteredStatics,
                     searchText,
                     selectedPluginFilter,
                     staticConfig,
@@ -131,7 +224,7 @@ namespace ESPExplorerAE
 
             if (ImGui::BeginTabItem(localize("Objects", "sFurniture", "Furniture"))) {
                 FormTable::Draw(
-                    filterEntries(cache.furniture),
+                    filteredFurniture,
                     searchText,
                     selectedPluginFilter,
                     furnitureConfig,

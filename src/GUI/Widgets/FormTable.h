@@ -21,7 +21,7 @@ namespace ESPExplorerAE
         using QuantityAction = std::function<void(const FormEntry&, int)>;
 
         static void Draw(
-            std::vector<FormEntry> entries,
+            const std::vector<FormEntry>& entries,
             std::string_view searchText,
             std::string_view pluginFilter,
             const FormTableConfig& config,

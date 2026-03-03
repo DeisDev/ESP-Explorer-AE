@@ -12,12 +12,13 @@ namespace ESPExplorerAE
 
         bool changed = false;
 
-        if (ImGui::InputText(label, buffer, bufferSize)) {
+        ImGui::SetNextItemWidth(-ImGui::CalcTextSize("X").x - ImGui::GetStyle().FramePadding.x * 2.0f - ImGui::GetStyle().ItemSpacing.x);
+        if (ImGui::InputTextWithHint(std::string(std::string("##") + label).c_str(), label, buffer, bufferSize)) {
             changed = true;
         }
 
         ImGui::SameLine();
-        const std::string clearLabel = std::string("Clear##") + label;
+        const std::string clearLabel = std::string("X##") + label;
         if (ImGui::Button(clearLabel.c_str())) {
             buffer[0] = '\0';
             value.clear();

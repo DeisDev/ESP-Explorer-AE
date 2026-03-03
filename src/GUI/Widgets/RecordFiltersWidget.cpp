@@ -9,7 +9,7 @@ namespace ESPExplorerAE
         bool changed = false;
 
         const std::string headerLabel = std::string(localize("General", "sRecordFilters", "Record Filters")) + "##" + std::string(idSuffix);
-        const ImGuiTreeNodeFlags headerFlags = ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding;
+        const ImGuiTreeNodeFlags headerFlags = ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding;
         if (!ImGui::TreeNodeEx(headerLabel.c_str(), headerFlags)) {
             return false;
         }

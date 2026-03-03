@@ -22,6 +22,7 @@ namespace ESPExplorerAE
         bool& showUnknownCategories;
         bool& pluginGlobalSearchMode;
         bool& pluginSearchCaseSensitive;
+        int& equipWeaponAmmoCount;
 
         std::unordered_set<std::uint32_t>& favoriteForms;
         std::uint32_t& selectedPluginTreeRecordFormID;
@@ -44,6 +45,7 @@ namespace ESPExplorerAE
 
         std::function<const char*(std::string_view, std::string_view, const char*)> localize;
         std::function<void()> persistListFilters;
+        std::function<void()> persistFilterCheckboxes;
         std::function<void(const FormEntry&)> openItemGrantPopup;
         std::function<void(std::uint32_t)> openGlobalValuePopup;
         std::function<void(std::string, std::string, std::function<void()>)> requestActionConfirmation;

@@ -158,43 +158,7 @@ namespace ESPExplorerAE
             return (std::max)(width, minimumWidth);
         }
 
-        bool DrawLocalizedFilterToggles(std::string_view idSuffix)
-        {
-            bool changed = false;
-
-            const std::string playableLabel = std::string(L("General", "sPlayable", "Playable")) + "##Playable" + std::string(idSuffix);
-            if (ImGui::Checkbox(playableLabel.c_str(), &showPlayableRecords)) {
-                changed = true;
-            }
-            ImGui::SameLine();
-
-            const std::string nonPlayableLabel = std::string(L("General", "sNonPlayable", "Non-Playable")) + "##NonPlayable" + std::string(idSuffix);
-            if (ImGui::Checkbox(nonPlayableLabel.c_str(), &showNonPlayableRecords)) {
-                changed = true;
-            }
-            ImGui::SameLine();
-
-            const std::string namedLabel = std::string(L("General", "sNamed", "Named")) + "##Named" + std::string(idSuffix);
-            if (ImGui::Checkbox(namedLabel.c_str(), &showNamedRecords)) {
-                changed = true;
-            }
-            ImGui::SameLine();
-
-            const std::string unnamedLabel = std::string(L("General", "sUnnamedLabel", "Unnamed")) + "##Unnamed" + std::string(idSuffix);
-            if (ImGui::Checkbox(unnamedLabel.c_str(), &showUnnamedRecords)) {
-                changed = true;
-            }
-            ImGui::SameLine();
-
-            const std::string deletedLabel = std::string(L("General", "sDeleted", "Deleted")) + "##Deleted" + std::string(idSuffix);
-            if (ImGui::Checkbox(deletedLabel.c_str(), &showDeletedRecords)) {
-                changed = true;
-            }
-
-            return changed;
-        }
-
-        std::vector<FormEntry> ApplyLocalRecordFilters(std::vector<FormEntry> entries);
+        std::vector<FormEntry> ApplyLocalRecordFilters(const std::vector<FormEntry>& entries);
 
         void PersistListFilterSettings()
         {
@@ -207,9 +171,27 @@ namespace ESPExplorerAE
             Config::Save();
         }
 
-        std::vector<FormEntry> ApplyLocalRecordFiltersForTabs(std::vector<FormEntry> entries)
+        void PersistFilterCheckboxSettings()
         {
-            return ApplyLocalRecordFilters(std::move(entries));
+            auto& settings = Config::GetMutable();
+            settings.listShowPlayable = showPlayableRecords;
+            settings.listShowNonPlayable = showNonPlayableRecords;
+            settings.listShowNamed = showNamedRecords;
+            settings.listShowUnnamed = showUnnamedRecords;
+            settings.listShowDeleted = showDeletedRecords;
+            settings.pluginGlobalSearchMode = pluginGlobalSearchMode;
+            settings.pluginShowUnknownCategories = showUnknownCategories;
+            settings.pluginSearchCaseSensitive = pluginSearchCaseSensitive;
+            settings.itemSearchCaseSensitive = itemSearchCaseSensitive;
+            settings.npcSearchCaseSensitive = npcSearchCaseSensitive;
+            settings.objectSearchCaseSensitive = objectSearchCaseSensitive;
+            settings.spellPerkSearchCaseSensitive = spellPerkSearchCaseSensitive;
+            Config::Save();
+        }
+
+        std::vector<FormEntry> ApplyLocalRecordFiltersForTabs(const std::vector<FormEntry>& entries)
+        {
+            return ApplyLocalRecordFilters(entries);
         }
 
         void EnsureFavoritesLoaded()
@@ -227,6 +209,13 @@ namespace ESPExplorerAE
             showNamedRecords = settings.listShowNamed;
             showUnnamedRecords = settings.listShowUnnamed;
             showDeletedRecords = settings.listShowDeleted;
+            pluginGlobalSearchMode = settings.pluginGlobalSearchMode;
+            showUnknownCategories = settings.pluginShowUnknownCategories;
+            pluginSearchCaseSensitive = settings.pluginSearchCaseSensitive;
+            itemSearchCaseSensitive = settings.itemSearchCaseSensitive;
+            npcSearchCaseSensitive = settings.npcSearchCaseSensitive;
+            objectSearchCaseSensitive = settings.objectSearchCaseSensitive;
+            spellPerkSearchCaseSensitive = settings.spellPerkSearchCaseSensitive;
             favoritesInitialized = true;
         }
 
@@ -450,7 +439,7 @@ namespace ESPExplorerAE
             itemGrantPopup.quantity = 1;
             itemGrantPopup.ammoQuantity = 100;
             itemGrantPopup.ammoFormID = FormActions::GetWeaponAmmoFormID(entry.formID);
-            itemGrantPopup.includeAmmo = (entry.category == "Weapon" || entry.category == "Weapons") && itemGrantPopup.ammoFormID != 0;
+            itemGrantPopup.includeAmmo = (entry.category == "Weapon" || entry.category == "Weapons" || entry.category == "WEAP") && itemGrantPopup.ammoFormID != 0;
             itemGrantPopup.openRequested = true;
             itemGrantPopup.visible = true;
         }
@@ -462,7 +451,7 @@ namespace ESPExplorerAE
                 itemGrantPopup.openRequested = false;
             }
 
-            ImGui::SetNextWindowSize(ImVec2(460.0f, 320.0f), ImGuiCond_Appearing);
+            ImGui::SetNextWindowSize(ImVec2(480.0f, 340.0f), ImGuiCond_Appearing);
             if (!ImGui::BeginPopupModal(L("Items", "sGivePopupTitle", "Add Item"), &itemGrantPopup.visible)) {
                 return;
             }
@@ -475,20 +464,17 @@ namespace ESPExplorerAE
             }
 
             ImGui::TextUnformatted(itemGrantPopup.entry.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : itemGrantPopup.entry.name.c_str());
-            ImGui::TextDisabled("%08X", itemGrantPopup.entry.formID);
+            ImGui::TextDisabled("%08X  |  %s", itemGrantPopup.entry.formID, itemGrantPopup.entry.sourcePlugin.c_str());
 
             ImGui::Separator();
 
             ImGui::TextUnformatted(L("Items", "sQuantity", "Quantity"));
             ImGui::SetNextItemWidth(-1.0f);
-            ImGui::SliderInt("##ItemQtySlider", &itemGrantPopup.quantity, 1, 100, "%d");
-            ImGui::SetNextItemWidth(120.0f);
-            ImGui::InputInt("##ItemQtyInput", &itemGrantPopup.quantity, 1, 10);
+            ImGui::DragInt("##ItemQtyDrag", &itemGrantPopup.quantity, 0.25f, 1, 9999, "%d");
             if (itemGrantPopup.quantity < 1) {
                 itemGrantPopup.quantity = 1;
             }
 
-            ImGui::SameLine();
             if (ImGui::Button("1##ItemQtyPreset")) {
                 itemGrantPopup.quantity = 1;
             }
@@ -500,25 +486,28 @@ namespace ESPExplorerAE
             if (ImGui::Button("100##ItemQtyPreset")) {
                 itemGrantPopup.quantity = 100;
             }
+            ImGui::SameLine();
+            if (ImGui::Button("1000##ItemQtyPreset")) {
+                itemGrantPopup.quantity = 1000;
+            }
 
-            if (itemGrantPopup.includeAmmo) {
+            const bool hasAmmoOption = itemGrantPopup.ammoFormID != 0;
+            if (hasAmmoOption) {
+                ImGui::Spacing();
+                ImGui::Checkbox(L("Player", "sIncludeAmmo", "Include Ammo"), &itemGrantPopup.includeAmmo);
+            }
+
+            if (hasAmmoOption && itemGrantPopup.includeAmmo) {
                 ImGui::Separator();
                 ImGui::TextUnformatted(L("Items", "sAmmoQuantity", "Ammo Quantity"));
                 ImGui::SetNextItemWidth(-1.0f);
-                ImGui::SliderInt("##AmmoQtySlider", &itemGrantPopup.ammoQuantity, 0, 1000, "%d");
-                ImGui::SetNextItemWidth(120.0f);
-                ImGui::InputInt("##AmmoQtyInput", &itemGrantPopup.ammoQuantity, 10, 100);
+                ImGui::DragInt("##AmmoQtyDrag", &itemGrantPopup.ammoQuantity, 1.0f, 0, 50000, "%d");
                 if (itemGrantPopup.ammoQuantity < 0) {
                     itemGrantPopup.ammoQuantity = 0;
                 }
 
-                ImGui::SameLine();
                 if (ImGui::Button("0##AmmoQtyPreset")) {
                     itemGrantPopup.ammoQuantity = 0;
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("10##AmmoQtyPreset")) {
-                    itemGrantPopup.ammoQuantity = 10;
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("50##AmmoQtyPreset")) {
@@ -528,19 +517,22 @@ namespace ESPExplorerAE
                 if (ImGui::Button("100##AmmoQtyPreset")) {
                     itemGrantPopup.ammoQuantity = 100;
                 }
-                ImGui::SameLine();
-                if (ImGui::Button("500##AmmoQtyPreset")) {
-                    itemGrantPopup.ammoQuantity = 500;
-                }
             }
 
             ImGui::Separator();
             const char* giveToPlayerLabel = L("Items", "sGiveToPlayer", "Give To Player");
-            const char* spawnAtPlayerLabel = L("NPCs", "sSpawnAtPlayer", "Spawn At Player");
             const char* cancelLabel = L("General", "sCancel", "Cancel");
             const float popupButtonMinWidth = 96.0f;
 
-            if (ImGui::Button(giveToPlayerLabel, ImVec2(CalcButtonWidth(giveToPlayerLabel, popupButtonMinWidth), 0.0f))) {
+            const bool canApply = itemGrantPopup.quantity > 0;
+            if (!canApply) {
+                ImGui::BeginDisabled(true);
+            }
+            const bool applyPressed = ImGui::Button(giveToPlayerLabel, ImVec2(CalcButtonWidth(giveToPlayerLabel, popupButtonMinWidth), 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Enter);
+            if (!canApply) {
+                ImGui::EndDisabled();
+            }
+            if (applyPressed && canApply) {
                 if (itemGrantPopup.includeAmmo && itemGrantPopup.ammoQuantity > 0) {
                     FormActions::GiveToPlayerWithAmmo(
                         itemGrantPopup.entry.formID,
@@ -550,13 +542,6 @@ namespace ESPExplorerAE
                 } else {
                     GiveItemToPlayer(itemGrantPopup.entry.formID, itemGrantPopup.quantity);
                 }
-                itemGrantPopup.visible = false;
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button(spawnAtPlayerLabel, ImVec2(CalcButtonWidth(spawnAtPlayerLabel, popupButtonMinWidth), 0.0f))) {
-                FormActions::SpawnAtPlayer(itemGrantPopup.entry.formID, static_cast<std::uint32_t>(itemGrantPopup.quantity));
                 itemGrantPopup.visible = false;
                 ImGui::CloseCurrentPopup();
             }
@@ -767,12 +752,18 @@ namespace ESPExplorerAE
             return true;
         }
 
-        std::vector<FormEntry> ApplyLocalRecordFilters(std::vector<FormEntry> entries)
+        std::vector<FormEntry> ApplyLocalRecordFilters(const std::vector<FormEntry>& entries)
         {
-            entries.erase(std::remove_if(entries.begin(), entries.end(), [](const FormEntry& entry) {
-                return !PassesLocalRecordFilters(entry);
-            }), entries.end());
-            return entries;
+            std::vector<FormEntry> filtered;
+            filtered.reserve(entries.size());
+
+            for (const auto& entry : entries) {
+                if (PassesLocalRecordFilters(entry)) {
+                    filtered.push_back(entry);
+                }
+            }
+
+            return filtered;
         }
 
         const char* TryGetEditorID(std::uint32_t formID)
@@ -805,6 +796,7 @@ namespace ESPExplorerAE
                 .showUnknownCategories = showUnknownCategories,
                 .pluginGlobalSearchMode = pluginGlobalSearchMode,
                 .pluginSearchCaseSensitive = pluginSearchCaseSensitive,
+                .equipWeaponAmmoCount = playerCurrentWeaponAmmoAmount,
                 .favoriteForms = favoriteForms,
                 .selectedPluginTreeRecordFormID = selectedPluginTreeRecordFormID,
                 .recentPluginRecordFormIDs = recentPluginRecordFormIDs,
@@ -826,6 +818,9 @@ namespace ESPExplorerAE
                 .persistListFilters = []() {
                     PersistListFilterSettings();
                 },
+                .persistFilterCheckboxes = []() {
+                    PersistFilterCheckboxSettings();
+                },
                 .openItemGrantPopup = [](const FormEntry& entry) {
                     OpenItemGrantPopup(entry);
                 },
@@ -838,198 +833,6 @@ namespace ESPExplorerAE
             };
 
             PluginBrowserTab::Draw(plugins, cache, dataVersion, context);
-        }
-
-        void DrawItemTable(std::string_view tableId, std::vector<FormEntry> items)
-        {
-            auto& selectedItemFormID = selectedItemRows[std::string(tableId)];
-
-            items.erase(std::remove_if(items.begin(), items.end(), [](const FormEntry& entry) {
-                return !PassesLocalRecordFilters(entry);
-            }), items.end());
-
-            if (!selectedPluginFilter.empty()) {
-                items.erase(std::remove_if(items.begin(), items.end(), [](const FormEntry& entry) {
-                    return entry.sourcePlugin != selectedPluginFilter;
-                }), items.end());
-            }
-
-            if (!itemSearch.empty()) {
-                items.erase(std::remove_if(items.begin(), items.end(), [](const FormEntry& entry) {
-                    return !ContainsCaseInsensitive(entry.name, itemSearch) && !ContainsCaseInsensitive(entry.sourcePlugin, itemSearch);
-                }), items.end());
-            }
-
-            if (!items.empty()) {
-                std::ranges::sort(items, [](const FormEntry& left, const FormEntry& right) {
-                    const auto compareBy = [&](int column) {
-                        switch (column) {
-                        case 0:
-                            if (left.formID < right.formID) {
-                                return -1;
-                            }
-                            if (left.formID > right.formID) {
-                                return 1;
-                            }
-                            return 0;
-                        case 1:
-                            return left.name.compare(right.name);
-                        case 2:
-                            return left.category.compare(right.category);
-                        case 3:
-                            return left.sourcePlugin.compare(right.sourcePlugin);
-                        case 4:
-                            return static_cast<int>(left.isPlayable) - static_cast<int>(right.isPlayable);
-                        case 5:
-                            return static_cast<int>(left.isDeleted) - static_cast<int>(right.isDeleted);
-                        default:
-                            return left.name.compare(right.name);
-                        }
-                    };
-
-                    const int cmp = compareBy(itemSort.column);
-                    if (cmp == 0) {
-                        return left.formID < right.formID;
-                    }
-                    return itemSort.ascending ? (cmp < 0) : (cmp > 0);
-                });
-            }
-
-            const float actionBarReserve = ImGui::GetFrameHeightWithSpacing() + 10.0f;
-            const auto availableHeight = ImGui::GetContentRegionAvail().y - actionBarReserve;
-            const auto tableHeight = availableHeight > 180.0f ? availableHeight : 180.0f;
-            if (ImGui::BeginTable(tableId.data(), 6, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY, ImVec2(0.0f, tableHeight))) {
-                ImGui::TableSetupColumn(L("General", "sFormID", "FormID"));
-                ImGui::TableSetupColumn(L("General", "sName", "Name"), ImGuiTableColumnFlags_DefaultSort);
-                ImGui::TableSetupColumn(L("General", "sCategory", "Category"));
-                ImGui::TableSetupColumn(L("General", "sPlugin", "Plugin"));
-                ImGui::TableSetupColumn(L("General", "sPlayable", "Playable"));
-                ImGui::TableSetupColumn(L("General", "sDeleted", "Deleted"));
-                ImGui::TableHeadersRow();
-
-                if (ImGuiTableSortSpecs* sortSpecs = ImGui::TableGetSortSpecs(); sortSpecs && sortSpecs->SpecsCount > 0 && sortSpecs->SpecsDirty) {
-                    itemSort.column = sortSpecs->Specs[0].ColumnIndex;
-                    itemSort.ascending = (sortSpecs->Specs[0].SortDirection == ImGuiSortDirection_Ascending);
-                    sortSpecs->SpecsDirty = false;
-                }
-
-                char formIDBuffer[16]{};
-
-                for (const auto& entry : items) {
-                    ImGui::TableNextRow();
-
-                    ImGui::TableSetColumnIndex(0);
-                    std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", entry.formID);
-                    const bool isRowSelected = selectedItemFormID == entry.formID;
-                    if (ImGui::Selectable(formIDBuffer, isRowSelected, ImGuiSelectableFlags_AllowDoubleClick)) {
-                        selectedItemFormID = entry.formID;
-                        ImGui::SetClipboardText(formIDBuffer);
-                    }
-
-                    ImGui::TableSetColumnIndex(1);
-                    const auto* entryName = entry.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : entry.name.c_str();
-                    ImGui::TextUnformatted(entryName);
-                    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-                        selectedItemFormID = entry.formID;
-                        OpenItemGrantPopup(entry);
-                    }
-
-                    const std::string rowPopupId = "ItemRowContext##" + std::to_string(entry.formID) + std::string(tableId);
-                    if (ImGui::BeginPopupContextItem(rowPopupId.c_str())) {
-                        if (ImGui::MenuItem(L("Items", "sGiveItem", "Give Item"))) {
-                            OpenItemGrantPopup(entry);
-                        }
-
-                        if (ImGui::MenuItem(L("NPCs", "sSpawnAtPlayer", "Spawn At Player"))) {
-                            FormActions::SpawnAtPlayer(entry.formID, 1);
-                        }
-
-                        ImGui::Separator();
-                        if (ImGui::MenuItem(L("General", "sCopyFormID", "Copy FormID"))) {
-                            FormActions::CopyFormID(entry.formID);
-                        }
-
-                        if (const char* editorID = TryGetEditorID(entry.formID)) {
-                            if (ImGui::MenuItem(L("General", "sCopyEditorID", "Copy EditorID"))) {
-                                ImGui::SetClipboardText(editorID);
-                            }
-                        }
-
-                        if (ImGui::MenuItem(L("General", "sCopyRecordSource", "Copy Record Source"))) {
-                            ImGui::SetClipboardText(entry.sourcePlugin.c_str());
-                        }
-
-                        ImGui::EndPopup();
-                    }
-
-                    ImGui::TableSetColumnIndex(2);
-                    ImGui::TextUnformatted(entry.category.c_str());
-
-                    ImGui::TableSetColumnIndex(3);
-                    ImGui::TextUnformatted(entry.sourcePlugin.c_str());
-
-                    ImGui::TableSetColumnIndex(4);
-                    ImGui::TextUnformatted(entry.isPlayable ? L("General", "sYes", "Yes") : L("General", "sNo", "No"));
-
-                    ImGui::TableSetColumnIndex(5);
-                    ImGui::TextUnformatted(entry.isDeleted ? L("General", "sYes", "Yes") : L("General", "sNo", "No"));
-                }
-
-                ImGui::EndTable();
-            }
-
-            const auto selectedIt = std::find_if(items.begin(), items.end(), [&](const FormEntry& entry) {
-                return entry.formID == selectedItemFormID;
-            });
-
-            if (selectedIt != items.end()) {
-                auto drawWrappedButton = [](const char* label, bool& firstInRow) {
-                    const auto& style = ImGui::GetStyle();
-                    const float buttonWidth = ImGui::CalcTextSize(label).x + style.FramePadding.x * 2.0f;
-
-                    if (!firstInRow) {
-                        const float needed = style.ItemSpacing.x + buttonWidth;
-                        if (ImGui::GetContentRegionAvail().x >= needed) {
-                            ImGui::SameLine();
-                        } else {
-                            firstInRow = true;
-                        }
-                    }
-
-                    const bool pressed = ImGui::Button(label);
-                    firstInRow = false;
-                    return pressed;
-                };
-
-                bool firstActionInRow = true;
-                if (drawWrappedButton(L("Items", "sGiveItem", "Give Item"), firstActionInRow)) {
-                    OpenItemGrantPopup(*selectedIt);
-                }
-                if (drawWrappedButton(L("NPCs", "sSpawnAtPlayer", "Spawn At Player"), firstActionInRow)) {
-                    FormActions::SpawnAtPlayer(selectedIt->formID, 1);
-                }
-
-                const bool isFavorite = favoriteForms.contains(selectedIt->formID);
-                if (drawWrappedButton(isFavorite ? L("General", "sRemoveFavorite", "Remove Favorite") : L("General", "sAddFavorite", "Add Favorite"), firstActionInRow)) {
-                    if (isFavorite) {
-                        favoriteForms.erase(selectedIt->formID);
-                    } else {
-                        favoriteForms.insert(selectedIt->formID);
-                    }
-                }
-
-                if (drawWrappedButton(L("General", "sCopyFormID", "Copy FormID"), firstActionInRow)) {
-                    FormActions::CopyFormID(selectedIt->formID);
-                }
-                if (const char* editorID = TryGetEditorID(selectedIt->formID)) {
-                    if (drawWrappedButton(L("General", "sCopyEditorID", "Copy EditorID"), firstActionInRow)) {
-                        ImGui::SetClipboardText(editorID);
-                    }
-                }
-                if (drawWrappedButton(L("General", "sCopyRecordSource", "Copy Record Source"), firstActionInRow)) {
-                    ImGui::SetClipboardText(selectedIt->sourcePlugin.c_str());
-                }
-            }
         }
 
         void DrawItemBrowser(const FormCache& cache)
@@ -1054,6 +857,9 @@ namespace ESPExplorerAE
                 },
                 .persistListFilters = []() {
                     PersistListFilterSettings();
+                },
+                .persistFilterCheckboxes = []() {
+                    PersistFilterCheckboxSettings();
                 },
                 .openItemGrantPopup = [](const FormEntry& entry) {
                     OpenItemGrantPopup(entry);
@@ -1087,6 +893,9 @@ namespace ESPExplorerAE
                 []() {
                     PersistListFilterSettings();
                 },
+                []() {
+                    PersistFilterCheckboxSettings();
+                },
                 ApplyLocalRecordFiltersForTabs,
                 L);
         }
@@ -1112,6 +921,9 @@ namespace ESPExplorerAE
                 []() {
                     PersistListFilterSettings();
                 },
+                []() {
+                    PersistFilterCheckboxSettings();
+                },
                 ApplyLocalRecordFiltersForTabs,
                 L);
         }
@@ -1136,6 +948,9 @@ namespace ESPExplorerAE
                 },
                 []() {
                     PersistListFilterSettings();
+                },
+                []() {
+                    PersistFilterCheckboxSettings();
                 },
                 ApplyLocalRecordFiltersForTabs,
                 L);
@@ -1226,7 +1041,8 @@ namespace ESPExplorerAE
                         }
 
                         ImGui::SameLine();
-                        ImGui::Text("%s: %zu", L("PluginBrowser", "sPluginsCount", "Plugins"), plugins.size());
+                        ImGui::TextDisabled("|");
+                        ImGui::SameLine();
                         DrawPluginFilterStatus();
 
                         DrawPluginBrowser(plugins, cache, dataVersion);
@@ -1235,51 +1051,30 @@ namespace ESPExplorerAE
 
                     if (ImGui::BeginTabItem(L("Player", "sTabName", "Player"))) {
                         activeMainTab = "Player";
-                        DrawPluginFilterStatus();
                         DrawPlayerTab(cache);
                         ImGui::EndTabItem();
                     }
 
                     if (ImGui::BeginTabItem(itemTabLabel)) {
                         activeMainTab = "Item Browser";
-                        ImGui::Text("%s: %zu  %s: %zu  %s: %zu  %s: %zu",
-                            L("Items", "sWeapons", "Weapons"),
-                            counts.weapons,
-                            L("Items", "sArmor", "Armor"),
-                            counts.armors,
-                            L("Items", "sAmmo", "Ammo"),
-                            counts.ammo,
-                            L("Items", "sMisc", "Misc"),
-                            counts.misc);
                         DrawItemBrowser(cache);
                         ImGui::EndTabItem();
                     }
 
                     if (ImGui::BeginTabItem(npcTabLabel)) {
                         activeMainTab = "NPC Browser";
-                        ImGui::Text("%s: %zu", L("NPCs", "sTabName", "NPCs"), counts.npcs);
                         DrawNPCBrowser(cache);
                         ImGui::EndTabItem();
                     }
 
                     if (ImGui::BeginTabItem(objectTabLabel)) {
                         activeMainTab = "Object Browser";
-                        ImGui::Text("%s: %zu  %s: %zu  %s: %zu  %s: %zu",
-                            L("Objects", "sActivators", "Activators"),
-                            counts.activators,
-                            L("Objects", "sContainers", "Containers"),
-                            counts.containers,
-                            L("Objects", "sStatics", "Statics"),
-                            counts.statics,
-                            L("Objects", "sFurniture", "Furniture"),
-                            counts.furniture);
                         DrawObjectBrowser(cache);
                         ImGui::EndTabItem();
                     }
 
                     if (ImGui::BeginTabItem(spellPerkTabLabel)) {
                         activeMainTab = "Spells & Perks";
-                        ImGui::Text("%s: %zu  %s: %zu", L("Spells", "sSpells", "Spells"), counts.spells, L("Spells", "sPerks", "Perks"), counts.perks);
                         DrawSpellPerkBrowser(cache);
                         ImGui::EndTabItem();
                     }
@@ -1311,14 +1106,25 @@ namespace ESPExplorerAE
                 ImGuiIO& io = ImGui::GetIO();
                 const float fps = io.Framerate;
                 const float frameTime = fps > 0.0f ? (1000.0f / fps) : 0.0f;
-                ImGui::Text("%s | %s: %zu  %s: %zu  %s: %zu",
-                    L("General", "sStatus", "Status"),
-                    L("PluginBrowser", "sPluginsCount", "Plugins"),
-                    plugins.size(),
-                    L("General", "sForms", "Forms"),
-                    totalForms,
-                    L("General", "sFavorites", "Favorites"),
-                    favoriteForms.size());
+
+                if (settings.showFPSInStatus) {
+                    ImGui::Text("%s: %zu  %s: %zu  %s: %zu  |  %.0f %s  %.1fms",
+                        L("PluginBrowser", "sPluginsCount", "Plugins"),
+                        plugins.size(),
+                        L("General", "sForms", "Forms"),
+                        totalForms,
+                        L("General", "sFavorites", "Favorites"),
+                        favoriteForms.size(),
+                        fps, L("General", "sFPS", "FPS"), frameTime);
+                } else {
+                    ImGui::Text("%s: %zu  %s: %zu  %s: %zu",
+                        L("PluginBrowser", "sPluginsCount", "Plugins"),
+                        plugins.size(),
+                        L("General", "sForms", "Forms"),
+                        totalForms,
+                        L("General", "sFavorites", "Favorites"),
+                        favoriteForms.size());
+                }
 
                 const float resetWidth = CalcButtonWidth(L("General", "sResetFilters", "Reset Filters"));
                 const float undoWidth = CalcButtonWidth(L("General", "sUndoLastAction", "Undo Last Action"));
@@ -1343,10 +1149,6 @@ namespace ESPExplorerAE
                 }
                 if (!canUndo) {
                     ImGui::EndDisabled();
-                }
-
-                if (settings.showFPSInStatus) {
-                    ImGui::Text("%s: %.1f  %s: %.2f ms", L("General", "sFPS", "FPS"), fps, L("General", "sFrame", "Frame"), frameTime);
                 }
             }
             ImGui::EndChild();

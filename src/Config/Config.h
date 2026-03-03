@@ -19,6 +19,13 @@ namespace ESPExplorerAE
         bool listShowNamed{ true };
         bool listShowUnnamed{ true };
         bool listShowDeleted{ true };
+        bool pluginGlobalSearchMode{ false };
+        bool pluginShowUnknownCategories{ false };
+        bool pluginSearchCaseSensitive{ false };
+        bool itemSearchCaseSensitive{ false };
+        bool npcSearchCaseSensitive{ false };
+        bool objectSearchCaseSensitive{ false };
+        bool spellPerkSearchCaseSensitive{ false };
         bool showFPSInStatus{ true };
         bool rememberWindowPos{ true };
         float fontSize{ 16.0f };

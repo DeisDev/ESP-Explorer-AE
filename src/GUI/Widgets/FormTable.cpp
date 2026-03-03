@@ -22,6 +22,18 @@ namespace ESPExplorerAE
         std::unordered_map<std::string, SortState> sortStates{};
         std::unordered_map<std::string, std::unordered_set<std::uint32_t>> selectedRows{};
         std::unordered_map<std::string, bool> searchCaseSensitive{};
+        struct TableRenderCache
+        {
+            const std::vector<FormEntry>* source{ nullptr };
+            std::size_t sourceSize{ 0 };
+            std::string search{};
+            std::string pluginFilter{};
+            bool caseSensitive{ false };
+            int sortColumn{ 1 };
+            bool sortAscending{ true };
+            std::vector<FormEntry> entries{};
+        };
+        std::unordered_map<std::string, TableRenderCache> tableRenderCaches{};
         std::uint32_t pendingQuantityFormID{ 0 };
         int pendingQuantity{ 1 };
         int pendingBulkQuantity{ 1 };
@@ -33,6 +45,82 @@ namespace ESPExplorerAE
         }
 
         const char* TryGetEditorID(std::uint32_t formID);
+        bool MatchesSearch(const FormEntry& entry, std::string_view query, bool caseSensitive);
+
+        const std::vector<FormEntry>& GetProcessedEntries(
+            std::string_view tableId,
+            const std::vector<FormEntry>& sourceEntries,
+            std::string_view searchText,
+            std::string_view pluginFilter,
+            bool caseSensitive,
+            const SortState& sortState)
+        {
+            auto& cache = tableRenderCaches[std::string(tableId)];
+
+            const bool needsRebuild =
+                cache.source != &sourceEntries ||
+                cache.sourceSize != sourceEntries.size() ||
+                cache.search != searchText ||
+                cache.pluginFilter != pluginFilter ||
+                cache.caseSensitive != caseSensitive ||
+                cache.sortColumn != sortState.column ||
+                cache.sortAscending != sortState.ascending;
+
+            if (!needsRebuild) {
+                return cache.entries;
+            }
+
+            cache.entries = sourceEntries;
+
+            if (!pluginFilter.empty()) {
+                cache.entries.erase(std::remove_if(cache.entries.begin(), cache.entries.end(), [&](const FormEntry& entry) {
+                    return entry.sourcePlugin != pluginFilter;
+                }), cache.entries.end());
+            }
+
+            if (!searchText.empty()) {
+                cache.entries.erase(std::remove_if(cache.entries.begin(), cache.entries.end(), [&](const FormEntry& entry) {
+                    return !MatchesSearch(entry, searchText, caseSensitive);
+                }), cache.entries.end());
+            }
+
+            std::ranges::sort(cache.entries, [&](const FormEntry& left, const FormEntry& right) {
+                const auto compareBy = [&](int column) {
+                    switch (column) {
+                    case 0:
+                        if (left.formID < right.formID) {
+                            return -1;
+                        }
+                        if (left.formID > right.formID) {
+                            return 1;
+                        }
+                        return 0;
+                    case 1:
+                        return left.name.compare(right.name);
+                    case 2:
+                        return left.sourcePlugin.compare(right.sourcePlugin);
+                    default:
+                        return left.name.compare(right.name);
+                    }
+                };
+
+                const int cmp = compareBy(sortState.column);
+                if (cmp == 0) {
+                    return left.formID < right.formID;
+                }
+                return sortState.ascending ? (cmp < 0) : (cmp > 0);
+            });
+
+            cache.source = &sourceEntries;
+            cache.sourceSize = sourceEntries.size();
+            cache.search = searchText;
+            cache.pluginFilter = pluginFilter;
+            cache.caseSensitive = caseSensitive;
+            cache.sortColumn = sortState.column;
+            cache.sortAscending = sortState.ascending;
+
+            return cache.entries;
+        }
 
         bool ContainsCaseInsensitive(std::string_view text, std::string_view query)
         {
@@ -106,6 +194,11 @@ namespace ESPExplorerAE
             return category == "CELL" || category == "WRLD" || category == "LCTN" || category == "REGN";
         }
 
+        bool IsSpawnCategory(std::string_view category)
+        {
+            return category == "NPC" || category == "NPC_" || category == "LVLN";
+        }
+
         const char* TryGetEditorID(std::uint32_t formID)
         {
             auto* form = RE::TESForm::GetFormByID(formID);
@@ -123,7 +216,7 @@ namespace ESPExplorerAE
     }
 
     void FormTable::Draw(
-        std::vector<FormEntry> entries,
+        const std::vector<FormEntry>& sourceEntries,
         std::string_view searchText,
         std::string_view pluginFilter,
         const FormTableConfig& config,
@@ -132,25 +225,17 @@ namespace ESPExplorerAE
         std::unordered_set<std::uint32_t>* favorites,
         bool* caseSensitiveOverride)
     {
-        if (!pluginFilter.empty()) {
-            entries.erase(std::remove_if(entries.begin(), entries.end(), [&](const FormEntry& entry) {
-                return entry.sourcePlugin != pluginFilter;
-            }), entries.end());
-        }
+        const std::string tableId = config.tableId ? config.tableId : "FormTable";
 
-        auto& sortState = sortStates[config.tableId ? config.tableId : "FormTable"];
-        auto& selected = selectedRows[config.tableId ? config.tableId : "FormTable"];
-        auto& tableCaseSensitive = searchCaseSensitive[config.tableId ? config.tableId : "FormTable"];
+        auto& sortState = sortStates[tableId];
+        auto& selected = selectedRows[tableId];
+        auto& tableCaseSensitive = searchCaseSensitive[tableId];
         bool caseSensitive = caseSensitiveOverride ? *caseSensitiveOverride : tableCaseSensitive;
         if (caseSensitiveOverride) {
             tableCaseSensitive = *caseSensitiveOverride;
         }
 
-        if (!searchText.empty()) {
-            entries.erase(std::remove_if(entries.begin(), entries.end(), [&](const FormEntry& entry) {
-                return !MatchesSearch(entry, searchText, caseSensitive);
-            }), entries.end());
-        }
+        const auto& entries = GetProcessedEntries(tableId, sourceEntries, searchText, pluginFilter, caseSensitive, sortState);
 
         ImGui::Spacing();
 
@@ -172,37 +257,7 @@ namespace ESPExplorerAE
             return pressed;
         };
 
-        std::ranges::sort(entries, [&](const FormEntry& left, const FormEntry& right) {
-            const auto compareBy = [&](int column) {
-                switch (column) {
-                case 0:
-                    if (left.formID < right.formID) {
-                        return -1;
-                    }
-                    if (left.formID > right.formID) {
-                        return 1;
-                    }
-                    return 0;
-                case 1:
-                    return left.name.compare(right.name);
-                case 2:
-                    return left.sourcePlugin.compare(right.sourcePlugin);
-                default:
-                    return left.name.compare(right.name);
-                }
-            };
-
-            const int cmp = compareBy(sortState.column);
-            if (cmp == 0) {
-                return left.formID < right.formID;
-            }
-            return sortState.ascending ? (cmp < 0) : (cmp > 0);
-        });
-
         bool firstActionInRow = true;
-
-        ImGui::Text("%s: %zu  %s: %zu", L("General", "sSelected", "Selected"), selected.size(), L("General", "sVisible", "Visible"), entries.size());
-        ImGui::Spacing();
 
         if (drawWrappedButton(L("General", "sSelectVisible", "Select Visible"), firstActionInRow)) {
             selected.clear();
@@ -309,116 +364,129 @@ namespace ESPExplorerAE
 
         char formIDBuffer[16]{};
 
-        for (const auto& entry : entries) {
-            ImGui::TableNextRow();
+        ImGuiListClipper clipper;
+        clipper.Begin(static_cast<int>(entries.size()));
+        while (clipper.Step()) {
+            for (int rowIndex = clipper.DisplayStart; rowIndex < clipper.DisplayEnd; ++rowIndex) {
+                const auto& entry = entries[static_cast<std::size_t>(rowIndex)];
+                ImGui::TableNextRow();
 
-            const std::string rowPopupId = "RowContext##" + std::to_string(entry.formID) + std::string(config.tableId);
-            const bool rowIsSelected = selected.contains(entry.formID);
-            const bool isFavoriteRow = config.allowFavorites && favorites && favorites->contains(entry.formID);
+                const std::string rowPopupId = "RowContext##" + std::to_string(entry.formID) + std::string(config.tableId);
+                const bool rowIsSelected = selected.contains(entry.formID);
+                const bool isFavoriteRow = config.allowFavorites && favorites && favorites->contains(entry.formID);
 
-            ImGui::TableSetColumnIndex(0);
-            const std::string rowSelectableId = "##row" + std::to_string(entry.formID) + std::string(config.tableId);
-            const bool rowClicked = ImGui::Selectable(rowSelectableId.c_str(), rowIsSelected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap);
-            if (rowClicked) {
-                if (ImGui::GetIO().KeyCtrl) {
-                    if (rowIsSelected) {
-                        selected.erase(entry.formID);
+                ImGui::TableSetColumnIndex(0);
+                std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", entry.formID);
+                const std::string rowSelectableLabel = std::string(formIDBuffer) + "##row" + std::to_string(entry.formID) + std::string(config.tableId);
+                const bool rowClicked = ImGui::Selectable(rowSelectableLabel.c_str(), rowIsSelected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap, ImVec2(0.0f, ImGui::GetTextLineHeight()));
+                if (rowClicked) {
+                    if (ImGui::GetIO().KeyCtrl) {
+                        if (rowIsSelected) {
+                            selected.erase(entry.formID);
+                        } else {
+                            selected.insert(entry.formID);
+                        }
                     } else {
+                        selected.clear();
                         selected.insert(entry.formID);
                     }
+                }
+                ImGui::OpenPopupOnItemClick(rowPopupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
+
+                ImGui::TableSetColumnIndex(1);
+                const auto* displayName = entry.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : entry.name.c_str();
+                if (isFavoriteRow) {
+                    std::string favoriteName = std::string("★ ") + displayName;
+                    ImGui::TextUnformatted(favoriteName.c_str());
                 } else {
-                    selected.clear();
-                    selected.insert(entry.formID);
+                    ImGui::TextUnformatted(displayName);
                 }
-            }
-            ImGui::OpenPopupOnItemClick(rowPopupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
+                ImGui::OpenPopupOnItemClick(rowPopupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
 
-            ImGui::TableSetColumnIndex(0);
-            std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", entry.formID);
-            ImGui::TextUnformatted(formIDBuffer);
-            if (ImGui::IsItemClicked()) {
-                ImGui::SetClipboardText(formIDBuffer);
-            }
-            ImGui::OpenPopupOnItemClick(rowPopupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
-
-            ImGui::TableSetColumnIndex(1);
-            const auto* displayName = entry.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : entry.name.c_str();
-            if (isFavoriteRow) {
-                std::string favoriteName = std::string("★ ") + displayName;
-                ImGui::TextUnformatted(favoriteName.c_str());
-            } else {
-                ImGui::TextUnformatted(displayName);
-            }
-            ImGui::OpenPopupOnItemClick(rowPopupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
-
-            if (ImGui::IsItemHovered()) {
-                ImGui::BeginTooltip();
-                ImGui::Text("%s: %s", L("General", "sName", "Name"), displayName);
-                ImGui::Text("%s: %s", L("General", "sCategory", "Category"), entry.category.c_str());
-                ImGui::Text("%s: %s", L("General", "sPlugin", "Plugin"), entry.sourcePlugin.c_str());
-                ImGui::Text("%s: %s", L("General", "sDeleted", "Deleted"), entry.isDeleted ? L("General", "sYes", "Yes") : L("General", "sNo", "No"));
-                ImGui::Text("%s: %s", L("General", "sPlayable", "Playable"), entry.isPlayable ? L("General", "sYes", "Yes") : L("General", "sNo", "No"));
-                if (config.allowFavorites && favorites) {
-                    ImGui::Text("%s: %s", L("General", "sFavorite", "Favorite"), isFavoriteRow ? L("General", "sYes", "Yes") : L("General", "sNo", "No"));
-                }
-                ImGui::EndTooltip();
-            }
-
-            ImGui::TableSetColumnIndex(2);
-            ImGui::TextUnformatted(entry.sourcePlugin.c_str());
-            ImGui::OpenPopupOnItemClick(rowPopupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
-
-            if (ImGui::BeginPopup(rowPopupId.c_str())) {
-                if (ImGui::MenuItem(rowIsSelected ? L("General", "sDeselect", "Deselect") : L("General", "sSelect", "Select"))) {
-                    if (rowIsSelected) {
-                        selected.erase(entry.formID);
-                    } else {
-                        selected.insert(entry.formID);
+                if (ImGui::IsItemHovered()) {
+                    ImGui::BeginTooltip();
+                    ImGui::Text("%s: %s", L("General", "sName", "Name"), displayName);
+                    ImGui::Text("%s: %s", L("General", "sCategory", "Category"), entry.category.c_str());
+                    ImGui::Text("%s: %s", L("General", "sPlugin", "Plugin"), entry.sourcePlugin.c_str());
+                    ImGui::Text("%s: %s", L("General", "sDeleted", "Deleted"), entry.isDeleted ? L("General", "sYes", "Yes") : L("General", "sNo", "No"));
+                    ImGui::Text("%s: %s", L("General", "sPlayable", "Playable"), entry.isPlayable ? L("General", "sYes", "Yes") : L("General", "sNo", "No"));
+                    if (config.allowFavorites && favorites) {
+                        ImGui::Text("%s: %s", L("General", "sFavorite", "Favorite"), isFavoriteRow ? L("General", "sYes", "Yes") : L("General", "sNo", "No"));
                     }
+                    ImGui::EndTooltip();
                 }
 
-                ImGui::Separator();
+                ImGui::TableSetColumnIndex(2);
+                ImGui::TextUnformatted(entry.sourcePlugin.c_str());
+                ImGui::OpenPopupOnItemClick(rowPopupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
 
-                if (primaryAction) {
-                    const char* actionLabel = config.primaryActionLabel ? config.primaryActionLabel : "Action";
-                    if (ImGui::MenuItem(actionLabel)) {
-                        primaryAction(entry);
-                    }
-                }
-
-                if (quantityAction && config.quantityActionLabel) {
-                    if (pendingQuantityFormID != entry.formID) {
-                        pendingQuantityFormID = entry.formID;
-                        pendingQuantity = 1;
+                if (ImGui::BeginPopup(rowPopupId.c_str())) {
+                    if (ImGui::MenuItem(rowIsSelected ? L("General", "sDeselect", "Deselect") : L("General", "sSelect", "Select"))) {
+                        if (rowIsSelected) {
+                            selected.erase(entry.formID);
+                        } else {
+                            selected.insert(entry.formID);
+                        }
                     }
 
-                    ImGui::InputInt(L("General", "sQuantity", "Quantity"), &pendingQuantity, 1, 10);
-                    if (pendingQuantity < 1) {
-                        pendingQuantity = 1;
+                    ImGui::Separator();
+
+                    if (primaryAction) {
+                        const char* actionLabel = config.primaryActionLabel ? config.primaryActionLabel : "Action";
+                        if (ImGui::MenuItem(actionLabel)) {
+                            primaryAction(entry);
+                        }
                     }
 
-                    if (ImGui::MenuItem(config.quantityActionLabel)) {
-                        quantityAction(entry, pendingQuantity);
-                    }
-                }
+                    if (quantityAction && config.quantityActionLabel) {
+                        if (pendingQuantityFormID != entry.formID) {
+                            pendingQuantityFormID = entry.formID;
+                            pendingQuantity = 1;
+                        }
 
-                if (IsSpellCategory(entry.category)) {
-                    if (!primaryAction && ImGui::MenuItem(L("General", "sAddSpell", "Add Spell"))) {
-                        FormActions::AddSpellToPlayer(entry.formID);
-                    }
-                    if (ImGui::MenuItem(L("General", "sRemoveSpell", "Remove Spell"))) {
-                        FormActions::RemoveSpellFromPlayer(entry.formID);
-                    }
-                }
+                        ImGui::InputInt(L("General", "sQuantity", "Quantity"), &pendingQuantity, 1, 10);
+                        if (pendingQuantity < 1) {
+                            pendingQuantity = 1;
+                        }
 
-                if (IsPerkCategory(entry.category)) {
-                    if (!primaryAction && ImGui::MenuItem(L("General", "sAddPerk", "Add Perk"))) {
-                        FormActions::AddPerkToPlayer(entry.formID);
+                        if (ImGui::MenuItem(config.quantityActionLabel)) {
+                            quantityAction(entry, pendingQuantity);
+                        }
                     }
-                    if (ImGui::MenuItem(L("General", "sRemovePerk", "Remove Perk"))) {
-                        FormActions::RemovePerkFromPlayer(entry.formID);
+
+                    if (IsSpawnCategory(entry.category) && !quantityAction) {
+                        if (pendingQuantityFormID != entry.formID) {
+                            pendingQuantityFormID = entry.formID;
+                            pendingQuantity = 1;
+                        }
+
+                        ImGui::InputInt(L("General", "sQuantity", "Quantity"), &pendingQuantity, 1, 10);
+                        if (pendingQuantity < 1) {
+                            pendingQuantity = 1;
+                        }
+
+                        if (ImGui::MenuItem(L("NPCs", "sSpawnAtPlayer", "Spawn At Player"))) {
+                            FormActions::SpawnAtPlayer(entry.formID, static_cast<std::uint32_t>(pendingQuantity));
+                        }
                     }
-                }
+
+                    if (IsSpellCategory(entry.category)) {
+                        if (!primaryAction && ImGui::MenuItem(L("General", "sAddSpell", "Add Spell"))) {
+                            FormActions::AddSpellToPlayer(entry.formID);
+                        }
+                        if (ImGui::MenuItem(L("General", "sRemoveSpell", "Remove Spell"))) {
+                            FormActions::RemoveSpellFromPlayer(entry.formID);
+                        }
+                    }
+
+                    if (IsPerkCategory(entry.category)) {
+                        if (!primaryAction && ImGui::MenuItem(L("General", "sAddPerk", "Add Perk"))) {
+                            FormActions::AddPerkToPlayer(entry.formID);
+                        }
+                        if (ImGui::MenuItem(L("General", "sRemovePerk", "Remove Perk"))) {
+                            FormActions::RemovePerkFromPlayer(entry.formID);
+                        }
+                    }
 
                 if (IsQuestCategory(entry.category)) {
                     if (ImGui::MenuItem(L("General", "sStartQuest", "Start Quest"))) {
@@ -478,12 +546,14 @@ namespace ESPExplorerAE
                     }
                 }
 
-                ImGui::EndPopup();
+                    ImGui::EndPopup();
+                }
             }
-
         }
 
         ImGui::EndTable();
+
+        ImGui::TextDisabled("%s: %zu  |  %s: %zu", L("General", "sVisible", "Visible"), entries.size(), L("General", "sSelectedShort", "Sel"), selected.size());
 
         const FormEntry* selectedEntry = nullptr;
         for (const auto& entry : entries) {
@@ -501,6 +571,22 @@ namespace ESPExplorerAE
             bool firstSelectedActionInRow = true;
             if (primaryAction && drawWrappedButton(config.primaryActionLabel ? config.primaryActionLabel : "Action", firstSelectedActionInRow)) {
                 primaryAction(*selectedEntry);
+            }
+
+            if (quantityAction && config.quantityActionLabel) {
+                if (!firstSelectedActionInRow) {
+                    ImGui::SameLine();
+                }
+                ImGui::SetNextItemWidth(80.0f);
+                ImGui::InputInt("##SelectedQty", &pendingQuantity, 1, 10);
+                if (pendingQuantity < 1) {
+                    pendingQuantity = 1;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button(config.quantityActionLabel)) {
+                    quantityAction(*selectedEntry, pendingQuantity);
+                }
+                firstSelectedActionInRow = false;
             }
 
             if (config.allowFavorites && favorites) {

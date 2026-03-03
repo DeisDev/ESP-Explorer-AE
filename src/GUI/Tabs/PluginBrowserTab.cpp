@@ -274,13 +274,23 @@ namespace ESPExplorerAE
 
         const FormEntry* FindRecordByFormID(const FormCache& cache, std::uint32_t formID)
         {
-            for (const auto& entry : cache.allRecords) {
-                if (entry.formID == formID) {
-                    return &entry;
+            static const FormCache* indexedCache{ nullptr };
+            static std::size_t indexedSize{ 0 };
+            static std::unordered_map<std::uint32_t, const FormEntry*> formIDIndex{};
+
+            if (indexedCache != &cache || indexedSize != cache.allRecords.size()) {
+                formIDIndex.clear();
+                formIDIndex.reserve(cache.allRecords.size());
+                for (const auto& entry : cache.allRecords) {
+                    formIDIndex[entry.formID] = &entry;
                 }
+
+                indexedCache = &cache;
+                indexedSize = cache.allRecords.size();
             }
 
-            return nullptr;
+            const auto it = formIDIndex.find(formID);
+            return it != formIDIndex.end() ? it->second : nullptr;
         }
 
         void TrackRecentRecord(std::uint32_t formID, PluginBrowserTabContext& context)
@@ -299,14 +309,216 @@ namespace ESPExplorerAE
                 context.recentPluginRecordFormIDs.pop_back();
             }
         }
+
+        void EquipRecordWithConfiguredAmmo(const FormEntry& record, int ammoCount)
+        {
+            char command[64]{};
+            std::snprintf(command, sizeof(command), "player.equipitem %08X", record.formID);
+            FormActions::ExecuteConsoleCommand(command);
+
+            const bool isWeapon = record.category == "WEAP" || record.category == "Weapon";
+            if (!isWeapon || ammoCount <= 0) {
+                return;
+            }
+
+            const auto ammoFormID = FormActions::GetWeaponAmmoFormID(record.formID);
+            if (ammoFormID != 0) {
+                FormActions::GiveToPlayer(ammoFormID, static_cast<std::uint32_t>(ammoCount));
+            }
+        }
+
+        std::unordered_map<std::uint32_t, int> pluginSpawnQuantities{};
+
+        void DrawRecordContextMenu(const FormEntry& record, bool isSelected, PluginBrowserTabContext& context)
+        {
+            if (ImGui::MenuItem(isSelected ? context.localize("General", "sDeselect", "Deselect") : context.localize("General", "sSelect", "Select"))) {
+                context.selectedPluginTreeRecordFormID = isSelected ? 0 : record.formID;
+            }
+
+            ImGui::Separator();
+
+            if (CanGiveFromTreeCategory(record.category) && ImGui::MenuItem(context.localize("Items", "sGiveItem", "Give Item"))) {
+                context.openItemGrantPopup(record);
+            }
+
+            if (CanGiveFromTreeCategory(record.category)) {
+                int& spawnQuantity = pluginSpawnQuantities[record.formID];
+                if (spawnQuantity < 1) {
+                    spawnQuantity = 1;
+                }
+
+                ImGui::SetNextItemWidth(120.0f);
+                ImGui::InputInt(context.localize("General", "sQuantity", "Quantity"), &spawnQuantity, 1, 10);
+                if (spawnQuantity < 1) {
+                    spawnQuantity = 1;
+                }
+
+                if (ImGui::MenuItem(context.localize("NPCs", "sSpawnAtPlayer", "Spawn At Player"))) {
+                    FormActions::SpawnAtPlayer(record.formID, static_cast<std::uint32_t>(spawnQuantity));
+                }
+            }
+
+            if (CanSpawnFromTreeCategory(record.category)) {
+                int& spawnQuantity = pluginSpawnQuantities[record.formID];
+                if (spawnQuantity < 1) {
+                    spawnQuantity = 1;
+                }
+
+                ImGui::InputInt(context.localize("General", "sQuantity", "Quantity"), &spawnQuantity, 1, 10);
+                if (spawnQuantity < 1) {
+                    spawnQuantity = 1;
+                }
+
+                if (ImGui::MenuItem(context.localize("NPCs", "sSpawnAtPlayer", "Spawn At Player"))) {
+                    const auto formID = record.formID;
+                    const auto quantity = static_cast<std::uint32_t>(spawnQuantity);
+                    const std::string name = record.name;
+                    context.requestActionConfirmation(
+                        context.localize("General", "sConfirmSpawnTitle", "Confirm Spawn"),
+                        std::string(context.localize("General", "sConfirmSpawnMessage", "Spawn selected record at player?")) + "\n" + (name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : name),
+                        [formID, quantity]() {
+                            FormActions::SpawnAtPlayer(formID, quantity);
+                        });
+                }
+            }
+
+            const bool isFavorite = context.favoriteForms.contains(record.formID);
+            if (ImGui::MenuItem(isFavorite ? context.localize("General", "sRemoveFavorite", "Remove Favorite") : context.localize("General", "sAddFavorite", "Add Favorite"))) {
+                if (isFavorite) {
+                    context.favoriteForms.erase(record.formID);
+                } else {
+                    context.favoriteForms.insert(record.formID);
+                }
+            }
+
+            if (IsQuestCategory(record.category)) {
+                if (ImGui::MenuItem(context.localize("General", "sStartQuest", "Start Quest"))) {
+                    const auto formID = record.formID;
+                    context.requestActionConfirmation(
+                        context.localize("General", "sConfirmQuestTitle", "Confirm Quest Action"),
+                        context.localize("General", "sConfirmStartQuest", "Start selected quest?"),
+                        [formID]() {
+                            char command[64]{};
+                            std::snprintf(command, sizeof(command), "startquest %08X", formID);
+                            FormActions::ExecuteConsoleCommand(command);
+                        });
+                }
+                if (ImGui::MenuItem(context.localize("General", "sCompleteQuest", "Complete Quest"))) {
+                    const auto formID = record.formID;
+                    context.requestActionConfirmation(
+                        context.localize("General", "sConfirmQuestTitle", "Confirm Quest Action"),
+                        context.localize("General", "sConfirmCompleteQuest", "Complete selected quest?"),
+                        [formID]() {
+                            char command[64]{};
+                            std::snprintf(command, sizeof(command), "completequest %08X", formID);
+                            FormActions::ExecuteConsoleCommand(command);
+                        });
+                }
+            }
+
+            if (IsPerkCategory(record.category)) {
+                if (ImGui::MenuItem(context.localize("General", "sAddPerk", "Add Perk"))) {
+                    FormActions::AddPerkToPlayer(record.formID);
+                }
+                if (ImGui::MenuItem(context.localize("General", "sRemovePerk", "Remove Perk"))) {
+                    FormActions::RemovePerkFromPlayer(record.formID);
+                }
+            }
+
+            if (IsSpellLikeCategory(record.category)) {
+                if (ImGui::MenuItem(context.localize("General", "sAddSpellEffect", "Add Spell/Effect"))) {
+                    FormActions::AddSpellToPlayer(record.formID);
+                }
+                if (ImGui::MenuItem(context.localize("General", "sRemoveSpellEffect", "Remove Spell/Effect"))) {
+                    FormActions::RemoveSpellFromPlayer(record.formID);
+                }
+            }
+
+            if (IsWeatherCategory(record.category) && ImGui::MenuItem(context.localize("General", "sSetWeather", "Set Weather"))) {
+                const auto formID = record.formID;
+                context.requestActionConfirmation(
+                    context.localize("General", "sConfirmWeatherTitle", "Confirm Weather Change"),
+                    context.localize("General", "sConfirmWeather", "Set current weather to selected weather record?"),
+                    [formID]() {
+                        char command[64]{};
+                        std::snprintf(command, sizeof(command), "fw %08X", formID);
+                        FormActions::ExecuteConsoleCommand(command);
+                    });
+            }
+
+            if (IsSoundCategory(record.category) && ImGui::MenuItem(context.localize("General", "sPlaySound", "Play Sound"))) {
+                if (const char* editorID = TryGetEditorID(record.formID)) {
+                    std::string command = std::string("playsound ") + editorID;
+                    FormActions::ExecuteConsoleCommand(command);
+                }
+            }
+
+            if (IsGlobalCategory(record.category) && ImGui::MenuItem(context.localize("General", "sSetGlobal", "Set Global"))) {
+                context.openGlobalValuePopup(record.formID);
+            }
+
+            if (IsOutfitCategory(record.category) && ImGui::MenuItem(context.localize("General", "sAddOutfitItems", "Add Outfit Items"))) {
+                FormActions::AddOutfitItemsToPlayer(record.formID);
+            }
+
+            if (IsConstructibleCategory(record.category) && ImGui::MenuItem(context.localize("General", "sAddCraftedItem", "Add Crafted Item"))) {
+                FormActions::AddConstructedItemToPlayer(record.formID);
+            }
+
+            const bool isEquippable = record.category == "WEAP" || record.category == "Weapon" || record.category == "ARMO" || record.category == "Armor";
+            if (isEquippable && ImGui::MenuItem(context.localize("General", "sEquipItem", "Equip Item"))) {
+                EquipRecordWithConfiguredAmmo(record, context.equipWeaponAmmoCount);
+            }
+
+            if (CanTeleportFromTreeCategory(record.category)) {
+                auto* teleportForm = RE::TESForm::GetFormByID(record.formID);
+                const char* editorID = teleportForm ? teleportForm->GetFormEditorID() : nullptr;
+                const bool canUseCoc = editorID && editorID[0] != '\0';
+                if (canUseCoc && ImGui::MenuItem(context.localize("General", "sTeleportCOC", "Teleport (COC)"))) {
+                    const auto editorIDCopy = std::string(editorID);
+                    context.requestActionConfirmation(
+                        context.localize("General", "sConfirmTeleportTitle", "Confirm Teleport"),
+                        context.localize("General", "sConfirmTeleport", "Teleport to selected destination?"),
+                        [editorIDCopy]() {
+                            std::string command = std::string("coc ") + editorIDCopy;
+                            FormActions::ExecuteConsoleCommand(command);
+                        });
+                }
+            }
+
+            ImGui::Separator();
+
+            if (ImGui::MenuItem(context.localize("General", "sCopyFormID", "Copy FormID"))) {
+                FormActions::CopyFormID(record.formID);
+            }
+
+            if (const char* editorID = TryGetEditorID(record.formID); editorID && editorID[0] != '\0') {
+                if (ImGui::MenuItem(context.localize("General", "sCopyEditorID", "Copy EditorID"))) {
+                    ImGui::SetClipboardText(editorID);
+                }
+            }
+
+            const auto sourceText = record.sourcePlugin.empty() ? context.localize("General", "sUnknown", "<Unknown>") : record.sourcePlugin.c_str();
+            if (ImGui::MenuItem(context.localize("General", "sCopyRecordSource", "Copy Record Source"))) {
+                ImGui::SetClipboardText(sourceText);
+            }
+        }
     }
 
     void PluginBrowserTab::Draw(const std::vector<PluginInfo>& plugins, const FormCache& cache, std::uint64_t dataVersion, PluginBrowserTabContext& context)
     {
         bool listFilterSettingsChanged = false;
 
-        if (ImGui::InputText(context.localize("PluginBrowser", "sSearch", "Plugin Search"), context.pluginSearchBuffer, context.pluginSearchBufferSize)) {
+        const float clearBtnWidth = ImGui::CalcTextSize("X").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+        const float searchFieldWidth = ImGui::GetContentRegionAvail().x * 0.55f - clearBtnWidth - ImGui::GetStyle().ItemSpacing.x;
+        ImGui::SetNextItemWidth(searchFieldWidth);
+        if (ImGui::InputTextWithHint("##PluginSearchInput", context.localize("PluginBrowser", "sSearch", "Plugin Search"), context.pluginSearchBuffer, context.pluginSearchBufferSize)) {
             context.pluginSearch = context.pluginSearchBuffer;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("X##PluginSearchClear")) {
+            context.pluginSearchBuffer[0] = '\0';
+            context.pluginSearch.clear();
         }
         ImGui::SameLine();
 
@@ -314,8 +526,30 @@ namespace ESPExplorerAE
             context.selectedPluginFilter.clear();
         }
 
+        if (ImGui::Checkbox(context.localize("PluginBrowser", "sGlobalSearch", "Global Search"), &context.pluginGlobalSearchMode)) {
+            context.persistFilterCheckboxes();
+        }
+        {
+            auto wrappedSameLine = [](const char* label) {
+                float w = ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetFontSize() + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::GetStyle().ItemSpacing.x;
+                if (ImGui::GetContentRegionAvail().x >= w) {
+                    ImGui::SameLine();
+                }
+            };
+            const char* caseSensLabel = context.localize("PluginBrowser", "sCaseSensitiveSearch", "Case Sensitive");
+            wrappedSameLine(caseSensLabel);
+            if (ImGui::Checkbox(caseSensLabel, &context.pluginSearchCaseSensitive)) {
+                context.persistFilterCheckboxes();
+            }
+            const char* unknownLabel = context.localize("PluginBrowser", "sShowUnknownCategories", "Show Unknown Categories");
+            wrappedSameLine(unknownLabel);
+            if (ImGui::Checkbox(unknownLabel, &context.showUnknownCategories)) {
+                listFilterSettingsChanged = true;
+                context.persistFilterCheckboxes();
+            }
+        }
+
         if (!context.selectedPluginFilter.empty()) {
-            ImGui::SameLine();
             ImGui::Text("%s: %s", context.localize("PluginBrowser", "sActiveFilter", "Active"), context.selectedPluginFilter.c_str());
         }
 
@@ -330,15 +564,6 @@ namespace ESPExplorerAE
                     .showDeleted = context.showDeletedRecords })) {
             listFilterSettingsChanged = true;
         }
-
-        if (ImGui::Checkbox(context.localize("PluginBrowser", "sShowUnknownCategories", "Show Unknown Categories"), &context.showUnknownCategories)) {
-            listFilterSettingsChanged = true;
-        }
-
-        ImGui::SameLine();
-        ImGui::Checkbox(context.localize("PluginBrowser", "sGlobalSearch", "Global Search"), &context.pluginGlobalSearchMode);
-        ImGui::SameLine();
-        ImGui::Checkbox(context.localize("PluginBrowser", "sCaseSensitiveSearch", "Case Sensitive"), &context.pluginSearchCaseSensitive);
 
         if (listFilterSettingsChanged) {
             context.persistListFilters();
@@ -429,10 +654,10 @@ namespace ESPExplorerAE
         const float leftWidth = ImGui::GetContentRegionAvail().x * 0.58f;
 
         if (ImGui::BeginChild("PluginTreeLeft", ImVec2(leftWidth, 0.0f), ImGuiChildFlags_Borders)) {
-            auto drawRecordSelectable = [&](const FormEntry& record, std::string_view idPrefix) {
+            auto drawRecordSelectable = [&](const FormEntry& record, const char* idPrefix) {
                 const auto* displayName = record.name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : record.name.c_str();
                 char recordLabel[512]{};
-                std::snprintf(recordLabel, sizeof(recordLabel), "%s [%08X]##%s%08X", displayName, record.formID, std::string(idPrefix).c_str(), record.formID);
+                std::snprintf(recordLabel, sizeof(recordLabel), "%s [%08X]##%s%08X", displayName, record.formID, idPrefix, record.formID);
                 const bool isSelected = context.selectedPluginTreeRecordFormID == record.formID;
                 if (ImGui::Selectable(recordLabel, isSelected)) {
                     context.selectedPluginTreeRecordFormID = record.formID;
@@ -445,143 +670,7 @@ namespace ESPExplorerAE
                         TrackRecentRecord(record.formID, context);
                     }
 
-                    if (ImGui::MenuItem(context.localize("General", "sCopyFormID", "Copy FormID"))) {
-                        FormActions::CopyFormID(record.formID);
-                    }
-
-                    if (const char* editorID = TryGetEditorID(record.formID); editorID && editorID[0] != '\0') {
-                        if (ImGui::MenuItem(context.localize("General", "sCopyEditorID", "Copy EditorID"))) {
-                            ImGui::SetClipboardText(editorID);
-                        }
-                    }
-
-                    const auto sourceText = record.sourcePlugin.empty() ? context.localize("General", "sUnknown", "<Unknown>") : record.sourcePlugin.c_str();
-                    if (ImGui::MenuItem(context.localize("General", "sCopyRecordSource", "Copy Record Source"))) {
-                        ImGui::SetClipboardText(sourceText);
-                    }
-
-                    ImGui::Separator();
-
-                    const bool isFavorite = context.favoriteForms.contains(record.formID);
-                    if (ImGui::MenuItem(isFavorite ? context.localize("General", "sRemoveFavorite", "Remove Favorite") : context.localize("General", "sAddFavorite", "Add Favorite"))) {
-                        if (isFavorite) {
-                            context.favoriteForms.erase(record.formID);
-                        } else {
-                            context.favoriteForms.insert(record.formID);
-                        }
-                    }
-
-                    if (CanGiveFromTreeCategory(record.category) && ImGui::MenuItem(context.localize("Items", "sGiveItem", "Give Item"))) {
-                        context.openItemGrantPopup(record);
-                    }
-
-                    if (CanSpawnFromTreeCategory(record.category) && ImGui::MenuItem(context.localize("NPCs", "sSpawnAtPlayer", "Spawn At Player"))) {
-                        const auto formID = record.formID;
-                        const std::string name = record.name;
-                        context.requestActionConfirmation(
-                            context.localize("General", "sConfirmSpawnTitle", "Confirm Spawn"),
-                            std::string(context.localize("General", "sConfirmSpawnMessage", "Spawn selected record at player?")) + "\n" + (name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : name),
-                            [formID]() {
-                                FormActions::SpawnAtPlayer(formID, 1);
-                            });
-                    }
-
-                    if (IsQuestCategory(record.category)) {
-                        if (ImGui::MenuItem(context.localize("General", "sStartQuest", "Start Quest"))) {
-                            const auto formID = record.formID;
-                            context.requestActionConfirmation(
-                                context.localize("General", "sConfirmQuestTitle", "Confirm Quest Action"),
-                                context.localize("General", "sConfirmStartQuest", "Start selected quest?"),
-                                [formID]() {
-                                    char command[64]{};
-                                    std::snprintf(command, sizeof(command), "startquest %08X", formID);
-                                    FormActions::ExecuteConsoleCommand(command);
-                                });
-                        }
-                        if (ImGui::MenuItem(context.localize("General", "sCompleteQuest", "Complete Quest"))) {
-                            const auto formID = record.formID;
-                            context.requestActionConfirmation(
-                                context.localize("General", "sConfirmQuestTitle", "Confirm Quest Action"),
-                                context.localize("General", "sConfirmCompleteQuest", "Complete selected quest?"),
-                                [formID]() {
-                                    char command[64]{};
-                                    std::snprintf(command, sizeof(command), "completequest %08X", formID);
-                                    FormActions::ExecuteConsoleCommand(command);
-                                });
-                        }
-                    }
-
-                    if (IsPerkCategory(record.category)) {
-                        if (ImGui::MenuItem(context.localize("General", "sAddPerk", "Add Perk"))) {
-                            FormActions::AddPerkToPlayer(record.formID);
-                        }
-                        if (ImGui::MenuItem(context.localize("General", "sRemovePerk", "Remove Perk"))) {
-                            FormActions::RemovePerkFromPlayer(record.formID);
-                        }
-                    }
-
-                    if (IsSpellLikeCategory(record.category)) {
-                        if (ImGui::MenuItem(context.localize("General", "sAddSpellEffect", "Add Spell/Effect"))) {
-                            FormActions::AddSpellToPlayer(record.formID);
-                        }
-                        if (ImGui::MenuItem(context.localize("General", "sRemoveSpellEffect", "Remove Spell/Effect"))) {
-                            FormActions::RemoveSpellFromPlayer(record.formID);
-                        }
-                    }
-
-                    if (IsWeatherCategory(record.category) && ImGui::MenuItem(context.localize("General", "sSetWeather", "Set Weather"))) {
-                        const auto formID = record.formID;
-                        context.requestActionConfirmation(
-                            context.localize("General", "sConfirmWeatherTitle", "Confirm Weather Change"),
-                            context.localize("General", "sConfirmWeather", "Set current weather to selected weather record?"),
-                            [formID]() {
-                                char command[64]{};
-                                std::snprintf(command, sizeof(command), "fw %08X", formID);
-                                FormActions::ExecuteConsoleCommand(command);
-                            });
-                    }
-
-                    if (IsSoundCategory(record.category) && ImGui::MenuItem(context.localize("General", "sPlaySound", "Play Sound"))) {
-                        if (const char* editorID = TryGetEditorID(record.formID)) {
-                            std::string command = std::string("playsound ") + editorID;
-                            FormActions::ExecuteConsoleCommand(command);
-                        }
-                    }
-
-                    if (IsGlobalCategory(record.category) && ImGui::MenuItem(context.localize("General", "sSetGlobal", "Set Global"))) {
-                        context.openGlobalValuePopup(record.formID);
-                    }
-
-                    if (IsOutfitCategory(record.category) && ImGui::MenuItem(context.localize("General", "sAddOutfitItems", "Add Outfit Items"))) {
-                        FormActions::AddOutfitItemsToPlayer(record.formID);
-                    }
-
-                    if (IsConstructibleCategory(record.category) && ImGui::MenuItem(context.localize("General", "sAddCraftedItem", "Add Crafted Item"))) {
-                        FormActions::AddConstructedItemToPlayer(record.formID);
-                    }
-
-                    const bool isEquippable = record.category == "WEAP" || record.category == "Weapon" || record.category == "ARMO" || record.category == "Armor";
-                    if (isEquippable && ImGui::MenuItem(context.localize("General", "sEquipItem", "Equip Item"))) {
-                        char command[64]{};
-                        std::snprintf(command, sizeof(command), "player.equipitem %08X", record.formID);
-                        FormActions::ExecuteConsoleCommand(command);
-                    }
-
-                    if (CanTeleportFromTreeCategory(record.category)) {
-                        auto* teleportForm = RE::TESForm::GetFormByID(record.formID);
-                        const char* editorID = teleportForm ? teleportForm->GetFormEditorID() : nullptr;
-                        const bool canUseCoc = editorID && editorID[0] != '\0';
-                        if (canUseCoc && ImGui::MenuItem(context.localize("General", "sTeleportCOC", "Teleport (COC)"))) {
-                            const auto editorIDCopy = std::string(editorID);
-                            context.requestActionConfirmation(
-                                context.localize("General", "sConfirmTeleportTitle", "Confirm Teleport"),
-                                context.localize("General", "sConfirmTeleport", "Teleport to selected destination?"),
-                                [editorIDCopy]() {
-                                    std::string command = std::string("coc ") + editorIDCopy;
-                                    FormActions::ExecuteConsoleCommand(command);
-                                });
-                        }
-                    }
+                    DrawRecordContextMenu(record, true, context);
 
                     ImGui::EndPopup();
                 }
@@ -593,32 +682,38 @@ namespace ESPExplorerAE
 
             const std::string globalResultsHeader = std::string(context.localize("PluginBrowser", "sGlobalSearchResults", "Global Search Results")) + "##PluginGlobalSearchResults";
             if (context.pluginGlobalSearchMode && !context.pluginSearch.empty() && ImGui::TreeNodeEx(globalResultsHeader.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
-                for (const auto* record : context.pluginBrowserGlobalSearchResultsCache) {
-                    if (!record) {
-                        continue;
+                ImGuiListClipper clipper;
+                clipper.Begin(static_cast<int>(context.pluginBrowserGlobalSearchResultsCache.size()));
+                while (clipper.Step()) {
+                    for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+                        const auto* record = context.pluginBrowserGlobalSearchResultsCache[static_cast<std::size_t>(row)];
+                        if (!record) {
+                            continue;
+                        }
+                        drawRecordSelectable(*record, "GlobalResult");
                     }
-                    drawRecordSelectable(*record, "GlobalResult");
                 }
                 ImGui::TreePop();
             }
 
             const std::string favoritesHeader = std::string(context.localize("General", "sFavorites", "Favorites")) + "##PluginFavorites";
             if (ImGui::TreeNodeEx(favoritesHeader.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
-                for (const auto& entry : cache.allRecords) {
-                    if (!context.favoriteForms.contains(entry.formID)) {
+                for (const auto favoriteFormID : context.favoriteForms) {
+                    const auto* entry = FindRecordByFormID(cache, favoriteFormID);
+                    if (!entry) {
                         continue;
                     }
-                    if (!PassesLocalRecordFilters(entry, context)) {
+                    if (!PassesLocalRecordFilters(*entry, context)) {
                         continue;
                     }
-                    if (!context.showUnknownCategories && (entry.sourcePlugin.empty() || IsUnknownCategory(entry.category))) {
+                    if (!context.showUnknownCategories && (entry->sourcePlugin.empty() || IsUnknownCategory(entry->category))) {
                         continue;
                     }
-                    if (!context.pluginSearch.empty() && !MatchesPluginSearch(entry, context.pluginSearch, context.pluginSearchCaseSensitive)) {
+                    if (!context.pluginSearch.empty() && !MatchesPluginSearch(*entry, context.pluginSearch, context.pluginSearchCaseSensitive)) {
                         continue;
                     }
 
-                    drawRecordSelectable(entry, "FavoriteRecord");
+                    drawRecordSelectable(*entry, "FavoriteRecord");
                 }
                 ImGui::TreePop();
             }
@@ -686,169 +781,15 @@ namespace ESPExplorerAE
                         }
                         ImGui::PushStyleColor(ImGuiCol_Text, CategoryColor(category));
                         if (ImGui::TreeNode(categoryLabel.c_str())) {
-                            for (const auto* record : categoryIt->second) {
-                                if (!record) {
-                                    continue;
-                                }
-
-                                const auto* displayName = record->name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : record->name.c_str();
-                                char recordLabel[512]{};
-                                std::snprintf(recordLabel, sizeof(recordLabel), "%s [%08X]##TreeRecord%08X", displayName, record->formID, record->formID);
-
-                                const bool isSelected = context.selectedPluginTreeRecordFormID == record->formID;
-                                if (ImGui::Selectable(recordLabel, isSelected)) {
-                                    context.selectedPluginTreeRecordFormID = record->formID;
-                                    TrackRecentRecord(record->formID, context);
-                                }
-                                if (ImGui::BeginPopupContextItem()) {
-                                    if (!isSelected) {
-                                        context.selectedPluginTreeRecordFormID = record->formID;
-                                        TrackRecentRecord(record->formID, context);
+                            ImGuiListClipper clipper;
+                            clipper.Begin(static_cast<int>(categoryIt->second.size()));
+                            while (clipper.Step()) {
+                                for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+                                    const auto* record = categoryIt->second[static_cast<std::size_t>(row)];
+                                    if (!record) {
+                                        continue;
                                     }
-
-                                    if (ImGui::MenuItem(context.localize("General", "sCopyFormID", "Copy FormID"))) {
-                                        FormActions::CopyFormID(record->formID);
-                                    }
-
-                                    if (const char* editorID = TryGetEditorID(record->formID); editorID && editorID[0] != '\0') {
-                                        if (ImGui::MenuItem(context.localize("General", "sCopyEditorID", "Copy EditorID"))) {
-                                            ImGui::SetClipboardText(editorID);
-                                        }
-                                    }
-
-                                    const auto sourceText = record->sourcePlugin.empty() ? context.localize("General", "sUnknown", "<Unknown>") : record->sourcePlugin.c_str();
-                                    if (ImGui::MenuItem(context.localize("General", "sCopyRecordSource", "Copy Record Source"))) {
-                                        ImGui::SetClipboardText(sourceText);
-                                    }
-
-                                    ImGui::Separator();
-
-                                    const bool isFavorite = context.favoriteForms.contains(record->formID);
-                                    if (ImGui::MenuItem(isFavorite ? context.localize("General", "sRemoveFavorite", "Remove Favorite") : context.localize("General", "sAddFavorite", "Add Favorite"))) {
-                                        if (isFavorite) {
-                                            context.favoriteForms.erase(record->formID);
-                                        } else {
-                                            context.favoriteForms.insert(record->formID);
-                                        }
-                                    }
-
-                                    if (CanGiveFromTreeCategory(record->category) && ImGui::MenuItem(context.localize("Items", "sGiveItem", "Give Item"))) {
-                                        context.openItemGrantPopup(*record);
-                                    }
-
-                                    if (CanSpawnFromTreeCategory(record->category) && ImGui::MenuItem(context.localize("NPCs", "sSpawnAtPlayer", "Spawn At Player"))) {
-                                        const auto formID = record->formID;
-                                        const std::string name = record->name;
-                                        context.requestActionConfirmation(
-                                            context.localize("General", "sConfirmSpawnTitle", "Confirm Spawn"),
-                                            std::string(context.localize("General", "sConfirmSpawnMessage", "Spawn selected record at player?")) + "\n" + (name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : name),
-                                            [formID]() {
-                                                FormActions::SpawnAtPlayer(formID, 1);
-                                            });
-                                    }
-
-                                    if (IsQuestCategory(record->category)) {
-                                        if (ImGui::MenuItem(context.localize("General", "sStartQuest", "Start Quest"))) {
-                                            const auto formID = record->formID;
-                                            context.requestActionConfirmation(
-                                                context.localize("General", "sConfirmQuestTitle", "Confirm Quest Action"),
-                                                context.localize("General", "sConfirmStartQuest", "Start selected quest?"),
-                                                [formID]() {
-                                                    char command[64]{};
-                                                    std::snprintf(command, sizeof(command), "startquest %08X", formID);
-                                                    FormActions::ExecuteConsoleCommand(command);
-                                                });
-                                        }
-                                        if (ImGui::MenuItem(context.localize("General", "sCompleteQuest", "Complete Quest"))) {
-                                            const auto formID = record->formID;
-                                            context.requestActionConfirmation(
-                                                context.localize("General", "sConfirmQuestTitle", "Confirm Quest Action"),
-                                                context.localize("General", "sConfirmCompleteQuest", "Complete selected quest?"),
-                                                [formID]() {
-                                                    char command[64]{};
-                                                    std::snprintf(command, sizeof(command), "completequest %08X", formID);
-                                                    FormActions::ExecuteConsoleCommand(command);
-                                                });
-                                        }
-                                    }
-
-                                    if (IsPerkCategory(record->category)) {
-                                        if (ImGui::MenuItem(context.localize("General", "sAddPerk", "Add Perk"))) {
-                                            FormActions::AddPerkToPlayer(record->formID);
-                                        }
-                                        if (ImGui::MenuItem(context.localize("General", "sRemovePerk", "Remove Perk"))) {
-                                            FormActions::RemovePerkFromPlayer(record->formID);
-                                        }
-                                    }
-
-                                    if (IsSpellLikeCategory(record->category)) {
-                                        if (ImGui::MenuItem(context.localize("General", "sAddSpellEffect", "Add Spell/Effect"))) {
-                                            FormActions::AddSpellToPlayer(record->formID);
-                                        }
-                                        if (ImGui::MenuItem(context.localize("General", "sRemoveSpellEffect", "Remove Spell/Effect"))) {
-                                            FormActions::RemoveSpellFromPlayer(record->formID);
-                                        }
-                                    }
-
-                                    if (IsWeatherCategory(record->category) && ImGui::MenuItem(context.localize("General", "sSetWeather", "Set Weather"))) {
-                                        const auto formID = record->formID;
-                                        context.requestActionConfirmation(
-                                            context.localize("General", "sConfirmWeatherTitle", "Confirm Weather Change"),
-                                            context.localize("General", "sConfirmWeather", "Set current weather to selected weather record?"),
-                                            [formID]() {
-                                                char command[64]{};
-                                                std::snprintf(command, sizeof(command), "fw %08X", formID);
-                                                FormActions::ExecuteConsoleCommand(command);
-                                            });
-                                    }
-
-                                    if (IsSoundCategory(record->category) && ImGui::MenuItem(context.localize("General", "sPlaySound", "Play Sound"))) {
-                                        if (const char* editorID = TryGetEditorID(record->formID)) {
-                                            std::string command = std::string("playsound ") + editorID;
-                                            FormActions::ExecuteConsoleCommand(command);
-                                        }
-                                    }
-
-                                    if (IsGlobalCategory(record->category) && ImGui::MenuItem(context.localize("General", "sSetGlobal", "Set Global"))) {
-                                        context.openGlobalValuePopup(record->formID);
-                                    }
-
-                                    if (IsOutfitCategory(record->category) && ImGui::MenuItem(context.localize("General", "sAddOutfitItems", "Add Outfit Items"))) {
-                                        FormActions::AddOutfitItemsToPlayer(record->formID);
-                                    }
-
-                                    if (IsConstructibleCategory(record->category) && ImGui::MenuItem(context.localize("General", "sAddCraftedItem", "Add Crafted Item"))) {
-                                        FormActions::AddConstructedItemToPlayer(record->formID);
-                                    }
-
-                                    const bool isEquippable = record->category == "WEAP" || record->category == "Weapon" || record->category == "ARMO" || record->category == "Armor";
-                                    if (isEquippable && ImGui::MenuItem(context.localize("General", "sEquipItem", "Equip Item"))) {
-                                        char command[64]{};
-                                        std::snprintf(command, sizeof(command), "player.equipitem %08X", record->formID);
-                                        FormActions::ExecuteConsoleCommand(command);
-                                    }
-
-                                    if (CanTeleportFromTreeCategory(record->category)) {
-                                        auto* teleportForm = RE::TESForm::GetFormByID(record->formID);
-                                        const char* editorID = teleportForm ? teleportForm->GetFormEditorID() : nullptr;
-                                        const bool canUseCoc = editorID && editorID[0] != '\0';
-                                        if (canUseCoc && ImGui::MenuItem(context.localize("General", "sTeleportCOC", "Teleport (COC)"))) {
-                                            const auto editorIDCopy = std::string(editorID);
-                                            context.requestActionConfirmation(
-                                                context.localize("General", "sConfirmTeleportTitle", "Confirm Teleport"),
-                                                context.localize("General", "sConfirmTeleport", "Teleport to selected destination?"),
-                                                [editorIDCopy]() {
-                                                    std::string command = std::string("coc ") + editorIDCopy;
-                                                    FormActions::ExecuteConsoleCommand(command);
-                                                });
-                                        }
-                                    }
-
-                                    ImGui::EndPopup();
-                                }
-
-                                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && CanGiveFromTreeCategory(record->category)) {
-                                    context.openItemGrantPopup(*record);
+                                    drawRecordSelectable(*record, "TreeRecord");
                                 }
                             }
 
@@ -866,15 +807,7 @@ namespace ESPExplorerAE
         ImGui::SameLine();
 
         if (ImGui::BeginChild("PluginTreeDetails", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders)) {
-            const FormEntry* selectedRecord = nullptr;
-            if (context.selectedPluginTreeRecordFormID != 0) {
-                for (const auto& entry : cache.allRecords) {
-                    if (entry.formID == context.selectedPluginTreeRecordFormID) {
-                        selectedRecord = &entry;
-                        break;
-                    }
-                }
-            }
+            const FormEntry* selectedRecord = context.selectedPluginTreeRecordFormID != 0 ? FindRecordByFormID(cache, context.selectedPluginTreeRecordFormID) : nullptr;
 
             if (!selectedRecord) {
                 ImGui::TextUnformatted(context.localize("PluginBrowser", "sSelectRecordHint", "Select a record to view details."));
@@ -889,6 +822,9 @@ namespace ESPExplorerAE
                         ImGui::EndPopup();
                     }
                 };
+
+                const float footerHeight = ImGui::GetFrameHeightWithSpacing() * 5.0f;
+                if (ImGui::BeginChild("PluginDetailsInfo", ImVec2(0.0f, -footerHeight), false)) {
 
                 ImGui::TextUnformatted(selectedRecord->name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : selectedRecord->name.c_str());
                 drawCopyPopup(selectedRecord->name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : selectedRecord->name);
@@ -1041,8 +977,10 @@ namespace ESPExplorerAE
                         }
                     }
                 }
+                }
+                ImGui::EndChild();
 
-                ImGui::Separator();
+                const bool canGive = CanGiveFromTreeCategory(selectedRecord->category);
                 const bool canSpawn = CanSpawnFromTreeCategory(selectedRecord->category);
                 const bool canTeleport = CanTeleportFromTreeCategory(selectedRecord->category);
                 const bool isQuest = IsQuestCategory(selectedRecord->category);
@@ -1055,51 +993,78 @@ namespace ESPExplorerAE
                 const bool isConstructible = IsConstructibleCategory(selectedRecord->category);
                 const bool isEquippable = selectedRecord->category == "WEAP" || selectedRecord->category == "Weapon" || selectedRecord->category == "ARMO" || selectedRecord->category == "Armor";
 
+                auto wrappedButton = [](const char* label, bool& firstInRow) {
+                    const auto& style = ImGui::GetStyle();
+                    const float buttonWidth = ImGui::CalcTextSize(label).x + style.FramePadding.x * 2.0f;
+
+                    if (!firstInRow) {
+                        const float needed = style.ItemSpacing.x + buttonWidth;
+                        if (ImGui::GetContentRegionAvail().x >= needed) {
+                            ImGui::SameLine();
+                        }
+                    }
+
+                    const bool pressed = ImGui::Button(label);
+                    firstInRow = false;
+                    return pressed;
+                };
+
+                bool firstBtn = true;
+
                 const bool isFavorite = context.favoriteForms.contains(selectedRecord->formID);
-                if (ImGui::Button(isFavorite ? context.localize("General", "sRemoveFavorite", "Remove Favorite") : context.localize("General", "sAddFavorite", "Add Favorite"))) {
+                if (wrappedButton(isFavorite ? context.localize("General", "sRemoveFavorite", "Remove Favorite") : context.localize("General", "sAddFavorite", "Add Favorite"), firstBtn)) {
                     if (isFavorite) {
                         context.favoriteForms.erase(selectedRecord->formID);
                     } else {
                         context.favoriteForms.insert(selectedRecord->formID);
                     }
                 }
-                ImGui::SameLine();
-                if (ImGui::Button(context.localize("General", "sCopyFormID", "Copy FormID"))) {
+
+                if (wrappedButton(context.localize("General", "sCopyFormID", "Copy FormID"), firstBtn)) {
                     FormActions::CopyFormID(selectedRecord->formID);
                 }
 
                 ImGui::Separator();
 
-                bool hasActionOnRow = false;
-                if (CanGiveFromTreeCategory(selectedRecord->category)) {
-                    if (ImGui::Button(context.localize("Items", "sGiveItem", "Give Item"))) {
+                firstBtn = true;
+                if (canGive) {
+                    if (wrappedButton(context.localize("Items", "sGiveItem", "Give Item"), firstBtn)) {
                         context.openItemGrantPopup(*selectedRecord);
                     }
-                    hasActionOnRow = true;
                 }
 
-                if (canSpawn) {
-                    if (hasActionOnRow) {
-                        ImGui::SameLine();
+                if (canSpawn || canGive) {
+                    if (!firstBtn) {
+                        const auto& style = ImGui::GetStyle();
+                        const float spawnBtnWidth = ImGui::CalcTextSize(context.localize("NPCs", "sSpawnAtPlayer", "Spawn At Player")).x + style.FramePadding.x * 2.0f;
+                        const float needed = style.ItemSpacing.x + 80.0f + style.ItemSpacing.x + spawnBtnWidth;
+                        if (ImGui::GetContentRegionAvail().x >= needed) {
+                            ImGui::SameLine();
+                        }
                     }
+                    static int detailSpawnQuantity = 1;
+                    ImGui::SetNextItemWidth(80.0f);
+                    ImGui::InputInt("##DetailSpawnQty", &detailSpawnQuantity, 1, 10);
+                    if (detailSpawnQuantity < 1) {
+                        detailSpawnQuantity = 1;
+                    }
+                    ImGui::SameLine();
                     if (ImGui::Button(context.localize("NPCs", "sSpawnAtPlayer", "Spawn At Player"))) {
                         const auto formID = selectedRecord->formID;
+                        const auto quantity = static_cast<std::uint32_t>(detailSpawnQuantity);
                         const std::string name = selectedRecord->name;
                         context.requestActionConfirmation(
                             context.localize("General", "sConfirmSpawnTitle", "Confirm Spawn"),
                             std::string(context.localize("General", "sConfirmSpawnMessage", "Spawn selected record at player?")) + "\n" + (name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : name),
-                            [formID]() {
-                                FormActions::SpawnAtPlayer(formID, 1);
+                            [formID, quantity]() {
+                                FormActions::SpawnAtPlayer(formID, quantity);
                             });
                     }
-                    hasActionOnRow = true;
+                    firstBtn = false;
                 }
 
                 if (isQuest) {
-                    if (hasActionOnRow) {
-                        ImGui::SameLine();
-                    }
-                    if (ImGui::Button(context.localize("General", "sStartQuest", "Start Quest"))) {
+                    if (wrappedButton(context.localize("General", "sStartQuest", "Start Quest"), firstBtn)) {
                         const auto formID = selectedRecord->formID;
                         context.requestActionConfirmation(
                             context.localize("General", "sConfirmQuestTitle", "Confirm Quest Action"),
@@ -1110,8 +1075,7 @@ namespace ESPExplorerAE
                                 FormActions::ExecuteConsoleCommand(command);
                             });
                     }
-                    ImGui::SameLine();
-                    if (ImGui::Button(context.localize("General", "sCompleteQuest", "Complete Quest"))) {
+                    if (wrappedButton(context.localize("General", "sCompleteQuest", "Complete Quest"), firstBtn)) {
                         const auto formID = selectedRecord->formID;
                         context.requestActionConfirmation(
                             context.localize("General", "sConfirmQuestTitle", "Confirm Quest Action"),
@@ -1122,42 +1086,28 @@ namespace ESPExplorerAE
                                 FormActions::ExecuteConsoleCommand(command);
                             });
                     }
-                    hasActionOnRow = true;
                 }
 
                 if (isPerk) {
-                    if (hasActionOnRow) {
-                        ImGui::SameLine();
-                    }
-                    if (ImGui::Button(context.localize("General", "sAddPerk", "Add Perk"))) {
+                    if (wrappedButton(context.localize("General", "sAddPerk", "Add Perk"), firstBtn)) {
                         FormActions::AddPerkToPlayer(selectedRecord->formID);
                     }
-                    ImGui::SameLine();
-                    if (ImGui::Button(context.localize("General", "sRemovePerk", "Remove Perk"))) {
+                    if (wrappedButton(context.localize("General", "sRemovePerk", "Remove Perk"), firstBtn)) {
                         FormActions::RemovePerkFromPlayer(selectedRecord->formID);
                     }
-                    hasActionOnRow = true;
                 }
 
                 if (isSpellLike) {
-                    if (hasActionOnRow) {
-                        ImGui::SameLine();
-                    }
-                    if (ImGui::Button(context.localize("General", "sAddSpellEffect", "Add Spell/Effect"))) {
+                    if (wrappedButton(context.localize("General", "sAddSpellEffect", "Add Spell/Effect"), firstBtn)) {
                         FormActions::AddSpellToPlayer(selectedRecord->formID);
                     }
-                    ImGui::SameLine();
-                    if (ImGui::Button(context.localize("General", "sRemoveSpellEffect", "Remove Spell/Effect"))) {
+                    if (wrappedButton(context.localize("General", "sRemoveSpellEffect", "Remove Spell/Effect"), firstBtn)) {
                         FormActions::RemoveSpellFromPlayer(selectedRecord->formID);
                     }
-                    hasActionOnRow = true;
                 }
 
                 if (isWeather) {
-                    if (hasActionOnRow) {
-                        ImGui::SameLine();
-                    }
-                    if (ImGui::Button(context.localize("General", "sSetWeather", "Set Weather"))) {
+                    if (wrappedButton(context.localize("General", "sSetWeather", "Set Weather"), firstBtn)) {
                         const auto formID = selectedRecord->formID;
                         context.requestActionConfirmation(
                             context.localize("General", "sConfirmWeatherTitle", "Confirm Weather Change"),
@@ -1168,75 +1118,48 @@ namespace ESPExplorerAE
                                 FormActions::ExecuteConsoleCommand(command);
                             });
                     }
-                    hasActionOnRow = true;
                 }
 
                 if (isSound) {
-                    if (hasActionOnRow) {
-                        ImGui::SameLine();
-                    }
-                    if (ImGui::Button(context.localize("General", "sPlaySound", "Play Sound"))) {
+                    if (wrappedButton(context.localize("General", "sPlaySound", "Play Sound"), firstBtn)) {
                         if (const char* editorID = TryGetEditorID(selectedRecord->formID)) {
                             std::string command = std::string("playsound ") + editorID;
                             FormActions::ExecuteConsoleCommand(command);
                         }
                     }
-                    hasActionOnRow = true;
                 }
 
                 if (isGlobal) {
-                    if (hasActionOnRow) {
-                        ImGui::SameLine();
-                    }
-                    if (ImGui::Button(context.localize("General", "sSetGlobal", "Set Global"))) {
+                    if (wrappedButton(context.localize("General", "sSetGlobal", "Set Global"), firstBtn)) {
                         context.openGlobalValuePopup(selectedRecord->formID);
                     }
-                    hasActionOnRow = true;
                 }
 
                 if (isOutfit) {
-                    if (hasActionOnRow) {
-                        ImGui::SameLine();
-                    }
-                    if (ImGui::Button(context.localize("General", "sAddOutfitItems", "Add Outfit Items"))) {
+                    if (wrappedButton(context.localize("General", "sAddOutfitItems", "Add Outfit Items"), firstBtn)) {
                         FormActions::AddOutfitItemsToPlayer(selectedRecord->formID);
                     }
-                    hasActionOnRow = true;
                 }
 
                 if (isConstructible) {
-                    if (hasActionOnRow) {
-                        ImGui::SameLine();
-                    }
-                    if (ImGui::Button(context.localize("General", "sAddCraftedItem", "Add Crafted Item"))) {
+                    if (wrappedButton(context.localize("General", "sAddCraftedItem", "Add Crafted Item"), firstBtn)) {
                         FormActions::AddConstructedItemToPlayer(selectedRecord->formID);
                     }
-                    hasActionOnRow = true;
                 }
 
                 if (isEquippable) {
-                    if (hasActionOnRow) {
-                        ImGui::SameLine();
+                    if (wrappedButton(context.localize("General", "sEquipItem", "Equip Item"), firstBtn)) {
+                        EquipRecordWithConfiguredAmmo(*selectedRecord, context.equipWeaponAmmoCount);
                     }
-                    if (ImGui::Button(context.localize("General", "sEquipItem", "Equip Item"))) {
-                        char command[64]{};
-                        std::snprintf(command, sizeof(command), "player.equipitem %08X", selectedRecord->formID);
-                        FormActions::ExecuteConsoleCommand(command);
-                    }
-                    hasActionOnRow = true;
                 }
 
                 if (canTeleport) {
-                    if (hasActionOnRow) {
-                        ImGui::SameLine();
-                    }
-
                     auto* teleportForm = RE::TESForm::GetFormByID(selectedRecord->formID);
                     const char* editorID = teleportForm ? teleportForm->GetFormEditorID() : nullptr;
                     const bool canUseCoc = editorID && editorID[0] != '\0';
 
                     if (canUseCoc) {
-                        if (ImGui::Button(context.localize("General", "sTeleportCOC", "Teleport (COC)"))) {
+                        if (wrappedButton(context.localize("General", "sTeleportCOC", "Teleport (COC)"), firstBtn)) {
                             const auto editorIDCopy = std::string(editorID);
                             context.requestActionConfirmation(
                                 context.localize("General", "sConfirmTeleportTitle", "Confirm Teleport"),
