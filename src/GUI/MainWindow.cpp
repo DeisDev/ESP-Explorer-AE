@@ -5,14 +5,18 @@
 #include "GUI/Tabs/ItemBrowserTab.h"
 #include "GUI/Tabs/LogViewerTab.h"
 #include "GUI/Tabs/NPCBrowserTab.h"
+#include "GUI/Tabs/CellBrowserTab.h"
 #include "GUI/Tabs/ObjectBrowserTab.h"
 #include "GUI/Tabs/PlayerTab.h"
 #include "GUI/Tabs/PluginBrowserTab.h"
 #include "GUI/Tabs/SettingsTab.h"
 #include "GUI/Tabs/SpellPerkBrowserTab.h"
+#include "GUI/Widgets/ContextMenu.h"
 #include "GUI/Widgets/FormActions.h"
 #include "GUI/Widgets/FormTable.h"
+#include "GUI/Widgets/ItemGrantPopup.h"
 #include "GUI/Widgets/SearchBar.h"
+#include "Hooks/Hooks.h"
 #include "Input/GamepadInput.h"
 #include "Localization/Language.h"
 
@@ -21,6 +25,9 @@
 #include <RE/B/BGSKeywordForm.h>
 #include <RE/T/TESFullName.h>
 #include <RE/T/TESNPC.h>
+
+#include <RE/A/ActorValue.h>
+#include <RE/P/PlayerCharacter.h>
 #include <RE/T/TESObjectARMO.h>
 #include <RE/T/TESObjectWEAP.h>
 #include <RE/T/TESSound.h>
@@ -48,56 +55,44 @@ namespace ESPExplorerAE
         char npcSearchBuffer[256]{};
         char objectSearchBuffer[256]{};
         char spellPerkSearchBuffer[256]{};
+        char cellSearchBuffer[256]{};
 
         std::string npcSearch{};
         std::string objectSearch{};
         std::string spellPerkSearch{};
-        bool itemSearchCaseSensitive{ false };
-        bool npcSearchCaseSensitive{ false };
-        bool objectSearchCaseSensitive{ false };
-        bool spellPerkSearchCaseSensitive{ false };
-
+        std::string cellSearch{};
         std::unordered_set<std::uint32_t> favoriteForms{};
         bool favoritesInitialized{ false };
         std::string activeMainTab{};
+        std::string previousMainTab{};
+        bool tabSearchFocusPending{ false };
 
-        struct ItemGrantPopupState
-        {
-            bool openRequested{ false };
-            bool visible{ false };
-            FormEntry entry{};
-            int quantity{ 1 };
-            int ammoQuantity{ 100 };
-            std::uint32_t ammoFormID{ 0 };
-            bool includeAmmo{ false };
-        };
-
-        ItemGrantPopupState itemGrantPopup{};
         bool playerGodModeEnabled{ false };
         bool playerNoClipEnabled{ false };
         int playerCurrentWeaponAmmoAmount{ 200 };
         int playerAllAmmoAmount{ 100 };
+        int playerPerkPointsAmount{ 1 };
+        int playerLevelAmount{ 1 };
         std::uint32_t selectedPluginTreeRecordFormID{ 0 };
+        std::unordered_set<std::uint32_t> selectedPluginTreeRecordFormIDs{};
         bool showPlayableRecords{ true };
-        bool showNonPlayableRecords{ true };
+        bool showNonPlayableRecords{ false };
         bool showNamedRecords{ true };
-        bool showUnnamedRecords{ true };
-        bool showDeletedRecords{ true };
+        bool showUnnamedRecords{ false };
+        bool showDeletedRecords{ false };
         bool showUnknownCategories{ false };
         bool pluginGlobalSearchMode{ false };
-        bool pluginSearchCaseSensitive{ false };
         std::unordered_map<std::string, std::uint32_t> selectedItemRows{};
         std::uint64_t pluginBrowserCacheVersion{ 0 };
         std::string pluginBrowserCacheSearch{};
         std::string pluginBrowserCacheSelectedPlugin{};
         bool pluginBrowserCacheShowPlayable{ true };
-        bool pluginBrowserCacheShowNonPlayable{ true };
+        bool pluginBrowserCacheShowNonPlayable{ false };
         bool pluginBrowserCacheShowNamed{ true };
-        bool pluginBrowserCacheShowUnnamed{ true };
-        bool pluginBrowserCacheShowDeleted{ true };
+        bool pluginBrowserCacheShowUnnamed{ false };
+        bool pluginBrowserCacheShowDeleted{ false };
         bool pluginBrowserCacheShowUnknown{ false };
         bool pluginBrowserCacheGlobalSearchMode{ false };
-        bool pluginBrowserCacheSearchCaseSensitive{ false };
         std::unordered_map<std::string, std::unordered_map<std::string, std::vector<const FormEntry*>>> pluginBrowserGroupedRecordsCache{};
         std::vector<std::string> pluginBrowserOrderedPluginsCache{};
         std::vector<const FormEntry*> pluginBrowserGlobalSearchResultsCache{};
@@ -140,12 +135,14 @@ namespace ESPExplorerAE
             npcSearch.clear();
             objectSearch.clear();
             spellPerkSearch.clear();
+            cellSearch.clear();
 
             pluginSearchBuffer[0] = '\0';
             itemSearchBuffer[0] = '\0';
             npcSearchBuffer[0] = '\0';
             objectSearchBuffer[0] = '\0';
             spellPerkSearchBuffer[0] = '\0';
+            cellSearchBuffer[0] = '\0';
         }
 
         void DrawPluginFilterStatus()
@@ -165,9 +162,7 @@ namespace ESPExplorerAE
         void PersistListFilterSettings()
         {
             auto& settings = Config::GetMutable();
-            settings.listShowPlayable = showPlayableRecords;
             settings.listShowNonPlayable = showNonPlayableRecords;
-            settings.listShowNamed = showNamedRecords;
             settings.listShowUnnamed = showUnnamedRecords;
             settings.listShowDeleted = showDeletedRecords;
             Config::Save();
@@ -176,18 +171,11 @@ namespace ESPExplorerAE
         void PersistFilterCheckboxSettings()
         {
             auto& settings = Config::GetMutable();
-            settings.listShowPlayable = showPlayableRecords;
             settings.listShowNonPlayable = showNonPlayableRecords;
-            settings.listShowNamed = showNamedRecords;
             settings.listShowUnnamed = showUnnamedRecords;
             settings.listShowDeleted = showDeletedRecords;
             settings.pluginGlobalSearchMode = pluginGlobalSearchMode;
             settings.pluginShowUnknownCategories = showUnknownCategories;
-            settings.pluginSearchCaseSensitive = pluginSearchCaseSensitive;
-            settings.itemSearchCaseSensitive = itemSearchCaseSensitive;
-            settings.npcSearchCaseSensitive = npcSearchCaseSensitive;
-            settings.objectSearchCaseSensitive = objectSearchCaseSensitive;
-            settings.spellPerkSearchCaseSensitive = spellPerkSearchCaseSensitive;
             Config::Save();
         }
 
@@ -206,18 +194,13 @@ namespace ESPExplorerAE
             favoriteForms.clear();
             favoriteForms.insert(settings.favorites.begin(), settings.favorites.end());
             activeMainTab = settings.lastActiveTab;
-            showPlayableRecords = settings.listShowPlayable;
+            showPlayableRecords = true;
             showNonPlayableRecords = settings.listShowNonPlayable;
-            showNamedRecords = settings.listShowNamed;
+            showNamedRecords = true;
             showUnnamedRecords = settings.listShowUnnamed;
             showDeletedRecords = settings.listShowDeleted;
             pluginGlobalSearchMode = settings.pluginGlobalSearchMode;
             showUnknownCategories = settings.pluginShowUnknownCategories;
-            pluginSearchCaseSensitive = settings.pluginSearchCaseSensitive;
-            itemSearchCaseSensitive = settings.itemSearchCaseSensitive;
-            npcSearchCaseSensitive = settings.npcSearchCaseSensitive;
-            objectSearchCaseSensitive = settings.objectSearchCaseSensitive;
-            spellPerkSearchCaseSensitive = settings.spellPerkSearchCaseSensitive;
             favoritesInitialized = true;
         }
 
@@ -350,7 +333,7 @@ namespace ESPExplorerAE
                 return;
             }
 
-            ImGui::TextUnformatted(confirmAction.title.empty() ? "Confirm Action" : confirmAction.title.c_str());
+            ImGui::TextUnformatted(confirmAction.title.empty() ? L("General", "sConfirm", "") : confirmAction.title.c_str());
             ImGui::Separator();
             ImGui::TextWrapped("%s", confirmAction.message.c_str());
             ImGui::Spacing();
@@ -437,134 +420,12 @@ namespace ESPExplorerAE
 
         void OpenItemGrantPopup(const FormEntry& entry)
         {
-            itemGrantPopup.entry = entry;
-            itemGrantPopup.quantity = 1;
-            itemGrantPopup.ammoQuantity = 100;
-            itemGrantPopup.ammoFormID = FormActions::GetWeaponAmmoFormID(entry.formID);
-            itemGrantPopup.includeAmmo = (entry.category == "Weapon" || entry.category == "Weapons" || entry.category == "WEAP") && itemGrantPopup.ammoFormID != 0;
-            itemGrantPopup.openRequested = true;
-            itemGrantPopup.visible = true;
+            ItemGrantPopup::Open(entry);
         }
 
-        void RenderItemGrantPopup()
+        void OpenItemGrantPopupMultiple(const std::vector<FormEntry>& entries)
         {
-            if (itemGrantPopup.openRequested) {
-                ImGui::OpenPopup(L("Items", "sGivePopupTitle", "Add Item"));
-                itemGrantPopup.openRequested = false;
-            }
-
-            ImGui::SetNextWindowSize(ImVec2(480.0f, 340.0f), ImGuiCond_Appearing);
-            if (!ImGui::BeginPopupModal(L("Items", "sGivePopupTitle", "Add Item"), &itemGrantPopup.visible)) {
-                return;
-            }
-
-            if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-                itemGrantPopup.visible = false;
-                ImGui::CloseCurrentPopup();
-                ImGui::EndPopup();
-                return;
-            }
-
-            ImGui::TextUnformatted(itemGrantPopup.entry.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : itemGrantPopup.entry.name.c_str());
-            ImGui::TextDisabled("%08X  |  %s", itemGrantPopup.entry.formID, itemGrantPopup.entry.sourcePlugin.c_str());
-
-            ImGui::Separator();
-
-            ImGui::TextUnformatted(L("Items", "sQuantity", "Quantity"));
-            ImGui::SetNextItemWidth(-1.0f);
-            ImGui::SliderInt("##ItemQtySlider", &itemGrantPopup.quantity, 1, 100, "%d");
-            ImGui::SetNextItemWidth(-1.0f);
-            ImGui::InputInt("##ItemQtyInput", &itemGrantPopup.quantity, 1, 10);
-            if (itemGrantPopup.quantity < 1) {
-                itemGrantPopup.quantity = 1;
-            }
-            if (itemGrantPopup.quantity > 9999) {
-                itemGrantPopup.quantity = 9999;
-            }
-
-            if (ImGui::Button("1##ItemQtyPreset")) {
-                itemGrantPopup.quantity = 1;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("10##ItemQtyPreset")) {
-                itemGrantPopup.quantity = 10;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("100##ItemQtyPreset")) {
-                itemGrantPopup.quantity = 100;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("1000##ItemQtyPreset")) {
-                itemGrantPopup.quantity = 1000;
-            }
-
-            const bool hasAmmoOption = itemGrantPopup.ammoFormID != 0;
-            if (hasAmmoOption) {
-                ImGui::Spacing();
-                ImGui::Checkbox(L("Player", "sIncludeAmmo", "Include Ammo"), &itemGrantPopup.includeAmmo);
-            }
-
-            if (hasAmmoOption && itemGrantPopup.includeAmmo) {
-                ImGui::Separator();
-                ImGui::TextUnformatted(L("Items", "sAmmoQuantity", "Ammo Quantity"));
-                ImGui::SetNextItemWidth(-1.0f);
-                ImGui::SliderInt("##AmmoQtySlider", &itemGrantPopup.ammoQuantity, 0, 500, "%d");
-                ImGui::SetNextItemWidth(-1.0f);
-                ImGui::InputInt("##AmmoQtyInput", &itemGrantPopup.ammoQuantity, 10, 100);
-                if (itemGrantPopup.ammoQuantity < 0) {
-                    itemGrantPopup.ammoQuantity = 0;
-                }
-                if (itemGrantPopup.ammoQuantity > 50000) {
-                    itemGrantPopup.ammoQuantity = 50000;
-                }
-
-                if (ImGui::Button("0##AmmoQtyPreset")) {
-                    itemGrantPopup.ammoQuantity = 0;
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("50##AmmoQtyPreset")) {
-                    itemGrantPopup.ammoQuantity = 50;
-                }
-                ImGui::SameLine();
-                if (ImGui::Button("100##AmmoQtyPreset")) {
-                    itemGrantPopup.ammoQuantity = 100;
-                }
-            }
-
-            ImGui::Separator();
-            const char* giveToPlayerLabel = L("Items", "sGiveToPlayer", "Give To Player");
-            const char* cancelLabel = L("General", "sCancel", "Cancel");
-            const float popupButtonMinWidth = 96.0f;
-
-            const bool canApply = itemGrantPopup.quantity > 0;
-            if (!canApply) {
-                ImGui::BeginDisabled(true);
-            }
-            const bool applyPressed = ImGui::Button(giveToPlayerLabel, ImVec2(CalcButtonWidth(giveToPlayerLabel, popupButtonMinWidth), 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Enter);
-            if (!canApply) {
-                ImGui::EndDisabled();
-            }
-            if (applyPressed && canApply) {
-                if (itemGrantPopup.includeAmmo && itemGrantPopup.ammoQuantity > 0) {
-                    FormActions::GiveToPlayerWithAmmo(
-                        itemGrantPopup.entry.formID,
-                        static_cast<std::uint32_t>(itemGrantPopup.quantity),
-                        itemGrantPopup.ammoFormID,
-                        static_cast<std::uint32_t>(itemGrantPopup.ammoQuantity));
-                } else {
-                    GiveItemToPlayer(itemGrantPopup.entry.formID, itemGrantPopup.quantity);
-                }
-                itemGrantPopup.visible = false;
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button(cancelLabel, ImVec2(CalcButtonWidth(cancelLabel, popupButtonMinWidth), 0.0f))) {
-                itemGrantPopup.visible = false;
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::EndPopup();
+            ItemGrantPopup::Open(entries);
         }
 
         void DrawPlayerTab(const FormCache& cache)
@@ -575,6 +436,8 @@ namespace ESPExplorerAE
                 playerNoClipEnabled,
                 playerCurrentWeaponAmmoAmount,
                 playerAllAmmoAmount,
+                playerPerkPointsAmount,
+                playerLevelAmount,
                 [](const FormEntry& entry) {
                     OpenItemGrantPopup(entry);
                 },
@@ -807,10 +670,11 @@ namespace ESPExplorerAE
                 .showDeletedRecords = showDeletedRecords,
                 .showUnknownCategories = showUnknownCategories,
                 .pluginGlobalSearchMode = pluginGlobalSearchMode,
-                .pluginSearchCaseSensitive = pluginSearchCaseSensitive,
                 .equipWeaponAmmoCount = playerCurrentWeaponAmmoAmount,
+                .searchFocusPending = &tabSearchFocusPending,
                 .favoriteForms = favoriteForms,
                 .selectedPluginTreeRecordFormID = selectedPluginTreeRecordFormID,
+                .selectedPluginTreeRecordFormIDs = selectedPluginTreeRecordFormIDs,
                 .recentPluginRecordFormIDs = recentPluginRecordFormIDs,
                 .pluginBrowserCacheVersion = pluginBrowserCacheVersion,
                 .pluginBrowserCacheSearch = pluginBrowserCacheSearch,
@@ -822,7 +686,6 @@ namespace ESPExplorerAE
                 .pluginBrowserCacheShowDeleted = pluginBrowserCacheShowDeleted,
                 .pluginBrowserCacheShowUnknown = pluginBrowserCacheShowUnknown,
                 .pluginBrowserCacheGlobalSearchMode = pluginBrowserCacheGlobalSearchMode,
-                .pluginBrowserCacheSearchCaseSensitive = pluginBrowserCacheSearchCaseSensitive,
                 .pluginBrowserGroupedRecordsCache = pluginBrowserGroupedRecordsCache,
                 .pluginBrowserOrderedPluginsCache = pluginBrowserOrderedPluginsCache,
                 .pluginBrowserGlobalSearchResultsCache = pluginBrowserGlobalSearchResultsCache,
@@ -836,6 +699,9 @@ namespace ESPExplorerAE
                 .openItemGrantPopup = [](const FormEntry& entry) {
                     OpenItemGrantPopup(entry);
                 },
+                .openItemGrantPopupMultiple = [](const std::vector<FormEntry>& entries) {
+                    OpenItemGrantPopupMultiple(entries);
+                },
                 .openGlobalValuePopup = [](std::uint32_t formID) {
                     OpenGlobalValuePopup(formID);
                 },
@@ -847,19 +713,39 @@ namespace ESPExplorerAE
             PluginBrowserTab::Draw(plugins, cache, dataVersion, context);
         }
 
+        ContextMenuCallbacks BuildContextCallbacks()
+        {
+            ContextMenuCallbacks cb{};
+            cb.localize = L;
+            cb.openItemGrantPopup = [](const FormEntry& entry) {
+                OpenItemGrantPopup(entry);
+            };
+            cb.openGlobalValuePopup = [](std::uint32_t formID) {
+                OpenGlobalValuePopup(formID);
+            };
+            cb.requestActionConfirmation = [](std::string title, std::string message, std::function<void()> callback) {
+                RequestActionConfirmation(std::move(title), std::move(message), std::move(callback));
+            };
+            cb.favorites = &favoriteForms;
+            cb.equipWeaponAmmoCount = playerCurrentWeaponAmmoAmount;
+            return cb;
+        }
+
         void DrawItemBrowser(const FormCache& cache)
         {
+            auto itemContextCallbacks = BuildContextCallbacks();
+
             ItemBrowserTabContext context{
                 .selectedPluginFilter = selectedPluginFilter,
                 .itemSearch = itemSearch,
                 .itemSearchBuffer = itemSearchBuffer,
                 .itemSearchBufferSize = sizeof(itemSearchBuffer),
-                .searchCaseSensitive = itemSearchCaseSensitive,
                 .showPlayableRecords = showPlayableRecords,
                 .showNonPlayableRecords = showNonPlayableRecords,
                 .showNamedRecords = showNamedRecords,
                 .showUnnamedRecords = showUnnamedRecords,
                 .showDeletedRecords = showDeletedRecords,
+                .searchFocusPending = &tabSearchFocusPending,
                 .itemSort = itemSort,
                 .selectedItemRows = selectedItemRows,
                 .favoriteForms = favoriteForms,
@@ -876,9 +762,13 @@ namespace ESPExplorerAE
                 .openItemGrantPopup = [](const FormEntry& entry) {
                     OpenItemGrantPopup(entry);
                 },
+                .openItemGrantPopupMultiple = [](const std::vector<FormEntry>& entries) {
+                    OpenItemGrantPopupMultiple(entries);
+                },
                 .tryGetEditorID = [](std::uint32_t formID) {
                     return TryGetEditorID(formID);
-                }
+                },
+                .contextCallbacks = itemContextCallbacks
             };
 
             ItemBrowserTab::Draw(cache, context);
@@ -886,18 +776,19 @@ namespace ESPExplorerAE
 
         void DrawNPCBrowser(const FormCache& cache)
         {
+            auto npcContextCallbacks = BuildContextCallbacks();
             NPCBrowserTab::Draw(
                 cache,
                 npcSearchBuffer,
                 sizeof(npcSearchBuffer),
                 npcSearch,
-                npcSearchCaseSensitive,
                 selectedPluginFilter,
                 showPlayableRecords,
                 showNonPlayableRecords,
                 showNamedRecords,
                 showUnnamedRecords,
                 showDeletedRecords,
+                &tabSearchFocusPending,
                 favoriteForms,
                 []() {
                     DrawPluginFilterStatus();
@@ -909,23 +800,25 @@ namespace ESPExplorerAE
                     PersistFilterCheckboxSettings();
                 },
                 ApplyLocalRecordFiltersForTabs,
-                L);
+                L,
+                &npcContextCallbacks);
         }
 
         void DrawObjectBrowser(const FormCache& cache)
         {
+            auto objectContextCallbacks = BuildContextCallbacks();
             ObjectBrowserTab::Draw(
                 cache,
                 objectSearchBuffer,
                 sizeof(objectSearchBuffer),
                 objectSearch,
-                objectSearchCaseSensitive,
                 selectedPluginFilter,
                 showPlayableRecords,
                 showNonPlayableRecords,
                 showNamedRecords,
                 showUnnamedRecords,
                 showDeletedRecords,
+                &tabSearchFocusPending,
                 favoriteForms,
                 []() {
                     DrawPluginFilterStatus();
@@ -937,23 +830,55 @@ namespace ESPExplorerAE
                     PersistFilterCheckboxSettings();
                 },
                 ApplyLocalRecordFiltersForTabs,
-                L);
+                L,
+                &objectContextCallbacks);
+        }
+
+        void DrawCellBrowser(const FormCache& cache)
+        {
+            auto cellContextCallbacks = BuildContextCallbacks();
+            CellBrowserTab::Draw(
+                cache,
+                cellSearchBuffer,
+                sizeof(cellSearchBuffer),
+                cellSearch,
+                selectedPluginFilter,
+                showPlayableRecords,
+                showNonPlayableRecords,
+                showNamedRecords,
+                showUnnamedRecords,
+                showDeletedRecords,
+                &tabSearchFocusPending,
+                favoriteForms,
+                []() {
+                    DrawPluginFilterStatus();
+                },
+                []() {
+                    PersistListFilterSettings();
+                },
+                []() {
+                    PersistFilterCheckboxSettings();
+                },
+                ApplyLocalRecordFiltersForTabs,
+                L,
+                &cellContextCallbacks);
         }
 
         void DrawSpellPerkBrowser(const FormCache& cache)
         {
+            auto spellPerkContextCallbacks = BuildContextCallbacks();
             SpellPerkBrowserTab::Draw(
                 cache,
                 spellPerkSearchBuffer,
                 sizeof(spellPerkSearchBuffer),
                 spellPerkSearch,
-                spellPerkSearchCaseSensitive,
                 selectedPluginFilter,
                 showPlayableRecords,
                 showNonPlayableRecords,
                 showNamedRecords,
                 showUnnamedRecords,
                 showDeletedRecords,
+                &tabSearchFocusPending,
                 favoriteForms,
                 []() {
                     DrawPluginFilterStatus();
@@ -965,7 +890,8 @@ namespace ESPExplorerAE
                     PersistFilterCheckboxSettings();
                 },
                 ApplyLocalRecordFiltersForTabs,
-                L);
+                L,
+                &spellPerkContextCallbacks);
         }
     }
 
@@ -973,6 +899,8 @@ namespace ESPExplorerAE
     {
         EnsureFavoritesLoaded();
         const auto favoritesBefore = favoriteForms;
+
+        const auto previousActiveTab = activeMainTab;
 
         if (refreshDataRequested && !refreshDataInProgress) {
             refreshDataInProgress = true;
@@ -985,7 +913,6 @@ namespace ESPExplorerAE
 
         ImGui::SetNextWindowPos(ImVec2(settings.windowX, settings.windowY), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(settings.windowW, settings.windowH), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowBgAlpha(settings.windowAlpha);
 
         const auto title = Language::Get("General", "sWindowTitle");
         const auto* windowTitle = title.empty() ? "ESP Explorer AE" : title.data();
@@ -1015,14 +942,16 @@ namespace ESPExplorerAE
             const auto dataVersion = dataView.GetDataVersion();
 
             const auto totalForms = counts.weapons + counts.armors + counts.ammo + counts.misc + counts.npcs +
-                                    counts.activators + counts.containers + counts.statics + counts.furniture + counts.spells + counts.perks;
+                                    counts.activators + counts.containers + counts.statics + counts.furniture + counts.spells + counts.perks + counts.cells;
 
             char itemTabLabel[64]{};
             char npcTabLabel[64]{};
+            char cellTabLabel[64]{};
             char objectTabLabel[64]{};
             char spellPerkTabLabel[64]{};
             std::snprintf(itemTabLabel, sizeof(itemTabLabel), "%s (%zu)###MainTabItem", L("Items", "sBrowserTab", "Item Browser"), counts.weapons + counts.armors + counts.ammo + counts.misc);
             std::snprintf(npcTabLabel, sizeof(npcTabLabel), "%s (%zu)###MainTabNPC", L("NPCs", "sBrowserTab", "NPC Browser"), counts.npcs);
+            std::snprintf(cellTabLabel, sizeof(cellTabLabel), "%s (%zu)###MainTabCell", L("Cells", "sBrowserTab", "Cell Browser"), counts.cells);
             std::snprintf(objectTabLabel, sizeof(objectTabLabel), "%s (%zu)###MainTabObject", L("Objects", "sBrowserTab", "Object Browser"), counts.activators + counts.containers + counts.statics + counts.furniture);
             std::snprintf(spellPerkTabLabel, sizeof(spellPerkTabLabel), "%s (%zu)###MainTabSpells", L("Spells", "sBrowserTab", "Spells & Perks"), counts.spells + counts.perks);
 
@@ -1036,11 +965,12 @@ namespace ESPExplorerAE
                 if (ImGui::BeginTabBar("MainTabs")) {
                     static std::string requestedTab{};
                     if (Config::Get().enableGamepadNav && (GamepadInput::WasTabNextPressed() || GamepadInput::WasTabPrevPressed())) {
-                        constexpr std::array<std::string_view, 8> tabOrder{
+                        constexpr std::array<std::string_view, 9> tabOrder{
                             "Plugin Browser",
                             "Player",
                             "Item Browser",
                             "NPC Browser",
+                            "Cell Browser",
                             "Object Browser",
                             "Spells & Perks",
                             "Settings",
@@ -1126,6 +1056,14 @@ namespace ESPExplorerAE
                         ImGui::EndTabItem();
                     }
 
+                    if (ImGui::BeginTabItem(cellTabLabel, nullptr,
+                        tabFlags("Cell Browser"))) {
+                        activeMainTab = "Cell Browser";
+                        focusTabIfRequested("Cell Browser");
+                        DrawCellBrowser(cache);
+                        ImGui::EndTabItem();
+                    }
+
                     if (ImGui::BeginTabItem(objectTabLabel, nullptr,
                         tabFlags("Object Browser"))) {
                         activeMainTab = "Object Browser";
@@ -1160,7 +1098,7 @@ namespace ESPExplorerAE
                         ImGui::EndTabItem();
                     }
 
-                    RenderItemGrantPopup();
+                    ItemGrantPopup::Draw(L);
                     RenderConfirmActionPopup();
                     RenderGlobalValuePopup();
 
@@ -1200,6 +1138,23 @@ namespace ESPExplorerAE
                     ImGui::TextDisabled("[Gamepad]");
                 }
 
+                if (settings.showPlayerStatsInStatus) {
+                    auto* player = RE::PlayerCharacter::GetSingleton();
+                    if (player) {
+                        auto* av = RE::ActorValue::GetSingleton();
+                        if (av && av->health && av->actionPoints) {
+                            const auto level = player->GetLevel();
+                            const auto caps = player->GetGoldAmount();
+                            const float hp = player->GetActorValue(*av->health);
+                            const float ap = player->GetActorValue(*av->actionPoints);
+                            ImGui::SameLine();
+                            ImGui::TextDisabled("|");
+                            ImGui::SameLine();
+                            ImGui::TextDisabled("%s %d  %s %lld  %s %.0f  %s %.0f", L("General", "sLevelShort", ""), level, L("Player", "sCaps", ""), caps, L("Player", "sHealthShort", ""), hp, L("Player", "sActionPointsShort", ""), ap);
+                        }
+                    }
+                }
+
                 const float resetWidth = CalcButtonWidth(L("General", "sResetFilters", "Reset Filters"));
                 const float undoWidth = CalcButtonWidth(L("General", "sUndoLastAction", "Undo Last Action"));
                 const float actionsWidth = resetWidth + style.ItemSpacing.x + undoWidth;
@@ -1229,6 +1184,10 @@ namespace ESPExplorerAE
 
             if (favoriteForms != favoritesBefore) {
                 PersistFavoriteForms();
+            }
+
+            if (activeMainTab != previousActiveTab && Config::Get().autoFocusSearchBars) {
+                tabSearchFocusPending = true;
             }
 
             auto& mutableSettings = Config::GetMutable();

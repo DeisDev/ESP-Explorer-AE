@@ -6,9 +6,7 @@ namespace ESPExplorerAE
 {
     struct RecordFilterState
     {
-        bool& showPlayable;
         bool& showNonPlayable;
-        bool& showNamed;
         bool& showUnnamed;
         bool& showDeleted;
     };

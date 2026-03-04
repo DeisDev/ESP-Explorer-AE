@@ -28,6 +28,8 @@ namespace ESPExplorerAE
             ImGuiStyle& style = ImGui::GetStyle();
             auto& colors = style.Colors;
 
+            style.Alpha = std::clamp(settings.windowAlpha, 0.0f, 1.0f);
+
             const ImVec4 accent{ settings.themeAccentR, settings.themeAccentG, settings.themeAccentB, settings.themeAccentA };
             const ImVec4 window{ settings.themeWindowR, settings.themeWindowG, settings.themeWindowB, settings.themeWindowA };
             const ImVec4 panel{ settings.themePanelR, settings.themePanelG, settings.themePanelB, settings.themePanelA };
@@ -114,7 +116,10 @@ namespace ESPExplorerAE
         }
 
         ApplyTheme(settings);
-        FontManager::Build(settings.fontSize, Language::GetCurrentLanguageCode());
+
+        const int sizeIndex = FontManager::FindClosestSizeIndex(settings.fontSize);
+        FontManager::SetCurrentSizeIndex(sizeIndex);
+        FontManager::BuildAll(Language::GetCurrentLanguageCode());
 
         if (!ImGui_ImplWin32_Init(hwnd)) {
             return false;
@@ -153,12 +158,22 @@ namespace ESPExplorerAE
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
+
+        if (auto* font = FontManager::GetCurrentFont()) {
+            ImGui::PushFont(font);
+            fontPushed = true;
+        }
     }
 
     void ImGuiRenderer::EndFrame()
     {
         if (!initialized) {
             return;
+        }
+
+        if (fontPushed) {
+            ImGui::PopFont();
+            fontPushed = false;
         }
 
         ImGui::Render();

@@ -154,11 +154,14 @@ namespace ESPExplorerAE
                 [&](const FormEntry& entry) {
                     context.openItemGrantPopup(entry);
                 },
+                [&](const std::vector<FormEntry>& selectedEntries) {
+                    context.openItemGrantPopupMultiple(selectedEntries);
+                },
                 [](const FormEntry& entry, int quantity) {
                     FormActions::SpawnAtPlayer(entry.formID, static_cast<std::uint32_t>(quantity));
                 },
                 &context.favoriteForms,
-                &context.searchCaseSensitive);
+                &context.contextCallbacks);
         }
     }
 
@@ -168,26 +171,13 @@ namespace ESPExplorerAE
                 context.localize,
                 "ItemBrowser",
                 RecordFilterState{
-                    .showPlayable = context.showPlayableRecords,
                     .showNonPlayable = context.showNonPlayableRecords,
-                    .showNamed = context.showNamedRecords,
                     .showUnnamed = context.showUnnamedRecords,
                     .showDeleted = context.showDeletedRecords })) {
             context.persistListFilters();
         }
 
-        if (ImGui::BeginTable("ItemSearchRow", 2, ImGuiTableFlags_SizingStretchProp)) {
-            ImGui::TableSetupColumn("Search", ImGuiTableColumnFlags_WidthStretch, 0.78f);
-            ImGui::TableSetupColumn("Options", ImGuiTableColumnFlags_WidthStretch, 0.22f);
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            SearchBar::Draw(context.localize("Items", "sSearch", "Item Search"), context.itemSearchBuffer, context.itemSearchBufferSize, context.itemSearch);
-            ImGui::TableNextColumn();
-            if (ImGui::Checkbox(context.localize("General", "sCaseSensitiveSearch", "Case Sensitive"), &context.searchCaseSensitive)) {
-                context.persistFilterCheckboxes();
-            }
-            ImGui::EndTable();
-        }
+        SearchBar::Draw(context.localize("Items", "sSearch", "Item Search"), context.itemSearchBuffer, context.itemSearchBufferSize, context.itemSearch, context.searchFocusPending);
 
         context.drawPluginFilterStatus();
         ImGui::Separator();

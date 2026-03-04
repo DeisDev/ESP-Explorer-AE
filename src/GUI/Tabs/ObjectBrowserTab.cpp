@@ -62,44 +62,32 @@ namespace ESPExplorerAE
         char* searchBuffer,
         std::size_t searchBufferSize,
         std::string& searchText,
-        bool& searchCaseSensitive,
         std::string_view selectedPluginFilter,
         bool& showPlayableRecords,
         bool& showNonPlayableRecords,
         bool& showNamedRecords,
         bool& showUnnamedRecords,
         bool& showDeletedRecords,
+        bool* searchFocusPending,
         std::unordered_set<std::uint32_t>& favoriteForms,
         const std::function<void()>& drawPluginFilterStatus,
         const std::function<void()>& persistListFilters,
-        const std::function<void()>& persistFilterCheckboxes,
+        const std::function<void()>&,
         const FilterEntriesFn& filterEntries,
-        const LocalizeFn& localize)
+        const LocalizeFn& localize,
+        const ContextMenuCallbacks* contextCallbacks)
     {
         if (RecordFiltersWidget::Draw(
                 localize,
                 "ObjectBrowser",
                 RecordFilterState{
-                    .showPlayable = showPlayableRecords,
                     .showNonPlayable = showNonPlayableRecords,
-                    .showNamed = showNamedRecords,
                     .showUnnamed = showUnnamedRecords,
                     .showDeleted = showDeletedRecords })) {
             persistListFilters();
         }
 
-        if (ImGui::BeginTable("ObjectSearchRow", 2, ImGuiTableFlags_SizingStretchProp)) {
-            ImGui::TableSetupColumn("Search", ImGuiTableColumnFlags_WidthStretch, 0.78f);
-            ImGui::TableSetupColumn("Options", ImGuiTableColumnFlags_WidthStretch, 0.22f);
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            SearchBar::Draw(localize("Objects", "sSearch", "Object Search"), searchBuffer, searchBufferSize, searchText);
-            ImGui::TableNextColumn();
-            if (ImGui::Checkbox(localize("General", "sCaseSensitiveSearch", "Case Sensitive"), &searchCaseSensitive)) {
-                persistFilterCheckboxes();
-            }
-            ImGui::EndTable();
-        }
+        SearchBar::Draw(localize("Objects", "sSearch", "Object Search"), searchBuffer, searchBufferSize, searchText, searchFocusPending);
         drawPluginFilterStatus();
         ImGui::Separator();
 
@@ -149,26 +137,33 @@ namespace ESPExplorerAE
             const FormTableConfig activatorConfig{
                 .tableId = "ObjectTableActivators",
                 .primaryActionLabel = localize("Objects", "sPlace", "Place"),
-                .quantityActionLabel = localize("Objects", "sPlaceAtPlayer", "Place At Player"),
+                .quantityActionLabel = nullptr,
                 .allowFavorites = true
             };
             const FormTableConfig containerConfig{
                 .tableId = "ObjectTableContainers",
                 .primaryActionLabel = localize("Objects", "sPlace", "Place"),
-                .quantityActionLabel = localize("Objects", "sPlaceAtPlayer", "Place At Player"),
+                .quantityActionLabel = nullptr,
                 .allowFavorites = true
             };
             const FormTableConfig staticConfig{
                 .tableId = "ObjectTableStatics",
                 .primaryActionLabel = localize("Objects", "sPlace", "Place"),
-                .quantityActionLabel = localize("Objects", "sPlaceAtPlayer", "Place At Player"),
+                .quantityActionLabel = nullptr,
                 .allowFavorites = true
             };
             const FormTableConfig furnitureConfig{
                 .tableId = "ObjectTableFurniture",
                 .primaryActionLabel = localize("Objects", "sPlace", "Place"),
-                .quantityActionLabel = localize("Objects", "sPlaceAtPlayer", "Place At Player"),
+                .quantityActionLabel = nullptr,
                 .allowFavorites = true
+            };
+
+            auto placeAction = [](const FormEntry& entry) {
+                FormActions::PlaceAtPlayer(entry.formID, 1);
+            };
+            auto placeQuantityAction = [](const FormEntry& entry, int quantity) {
+                FormActions::PlaceAtPlayer(entry.formID, static_cast<std::uint32_t>(quantity));
             };
 
             if (ImGui::BeginTabItem(localize("Objects", "sActivators", "Activators"))) {
@@ -177,14 +172,11 @@ namespace ESPExplorerAE
                     searchText,
                     selectedPluginFilter,
                     activatorConfig,
-                    [](const FormEntry& entry) {
-                        FormActions::PlaceAtPlayer(entry.formID, 1);
-                    },
-                    [](const FormEntry& entry, int quantity) {
-                        FormActions::PlaceAtPlayer(entry.formID, static_cast<std::uint32_t>(quantity));
-                    },
+                    placeAction,
+                    {},
+                    placeQuantityAction,
                     &favoriteForms,
-                    &searchCaseSensitive);
+                    contextCallbacks);
                 ImGui::EndTabItem();
             }
 
@@ -194,14 +186,11 @@ namespace ESPExplorerAE
                     searchText,
                     selectedPluginFilter,
                     containerConfig,
-                    [](const FormEntry& entry) {
-                        FormActions::PlaceAtPlayer(entry.formID, 1);
-                    },
-                    [](const FormEntry& entry, int quantity) {
-                        FormActions::PlaceAtPlayer(entry.formID, static_cast<std::uint32_t>(quantity));
-                    },
+                    placeAction,
+                    {},
+                    placeQuantityAction,
                     &favoriteForms,
-                    &searchCaseSensitive);
+                    contextCallbacks);
                 ImGui::EndTabItem();
             }
 
@@ -211,14 +200,11 @@ namespace ESPExplorerAE
                     searchText,
                     selectedPluginFilter,
                     staticConfig,
-                    [](const FormEntry& entry) {
-                        FormActions::PlaceAtPlayer(entry.formID, 1);
-                    },
-                    [](const FormEntry& entry, int quantity) {
-                        FormActions::PlaceAtPlayer(entry.formID, static_cast<std::uint32_t>(quantity));
-                    },
+                    placeAction,
+                    {},
+                    placeQuantityAction,
                     &favoriteForms,
-                    &searchCaseSensitive);
+                    contextCallbacks);
                 ImGui::EndTabItem();
             }
 
@@ -228,14 +214,11 @@ namespace ESPExplorerAE
                     searchText,
                     selectedPluginFilter,
                     furnitureConfig,
-                    [](const FormEntry& entry) {
-                        FormActions::PlaceAtPlayer(entry.formID, 1);
-                    },
-                    [](const FormEntry& entry, int quantity) {
-                        FormActions::PlaceAtPlayer(entry.formID, static_cast<std::uint32_t>(quantity));
-                    },
+                    placeAction,
+                    {},
+                    placeQuantityAction,
                     &favoriteForms,
-                    &searchCaseSensitive);
+                    contextCallbacks);
                 ImGui::EndTabItem();
             }
 

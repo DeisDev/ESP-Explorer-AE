@@ -24,6 +24,7 @@ namespace ESPExplorerAE
         static int AddOutfitItemsToPlayer(std::uint32_t formID);
         static bool AddConstructedItemToPlayer(std::uint32_t formID);
         static void ExecuteConsoleCommand(std::string_view command);
+        static void TeleportToCell(std::uint32_t formID);
         static bool CanUndoLastAction();
         static void UndoLastAction();
     };

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Data/DataManager.h"
+#include "GUI/Widgets/ContextMenu.h"
 
 #include <functional>
 
@@ -18,12 +19,12 @@ namespace ESPExplorerAE
         std::string& itemSearch;
         char* itemSearchBuffer;
         std::size_t itemSearchBufferSize;
-        bool& searchCaseSensitive;
         bool& showPlayableRecords;
         bool& showNonPlayableRecords;
         bool& showNamedRecords;
         bool& showUnnamedRecords;
         bool& showDeletedRecords;
+        bool* searchFocusPending;
         ItemSortState& itemSort;
         std::unordered_map<std::string, std::uint32_t>& selectedItemRows;
         std::unordered_set<std::uint32_t>& favoriteForms;
@@ -33,7 +34,9 @@ namespace ESPExplorerAE
         std::function<void()> persistListFilters;
         std::function<void()> persistFilterCheckboxes;
         std::function<void(const FormEntry&)> openItemGrantPopup;
+        std::function<void(const std::vector<FormEntry>&)> openItemGrantPopupMultiple;
         std::function<const char*(std::uint32_t)> tryGetEditorID;
+        ContextMenuCallbacks contextCallbacks{};
     };
 
     class ItemBrowserTab

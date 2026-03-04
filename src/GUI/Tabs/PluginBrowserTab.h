@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Data/DataManager.h"
+#include "GUI/Widgets/ContextMenu.h"
 
 #include <deque>
 #include <functional>
@@ -21,11 +22,12 @@ namespace ESPExplorerAE
         bool& showDeletedRecords;
         bool& showUnknownCategories;
         bool& pluginGlobalSearchMode;
-        bool& pluginSearchCaseSensitive;
         int& equipWeaponAmmoCount;
+        bool* searchFocusPending;
 
         std::unordered_set<std::uint32_t>& favoriteForms;
         std::uint32_t& selectedPluginTreeRecordFormID;
+        std::unordered_set<std::uint32_t>& selectedPluginTreeRecordFormIDs;
         std::deque<std::uint32_t>& recentPluginRecordFormIDs;
 
         std::uint64_t& pluginBrowserCacheVersion;
@@ -38,7 +40,6 @@ namespace ESPExplorerAE
         bool& pluginBrowserCacheShowDeleted;
         bool& pluginBrowserCacheShowUnknown;
         bool& pluginBrowserCacheGlobalSearchMode;
-        bool& pluginBrowserCacheSearchCaseSensitive;
         std::unordered_map<std::string, std::unordered_map<std::string, std::vector<const FormEntry*>>>& pluginBrowserGroupedRecordsCache;
         std::vector<std::string>& pluginBrowserOrderedPluginsCache;
         std::vector<const FormEntry*>& pluginBrowserGlobalSearchResultsCache;
@@ -47,6 +48,7 @@ namespace ESPExplorerAE
         std::function<void()> persistListFilters;
         std::function<void()> persistFilterCheckboxes;
         std::function<void(const FormEntry&)> openItemGrantPopup;
+        std::function<void(const std::vector<FormEntry>&)> openItemGrantPopupMultiple;
         std::function<void(std::uint32_t)> openGlobalValuePopup;
         std::function<void(std::string, std::string, std::function<void()>)> requestActionConfirmation;
     };

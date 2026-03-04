@@ -8,6 +8,7 @@
 
 #include <imgui.h>
 
+#include <RE/S/Setting.h>
 #include <REL/Version.h>
 
 namespace ESPExplorerAE
@@ -199,6 +200,96 @@ namespace ESPExplorerAE
             return cachedVersion;
         }
 
+        struct ColorPreset
+        {
+            const char* key;
+            float accentR, accentG, accentB, accentA;
+            float windowR, windowG, windowB, windowA;
+            float panelR, panelG, panelB, panelA;
+        };
+
+        constexpr ColorPreset kColorPresets[] = {
+            { "sPresetDefaultGreen", 0.27f, 0.94f, 0.38f, 1.0f, 0.03f, 0.08f, 0.05f, 0.96f, 0.06f, 0.14f, 0.09f, 0.94f },
+            { "sPresetPipBoyAmber", 1.00f, 0.80f, 0.24f, 1.0f, 0.08f, 0.06f, 0.02f, 0.96f, 0.14f, 0.10f, 0.04f, 0.94f },
+            { "sPresetPipBoyBlue", 0.38f, 0.72f, 1.00f, 1.0f, 0.02f, 0.04f, 0.10f, 0.96f, 0.05f, 0.08f, 0.16f, 0.94f },
+            { "sPresetPipBoyWhite", 0.92f, 0.94f, 0.96f, 1.0f, 0.06f, 0.06f, 0.07f, 0.96f, 0.10f, 0.10f, 0.12f, 0.94f },
+            { "sPresetNukaRed", 1.00f, 0.30f, 0.28f, 1.0f, 0.10f, 0.03f, 0.03f, 0.96f, 0.16f, 0.05f, 0.05f, 0.94f },
+            { "sPresetInstitute", 0.42f, 0.88f, 0.98f, 1.0f, 0.02f, 0.05f, 0.08f, 0.96f, 0.04f, 0.09f, 0.14f, 0.94f },
+            { "sPresetBrotherhood", 0.85f, 0.65f, 0.30f, 1.0f, 0.07f, 0.05f, 0.02f, 0.96f, 0.12f, 0.09f, 0.04f, 0.94f },
+            { "sPresetRailroad", 0.75f, 0.45f, 0.80f, 1.0f, 0.06f, 0.03f, 0.07f, 0.96f, 0.10f, 0.05f, 0.12f, 0.94f },
+            { "sPresetMinutemen", 0.50f, 0.75f, 0.95f, 1.0f, 0.03f, 0.05f, 0.08f, 0.96f, 0.06f, 0.09f, 0.14f, 0.94f },
+            { "sPresetVaultTec", 0.25f, 0.55f, 0.95f, 1.0f, 0.02f, 0.03f, 0.09f, 0.96f, 0.04f, 0.06f, 0.15f, 0.94f },
+            { "sPresetStealth", 0.55f, 0.55f, 0.58f, 1.0f, 0.04f, 0.04f, 0.05f, 0.96f, 0.07f, 0.07f, 0.08f, 0.94f },
+            { "sPresetNeonPink", 1.00f, 0.40f, 0.70f, 1.0f, 0.08f, 0.03f, 0.05f, 0.96f, 0.14f, 0.05f, 0.09f, 0.94f },
+        };
+        constexpr int kColorPresetCount = static_cast<int>(std::size(kColorPresets));
+
+        void ApplyColorPreset(Settings& settings, const ColorPreset& preset)
+        {
+            settings.themeAccentR = preset.accentR;
+            settings.themeAccentG = preset.accentG;
+            settings.themeAccentB = preset.accentB;
+            settings.themeAccentA = preset.accentA;
+            settings.themeWindowR = preset.windowR;
+            settings.themeWindowG = preset.windowG;
+            settings.themeWindowB = preset.windowB;
+            settings.themeWindowA = preset.windowA;
+            settings.themePanelR = preset.panelR;
+            settings.themePanelG = preset.panelG;
+            settings.themePanelB = preset.panelB;
+            settings.themePanelA = preset.panelA;
+        }
+
+        bool TryReadPipboyColor(float& outR, float& outG, float& outB)
+        {
+            auto* settingR = RE::GetINISetting("fPipboyEffectColorR:Pipboy");
+            auto* settingG = RE::GetINISetting("fPipboyEffectColorG:Pipboy");
+            auto* settingB = RE::GetINISetting("fPipboyEffectColorB:Pipboy");
+
+            if (!settingR || !settingG || !settingB) {
+                return false;
+            }
+
+            if (settingR->GetType() != RE::Setting::SETTING_TYPE::kFloat ||
+                settingG->GetType() != RE::Setting::SETTING_TYPE::kFloat ||
+                settingB->GetType() != RE::Setting::SETTING_TYPE::kFloat) {
+                return false;
+            }
+
+            outR = settingR->GetFloat();
+            outG = settingG->GetFloat();
+            outB = settingB->GetFloat();
+            return true;
+        }
+
+        void ApplyPipboyColorToTheme(Settings& settings)
+        {
+            float r = 0.0f, g = 0.0f, b = 0.0f;
+            if (!TryReadPipboyColor(r, g, b)) {
+                return;
+            }
+
+            const float maxComp = (std::max)({ r, g, b, 0.01f });
+            const float normR = r / maxComp;
+            const float normG = g / maxComp;
+            const float normB = b / maxComp;
+
+            settings.themeAccentR = std::clamp(normR * 0.94f, 0.0f, 1.0f);
+            settings.themeAccentG = std::clamp(normG * 0.94f, 0.0f, 1.0f);
+            settings.themeAccentB = std::clamp(normB * 0.94f, 0.0f, 1.0f);
+            settings.themeAccentA = 1.0f;
+
+            settings.themeWindowR = std::clamp(normR * 0.06f, 0.0f, 1.0f);
+            settings.themeWindowG = std::clamp(normG * 0.06f, 0.0f, 1.0f);
+            settings.themeWindowB = std::clamp(normB * 0.06f, 0.0f, 1.0f);
+            settings.themeWindowA = 0.96f;
+
+            settings.themePanelR = std::clamp(normR * 0.11f, 0.0f, 1.0f);
+            settings.themePanelG = std::clamp(normG * 0.11f, 0.0f, 1.0f);
+            settings.themePanelB = std::clamp(normB * 0.11f, 0.0f, 1.0f);
+            settings.themePanelA = 0.94f;
+        }
+
         std::string GetModVersionText()
         {
             const auto version = F4SE::GetPluginVersion();
@@ -210,6 +301,11 @@ namespace ESPExplorerAE
     {
         auto& settings = Config::GetMutable();
 
+        if (!ImGui::BeginChild("SettingsScrollRegion", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
+            ImGui::EndChild();
+            return;
+        }
+
         const auto languages = Language::ListAvailableLanguages();
         auto currentLanguage = settings.language;
         if (currentLanguage.empty()) {
@@ -218,7 +314,6 @@ namespace ESPExplorerAE
 
         bool changed = false;
         bool languageChanged = false;
-        bool fontChanged = false;
 
         if (CaptureToggleKey(settings)) {
             changed = true;
@@ -239,6 +334,7 @@ namespace ESPExplorerAE
 
             changed = ImGui::Checkbox(L("Settings", "sShowOnStartup", "Show On Startup"), &settings.showOnStartup) || changed;
             changed = ImGui::Checkbox(L("Settings", "sNoPauseOnFocusLoss", "Do Not Pause On Focus Loss"), &settings.noPauseOnFocusLoss) || changed;
+            changed = ImGui::Checkbox(L("Settings", "sPauseGameWhenMenuOpen", "Pause Game When Menu Open"), &settings.pauseGameWhenMenuOpen) || changed;
             if (ImGui::Checkbox(L("Settings", "sVerboseLogging", "Verbose Logging"), &settings.verboseLogging)) {
                 Logger::SetVerboseEnabled(settings.verboseLogging);
                 changed = true;
@@ -246,62 +342,122 @@ namespace ESPExplorerAE
             ImGui::TreePop();
         }
 
+        ImGui::Spacing();
+
         if (ImGui::TreeNodeEx(std::string(L("Settings", "sInterfaceSection", "Interface") + std::string("##SettingsInterfaceSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
             changed = ImGui::Checkbox(L("Settings", "sRememberWindowPos", "Remember Window Position"), &settings.rememberWindowPos) || changed;
             changed = ImGui::Checkbox(L("Settings", "sShowFPSStatus", "Show FPS In Status Bar"), &settings.showFPSInStatus) || changed;
-            if (ImGui::SliderFloat(L("Settings", "sFontSize", "Font Size"), &settings.fontSize, 12.0f, 30.0f, "%.1f")) {
-                fontChanged = true;
-                changed = true;
+            changed = ImGui::Checkbox(L("Settings", "sShowPlayerStats", "Show Player Stats In Status Bar"), &settings.showPlayerStatsInStatus) || changed;
+            changed = ImGui::Checkbox(L("Settings", "sAutoFocusSearch", "Auto-Focus Search Bars"), &settings.autoFocusSearchBars) || changed;
+
+            {
+                int currentIdx = FontManager::GetCurrentSizeIndex();
+                char previewBuf[16]{};
+                std::snprintf(previewBuf, sizeof(previewBuf), "%.0f px", FontManager::kPresetSizes[currentIdx]);
+                if (ImGui::BeginCombo(L("Settings", "sFontSize", "Font Size"), previewBuf)) {
+                    for (int i = 0; i < FontManager::kPresetCount; ++i) {
+                        char label[16]{};
+                        std::snprintf(label, sizeof(label), "%.0f px", FontManager::kPresetSizes[i]);
+                        const bool selected = (i == currentIdx);
+                        if (ImGui::Selectable(label, selected)) {
+                            FontManager::SetCurrentSizeIndex(i);
+                            settings.fontSize = FontManager::kPresetSizes[i];
+                            changed = true;
+                        }
+                        if (selected) {
+                            ImGui::SetItemDefaultFocus();
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
             }
             changed = ImGui::SliderFloat(L("Settings", "sWindowOpacity", "Window Opacity"), &settings.windowAlpha, 0.50f, 1.0f, "%.2f") || changed;
             ImGui::TreePop();
         }
 
+        ImGui::Spacing();
+
         if (ImGui::TreeNodeEx(std::string(L("Settings", "sThemeSection", "Theme") + std::string("##SettingsThemeSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
-            float accentColor[4]{ settings.themeAccentR, settings.themeAccentG, settings.themeAccentB, settings.themeAccentA };
-            if (ImGui::ColorEdit4(L("Settings", "sThemeAccent", "Theme Accent"), accentColor, ImGuiColorEditFlags_NoInputs)) {
-                settings.themeAccentR = accentColor[0];
-                settings.themeAccentG = accentColor[1];
-                settings.themeAccentB = accentColor[2];
-                settings.themeAccentA = accentColor[3];
-                changed = true;
+            if (ImGui::BeginCombo(L("Settings", "sColorPreset", ""), L("Settings", "sSelectPreset", ""))) {
+                for (int i = 0; i < kColorPresetCount; ++i) {
+                    const auto& preset = kColorPresets[i];
+                    ImVec4 previewColor(preset.accentR, preset.accentG, preset.accentB, preset.accentA);
+                    ImGui::ColorButton(("##PresetColor" + std::to_string(i)).c_str(), previewColor, ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoBorder, ImVec2(14, 14));
+                    ImGui::SameLine();
+                    if (ImGui::Selectable(L("Settings", preset.key, ""), false)) {
+                        ApplyColorPreset(settings, preset);
+                        settings.syncPipboyColor = false;
+                        changed = true;
+                    }
+                }
+                ImGui::EndCombo();
             }
 
-            float windowColor[4]{ settings.themeWindowR, settings.themeWindowG, settings.themeWindowB, settings.themeWindowA };
-            if (ImGui::ColorEdit4(L("Settings", "sThemeWindow", "Theme Window"), windowColor, ImGuiColorEditFlags_NoInputs)) {
-                settings.themeWindowR = windowColor[0];
-                settings.themeWindowG = windowColor[1];
-                settings.themeWindowB = windowColor[2];
-                settings.themeWindowA = windowColor[3];
+            if (ImGui::Checkbox(L("Settings", "sSyncPipboyColor", "Sync With Pip-Boy Color"), &settings.syncPipboyColor)) {
+                if (settings.syncPipboyColor) {
+                    ApplyPipboyColorToTheme(settings);
+                }
                 changed = true;
             }
+            if (settings.syncPipboyColor) {
+                ImGui::SameLine();
+                ImGui::TextDisabled("(%s)", L("Settings", "sAuto", ""));
+            }
 
-            float panelColor[4]{ settings.themePanelR, settings.themePanelG, settings.themePanelB, settings.themePanelA };
-            if (ImGui::ColorEdit4(L("Settings", "sThemePanel", "Theme Panel"), panelColor, ImGuiColorEditFlags_NoInputs)) {
-                settings.themePanelR = panelColor[0];
-                settings.themePanelG = panelColor[1];
-                settings.themePanelB = panelColor[2];
-                settings.themePanelA = panelColor[3];
-                changed = true;
+            if (settings.syncPipboyColor) {
+                static int pipboyPollCounter{ 0 };
+                if (++pipboyPollCounter >= 60) {
+                    pipboyPollCounter = 0;
+                    ApplyPipboyColorToTheme(settings);
+                }
+            }
+
+            if (!settings.syncPipboyColor) {
+                float accentColor[4]{ settings.themeAccentR, settings.themeAccentG, settings.themeAccentB, settings.themeAccentA };
+                if (ImGui::ColorEdit4(L("Settings", "sThemeAccent", "Theme Accent"), accentColor, ImGuiColorEditFlags_NoInputs)) {
+                    settings.themeAccentR = accentColor[0];
+                    settings.themeAccentG = accentColor[1];
+                    settings.themeAccentB = accentColor[2];
+                    settings.themeAccentA = accentColor[3];
+                    changed = true;
+                }
+
+                float windowColor[4]{ settings.themeWindowR, settings.themeWindowG, settings.themeWindowB, settings.themeWindowA };
+                if (ImGui::ColorEdit4(L("Settings", "sThemeWindow", "Theme Window"), windowColor, ImGuiColorEditFlags_NoInputs)) {
+                    settings.themeWindowR = windowColor[0];
+                    settings.themeWindowG = windowColor[1];
+                    settings.themeWindowB = windowColor[2];
+                    settings.themeWindowA = windowColor[3];
+                    changed = true;
+                }
+
+                float panelColor[4]{ settings.themePanelR, settings.themePanelG, settings.themePanelB, settings.themePanelA };
+                if (ImGui::ColorEdit4(L("Settings", "sThemePanel", "Theme Panel"), panelColor, ImGuiColorEditFlags_NoInputs)) {
+                    settings.themePanelR = panelColor[0];
+                    settings.themePanelG = panelColor[1];
+                    settings.themePanelB = panelColor[2];
+                    settings.themePanelA = panelColor[3];
+                    changed = true;
+                }
+            } else {
+                float pipR = 0, pipG = 0, pipB = 0;
+                if (TryReadPipboyColor(pipR, pipG, pipB)) {
+                    ImVec4 pipColor(pipR, pipG, pipB, 1.0f);
+                    ImGui::ColorButton("##PipboyPreview", pipColor, ImGuiColorEditFlags_NoTooltip, ImVec2(14, 14));
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("%s: R=%.2f G=%.2f B=%.2f", L("Settings", "sPipboyColor", ""), pipR, pipG, pipB);
+                }
             }
 
             if (ImGui::Button(L("Settings", "sResetTheme", "Reset Theme"))) {
-                settings.themeAccentR = 0.27f;
-                settings.themeAccentG = 0.94f;
-                settings.themeAccentB = 0.38f;
-                settings.themeAccentA = 1.0f;
-                settings.themeWindowR = 0.03f;
-                settings.themeWindowG = 0.08f;
-                settings.themeWindowB = 0.05f;
-                settings.themeWindowA = 0.96f;
-                settings.themePanelR = 0.06f;
-                settings.themePanelG = 0.14f;
-                settings.themePanelB = 0.09f;
-                settings.themePanelA = 0.94f;
+                ApplyColorPreset(settings, kColorPresets[0]);
+                settings.syncPipboyColor = false;
                 changed = true;
             }
             ImGui::TreePop();
         }
+
+        ImGui::Spacing();
 
         if (ImGui::TreeNodeEx(std::string(L("Settings", "sLocalizationSection", "Localization") + std::string("##SettingsLocalizationSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
             if (ImGui::BeginCombo(L("Settings", "sLanguage", "Language"), currentLanguage.c_str())) {
@@ -319,29 +475,32 @@ namespace ESPExplorerAE
                 }
                 ImGui::EndCombo();
             }
-
-            if (ImGui::Button(L("Settings", "sReloadLanguage", "Reload Language"))) {
-                Language::Load(settings.language);
-            }
-            ImGui::TreePop();
-        }
-
-        if (ImGui::TreeNodeEx(std::string(L("Settings", "sControllerSection", "Controller") + std::string("##SettingsControllerSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
-            changed = ImGui::Checkbox(L("Settings", "sEnableGamepadNav", "Enable Gamepad Navigation"), &settings.enableGamepadNav) || changed;
-            ImGui::TextDisabled("%s: %s", L("Settings", "sGamepadStatus", "Gamepad"), GamepadInput::IsGamepadConnected() ? L("Settings", "sConnected", "Connected") : L("Settings", "sDisconnected", "Disconnected"));
-            ImGui::TextDisabled("%s: RB + X", L("Settings", "sControllerToggle", "Toggle Menu"));
-            ImGui::TextDisabled("%s: %s / %s", L("Settings", "sNavigation", "Navigate"), "D-Pad", "Left Stick");
-            ImGui::TextDisabled("%s: A  |  %s: B", L("Settings", "sConfirm", "Select"), L("Settings", "sGoBack", "Back"));
-            ImGui::TextDisabled("%s: LB / RB", L("Settings", "sTabSwitch", "Switch Tabs"));
             ImGui::TreePop();
         }
 
         ImGui::Spacing();
+
+        if (ImGui::TreeNodeEx(std::string(L("Settings", "sControllerSection", "Controller") + std::string("##SettingsControllerSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+            changed = ImGui::Checkbox(L("Settings", "sEnableGamepadNav", ""), &settings.enableGamepadNav) || changed;
+            ImGui::Spacing();
+            ImGui::TextDisabled("%s: %s", L("Settings", "sGamepadStatus", ""), GamepadInput::IsGamepadConnected() ? L("Settings", "sConnected", "") : L("Settings", "sDisconnected", ""));
+            ImGui::TextDisabled("%s: %s", L("Settings", "sControllerToggle", ""), L("Settings", "sToggleCombo", ""));
+            ImGui::TextDisabled("%s: %s / %s", L("Settings", "sNavigation", ""), L("Settings", "sDPad", ""), L("Settings", "sLeftStick", ""));
+            ImGui::TextDisabled("%s: %s  |  %s: %s", L("Settings", "sConfirm", ""), L("Settings", "sButtonA", ""), L("Settings", "sGoBack", ""), L("Settings", "sButtonB", ""));
+            ImGui::TextDisabled("%s: %s", L("Settings", "sTabSwitch", ""), L("Settings", "sShoulderButtons", ""));
+            ImGui::TreePop();
+        }
+
+        ImGui::Spacing();
+        ImGui::Spacing();
         ImGui::SeparatorText(L("Settings", "sAboutSection", "About"));
+        ImGui::Spacing();
         ImGui::TextDisabled("%s: %s", L("Settings", "sGameVersion", "Game Version"), GetGameVersionText().c_str());
         ImGui::TextDisabled("%s: %s", L("Settings", "sModVersion", "Mod Version"), GetModVersionText().c_str());
         ImGui::Spacing();
+        ImGui::Spacing();
         ImGui::TextDisabled("%s", kNexusModsUrl);
+        ImGui::Spacing();
         if (ImGui::Button(L("Settings", "sOpenNexusMods", "Open Nexus Mods Page"))) {
             ShellExecuteA(nullptr, "open", kNexusModsUrl, nullptr, nullptr, SW_SHOWNORMAL);
         }
@@ -350,8 +509,10 @@ namespace ESPExplorerAE
         if (languageChanged) {
             Language::Load(settings.language);
         }
-        if (fontChanged || languageChanged) {
-            FontManager::RequestRebuild(settings.fontSize, settings.language);
+        if (languageChanged) {
+            FontManager::RequestLanguageRebuild(settings.language);
         }
+
+        ImGui::EndChild();
     }
 }

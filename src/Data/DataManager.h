@@ -28,6 +28,7 @@ namespace ESPExplorerAE
         std::vector<FormEntry> furniture;
         std::vector<FormEntry> spells;
         std::vector<FormEntry> perks;
+        std::vector<FormEntry> cells;
     };
 
     struct PluginInfo
@@ -52,6 +53,7 @@ namespace ESPExplorerAE
         std::size_t furniture{ 0 };
         std::size_t spells{ 0 };
         std::size_t perks{ 0 };
+        std::size_t cells{ 0 };
     };
 
     class DataManager

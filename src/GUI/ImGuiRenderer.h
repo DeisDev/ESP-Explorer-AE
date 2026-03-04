@@ -18,6 +18,7 @@ namespace ESPExplorerAE
 
     private:
         static inline bool initialized{ false };
+        static inline bool fontPushed{ false };
         static inline ID3D11Device* device{ nullptr };
         static inline ID3D11DeviceContext* context{ nullptr };
     };

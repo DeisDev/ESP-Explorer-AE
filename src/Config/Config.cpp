@@ -80,9 +80,10 @@ namespace ESPExplorerAE
         settings.toggleKey = static_cast<std::uint32_t>(ini.GetLongValue("General", "iToggleKey", 0x2D));
         settings.showOnStartup = ini.GetBoolValue("General", "bShowOnStartup", false);
         settings.noPauseOnFocusLoss = ini.GetBoolValue("General", "bNoPauseOnFocusLoss", false);
+        settings.pauseGameWhenMenuOpen = ini.GetBoolValue("General", "bPauseGameWhenMenuOpen", false);
         settings.verboseLogging = ini.GetBoolValue("General", "bVerboseLogging", true);
 
-        settings.fontSize = static_cast<float>(ini.GetDoubleValue("UI", "fFontSize", 16.0));
+        settings.fontSize = static_cast<float>(ini.GetDoubleValue("UI", "fFontSize", 22.0));
         settings.windowAlpha = static_cast<float>(ini.GetDoubleValue("UI", "fWindowAlpha", 0.95));
         settings.rememberWindowPos = ini.GetBoolValue("UI", "bRememberWindowPos", true);
         settings.windowX = static_cast<float>(ini.GetDoubleValue("UI", "fWindowX", 100.0));
@@ -104,6 +105,7 @@ namespace ESPExplorerAE
         settings.themePanelG = static_cast<float>(ini.GetDoubleValue("Theme", "fPanelG", settings.themePanelG));
         settings.themePanelB = static_cast<float>(ini.GetDoubleValue("Theme", "fPanelB", settings.themePanelB));
         settings.themePanelA = static_cast<float>(ini.GetDoubleValue("Theme", "fPanelA", settings.themePanelA));
+        settings.syncPipboyColor = ini.GetBoolValue("Theme", "bSyncPipboyColor", false);
 
         settings.hideNonPlayable = ini.GetBoolValue("Filters", "bHideNonPlayable", true);
         settings.hideDeleted = ini.GetBoolValue("Filters", "bHideDeleted", true);
@@ -115,11 +117,8 @@ namespace ESPExplorerAE
         settings.listShowDeleted = ini.GetBoolValue("Filters", "bListShowDeleted", true);
         settings.pluginGlobalSearchMode = ini.GetBoolValue("Filters", "bPluginGlobalSearchMode", false);
         settings.pluginShowUnknownCategories = ini.GetBoolValue("Filters", "bPluginShowUnknownCategories", false);
-        settings.pluginSearchCaseSensitive = ini.GetBoolValue("Filters", "bPluginSearchCaseSensitive", false);
-        settings.itemSearchCaseSensitive = ini.GetBoolValue("Filters", "bItemSearchCaseSensitive", false);
-        settings.npcSearchCaseSensitive = ini.GetBoolValue("Filters", "bNPCSearchCaseSensitive", false);
-        settings.objectSearchCaseSensitive = ini.GetBoolValue("Filters", "bObjectSearchCaseSensitive", false);
-        settings.spellPerkSearchCaseSensitive = ini.GetBoolValue("Filters", "bSpellPerkSearchCaseSensitive", false);
+        settings.autoFocusSearchBars = ini.GetBoolValue("UI", "bAutoFocusSearchBars", true);
+        settings.showPlayerStatsInStatus = ini.GetBoolValue("UI", "bShowPlayerStatsInStatus", true);
 
         settings.enableGamepadNav = ini.GetBoolValue("Controller", "bEnableGamepadNav", true);
 
@@ -143,6 +142,7 @@ namespace ESPExplorerAE
         ini.SetLongValue("General", "iToggleKey", static_cast<long>(settings.toggleKey));
         ini.SetBoolValue("General", "bShowOnStartup", settings.showOnStartup);
         ini.SetBoolValue("General", "bNoPauseOnFocusLoss", settings.noPauseOnFocusLoss);
+        ini.SetBoolValue("General", "bPauseGameWhenMenuOpen", settings.pauseGameWhenMenuOpen);
         ini.SetBoolValue("General", "bVerboseLogging", settings.verboseLogging);
 
         ini.SetDoubleValue("UI", "fFontSize", settings.fontSize);
@@ -167,6 +167,7 @@ namespace ESPExplorerAE
         ini.SetDoubleValue("Theme", "fPanelG", settings.themePanelG);
         ini.SetDoubleValue("Theme", "fPanelB", settings.themePanelB);
         ini.SetDoubleValue("Theme", "fPanelA", settings.themePanelA);
+        ini.SetBoolValue("Theme", "bSyncPipboyColor", settings.syncPipboyColor);
 
         ini.SetBoolValue("Filters", "bHideNonPlayable", settings.hideNonPlayable);
         ini.SetBoolValue("Filters", "bHideDeleted", settings.hideDeleted);
@@ -178,11 +179,8 @@ namespace ESPExplorerAE
         ini.SetBoolValue("Filters", "bListShowDeleted", settings.listShowDeleted);
         ini.SetBoolValue("Filters", "bPluginGlobalSearchMode", settings.pluginGlobalSearchMode);
         ini.SetBoolValue("Filters", "bPluginShowUnknownCategories", settings.pluginShowUnknownCategories);
-        ini.SetBoolValue("Filters", "bPluginSearchCaseSensitive", settings.pluginSearchCaseSensitive);
-        ini.SetBoolValue("Filters", "bItemSearchCaseSensitive", settings.itemSearchCaseSensitive);
-        ini.SetBoolValue("Filters", "bNPCSearchCaseSensitive", settings.npcSearchCaseSensitive);
-        ini.SetBoolValue("Filters", "bObjectSearchCaseSensitive", settings.objectSearchCaseSensitive);
-        ini.SetBoolValue("Filters", "bSpellPerkSearchCaseSensitive", settings.spellPerkSearchCaseSensitive);
+        ini.SetBoolValue("UI", "bAutoFocusSearchBars", settings.autoFocusSearchBars);
+        ini.SetBoolValue("UI", "bShowPlayerStatsInStatus", settings.showPlayerStatsInStatus);
 
         ini.SetBoolValue("Controller", "bEnableGamepadNav", settings.enableGamepadNav);
 

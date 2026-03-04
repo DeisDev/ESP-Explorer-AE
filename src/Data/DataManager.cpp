@@ -23,6 +23,7 @@
 #include <RE/B/BGSPerk.h>
 #include <RE/B/BGSKeywordForm.h>
 #include <RE/S/SpellItem.h>
+#include <RE/T/TESObjectCELL.h>
 
 namespace ESPExplorerAE
 {
@@ -83,6 +84,31 @@ namespace ESPExplorerAE
                 return true;
             }
         }
+
+        std::string GetNPCRaceCategory(const RE::TESNPC* npc)
+        {
+            if (!npc) {
+                return "NPC";
+            }
+
+            const auto* race = npc->GetFormRace();
+            if (!race) {
+                return "NPC";
+            }
+
+            const auto* raceName = race->GetFullName();
+            if (raceName && raceName[0] != '\0') {
+                return raceName;
+            }
+
+            const auto* raceEditorID = race->GetFormEditorID();
+            if (raceEditorID && raceEditorID[0] != '\0') {
+                return raceEditorID;
+            }
+
+            return "NPC";
+        }
+
     }
 
     void DataManager::Refresh()
@@ -259,18 +285,7 @@ namespace ESPExplorerAE
             entry.isDeleted = form->IsDeleted();
             entry.isPlayable = IsPlayable(form);
 
-            const auto* race = form->GetFormRace();
-            if (race) {
-                const auto* raceName = race->GetFullName();
-                if (raceName && raceName[0] != '\0') {
-                    entry.category = raceName;
-                } else {
-                    const auto* raceEditorID = race->GetFormEditorID();
-                    entry.category = (raceEditorID && raceEditorID[0] != '\0') ? raceEditorID : "NPC";
-                }
-            } else {
-                entry.category = "NPC";
-            }
+            entry.category = GetNPCRaceCategory(form);
 
             if (PassesFilters(form, entry.name, entry.isPlayable)) {
                 newCache.npcs.push_back(entry);
@@ -385,6 +400,21 @@ namespace ESPExplorerAE
             }
         }
 
+        for (const auto& entry : newCache.allRecords) {
+            auto* form = RE::TESForm::GetFormByID(entry.formID);
+            if (!form || form->GetFormType() != RE::ENUM_FORM_ID::kCELL) {
+                continue;
+            }
+
+            FormEntry cellEntry = entry;
+            cellEntry.category = "CELL";
+            cellEntry.isPlayable = true;
+
+            if (!cellEntry.name.empty() || !Config::Get().hideNoName) {
+                newCache.cells.push_back(std::move(cellEntry));
+            }
+        }
+
         FormCategoryCounts newCounts{};
         newCounts.weapons = newCache.weapons.size();
         newCounts.armors = newCache.armors.size();
@@ -397,6 +427,7 @@ namespace ESPExplorerAE
         newCounts.furniture = newCache.furniture.size();
         newCounts.spells = newCache.spells.size();
         newCounts.perks = newCache.perks.size();
+        newCounts.cells = newCache.cells.size();
 
         {
             std::unique_lock lock(dataMutex);

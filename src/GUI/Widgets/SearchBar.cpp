@@ -6,13 +6,18 @@
 
 namespace ESPExplorerAE
 {
-    bool SearchBar::Draw(const char* label, char* buffer, std::size_t bufferSize, std::string& value)
+    bool SearchBar::Draw(const char* label, char* buffer, std::size_t bufferSize, std::string& value, bool* shouldFocus)
     {
         if (!label || !buffer || bufferSize == 0) {
             return false;
         }
 
         bool changed = false;
+
+        if (shouldFocus && *shouldFocus && !ImGui::IsAnyItemActive() && !GamepadInput::IsUsingGamepad()) {
+            ImGui::SetKeyboardFocusHere();
+            *shouldFocus = false;
+        }
 
         ImGui::SetNextItemWidth(-ImGui::CalcTextSize("X").x - ImGui::GetStyle().FramePadding.x * 2.0f - ImGui::GetStyle().ItemSpacing.x);
         if (ImGui::InputTextWithHint(std::string(std::string("##") + label).c_str(), label, buffer, bufferSize)) {

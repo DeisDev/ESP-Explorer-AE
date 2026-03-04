@@ -234,6 +234,23 @@ namespace ESPExplorerAE
         RE::Console::ExecuteCommand(std::string(command).c_str());
     }
 
+    void FormActions::TeleportToCell(std::uint32_t formID)
+    {
+        auto* form = RE::TESForm::GetFormByID(formID);
+        if (!form) {
+            return;
+        }
+
+        const auto* editorID = form->GetFormEditorID();
+        if (!editorID || editorID[0] == '\0') {
+            return;
+        }
+
+        std::string command = std::string("coc ") + editorID;
+        ExecuteConsoleCommand(command);
+        lastUndoCommand.clear();
+    }
+
     bool FormActions::CanUndoLastAction()
     {
         return !lastUndoCommand.empty();

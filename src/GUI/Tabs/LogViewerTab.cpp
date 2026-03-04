@@ -1,5 +1,6 @@
 #include "GUI/Tabs/LogViewerTab.h"
 
+#include "Hooks/Hooks.h"
 #include "Logging/Logger.h"
 
 #include <imgui.h>
@@ -234,12 +235,15 @@ namespace ESPExplorerAE
 
             OPENFILENAMEA saveDialog{};
             saveDialog.lStructSize = sizeof(saveDialog);
+            saveDialog.hwndOwner = Hooks::GetGameWindow();
             saveDialog.lpstrFile = filePathBuffer.data();
             saveDialog.nMaxFile = static_cast<DWORD>(filePathBuffer.size());
             saveDialog.lpstrFilter = "Log Files (*.log;*.txt)\0*.log;*.txt\0All Files (*.*)\0*.*\0";
             saveDialog.nFilterIndex = 1;
             saveDialog.lpstrDefExt = sourceExt.empty() ? "log" : sourceExt.c_str() + 1;
             saveDialog.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
+
+            Hooks::SetModalDialogActive(true);
 
             int showCursorCalls = 0;
             for (;;) {
@@ -255,6 +259,8 @@ namespace ESPExplorerAE
             for (int i = 0; i < showCursorCalls; ++i) {
                 ShowCursor(FALSE);
             }
+
+            Hooks::SetModalDialogActive(false);
 
             if (!pickedPath) {
                 return;

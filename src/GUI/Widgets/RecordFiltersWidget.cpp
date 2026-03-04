@@ -8,58 +8,22 @@ namespace ESPExplorerAE
     {
         bool changed = false;
 
-        const std::string headerLabel = std::string(localize("General", "sRecordFilters", "Record Filters")) + "##" + std::string(idSuffix);
-        const ImGuiTreeNodeFlags headerFlags = ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding;
-        if (!ImGui::TreeNodeEx(headerLabel.c_str(), headerFlags)) {
-            return false;
+        const std::string nonPlayableLabel = std::string(localize("General", "sIncludeNonPlayable", "Include Non-Playable")) + "##NonPlayable" + std::string(idSuffix);
+        if (ImGui::Checkbox(nonPlayableLabel.c_str(), &state.showNonPlayable)) {
+            changed = true;
         }
 
-        const std::string tableId = "RecordFiltersTable##" + std::string(idSuffix);
-        if (ImGui::BeginTable(tableId.c_str(), 2, ImGuiTableFlags_SizingStretchSame)) {
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            const std::string playableLabel = std::string(localize("General", "sPlayable", "Playable")) + "##Playable" + std::string(idSuffix);
-            if (ImGui::Checkbox(playableLabel.c_str(), &state.showPlayable)) {
-                changed = true;
-            }
-
-            ImGui::TableNextColumn();
-            const std::string nonPlayableLabel = std::string(localize("General", "sNonPlayable", "Non-Playable")) + "##NonPlayable" + std::string(idSuffix);
-            if (ImGui::Checkbox(nonPlayableLabel.c_str(), &state.showNonPlayable)) {
-                changed = true;
-            }
-
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            const std::string namedLabel = std::string(localize("General", "sNamed", "Named")) + "##Named" + std::string(idSuffix);
-            if (ImGui::Checkbox(namedLabel.c_str(), &state.showNamed)) {
-                changed = true;
-            }
-
-            ImGui::TableNextColumn();
-            const std::string unnamedLabel = std::string(localize("General", "sUnnamedLabel", "Unnamed")) + "##Unnamed" + std::string(idSuffix);
-            if (ImGui::Checkbox(unnamedLabel.c_str(), &state.showUnnamed)) {
-                changed = true;
-            }
-
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            const std::string deletedLabel = std::string(localize("General", "sDeleted", "Deleted")) + "##Deleted" + std::string(idSuffix);
-            if (ImGui::Checkbox(deletedLabel.c_str(), &state.showDeleted)) {
-                changed = true;
-            }
-
-            ImGui::EndTable();
+        ImGui::SameLine();
+        const std::string unnamedLabel = std::string(localize("General", "sIncludeUnnamed", "Include Unnamed")) + "##Unnamed" + std::string(idSuffix);
+        if (ImGui::Checkbox(unnamedLabel.c_str(), &state.showUnnamed)) {
+            changed = true;
         }
 
-        if (!state.showPlayable && !state.showNonPlayable) {
-            ImGui::TextDisabled("%s", localize("General", "sFilterNoPlayableSelected", "No playable state selected."));
+        ImGui::SameLine();
+        const std::string deletedLabel = std::string(localize("General", "sIncludeDeleted", "Include Deleted")) + "##Deleted" + std::string(idSuffix);
+        if (ImGui::Checkbox(deletedLabel.c_str(), &state.showDeleted)) {
+            changed = true;
         }
-        if (!state.showNamed && !state.showUnnamed) {
-            ImGui::TextDisabled("%s", localize("General", "sFilterNoNameSelected", "No name state selected."));
-        }
-
-        ImGui::TreePop();
 
         return changed;
     }

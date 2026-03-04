@@ -12,6 +12,8 @@ namespace ESPExplorerAE
         bool& playerNoClipEnabled,
         int& playerCurrentWeaponAmmoAmount,
         int& playerAllAmmoAmount,
+        int& playerPerkPointsAmount,
+        int& playerLevelAmount,
         const OpenItemGrantPopupFn& openItemGrantPopup,
         const LocalizeFn& localize)
     {
@@ -44,9 +46,44 @@ namespace ESPExplorerAE
             playerNoClipEnabled = !playerNoClipEnabled;
         }
 
-        ImGui::SeparatorText(localize("Player", "sAmmunitionSection", "Ammunition"));
+        ImGui::SeparatorText(localize("Player", "sCharacterSection", "Character"));
 
         const float inputWidth = (std::max)(120.0f, ImGui::GetContentRegionAvail().x * 0.2f);
+
+        ImGui::SetNextItemWidth(inputWidth);
+        ImGui::InputInt(localize("Player", "sSetLevel", "Set Level"), &playerLevelAmount, 1, 10);
+        if (playerLevelAmount < 1) {
+            playerLevelAmount = 1;
+        }
+        if (playerLevelAmount > 65535) {
+            playerLevelAmount = 65535;
+        }
+        const char* setLevelLabel = localize("Player", "sApplyLevel", "Apply Level");
+        wrappedSameLine(setLevelLabel);
+        if (ImGui::Button(setLevelLabel)) {
+            char command[64]{};
+            std::snprintf(command, sizeof(command), "player.setlevel %d", playerLevelAmount);
+            FormActions::ExecuteConsoleCommand(command);
+        }
+
+        ImGui::SetNextItemWidth(inputWidth);
+        ImGui::InputInt(localize("Player", "sAddPerkPoints", "Perk Points"), &playerPerkPointsAmount, 1, 5);
+        if (playerPerkPointsAmount < 1) {
+            playerPerkPointsAmount = 1;
+        }
+        if (playerPerkPointsAmount > 999) {
+            playerPerkPointsAmount = 999;
+        }
+        const char* addPerkPointsLabel = localize("Player", "sAddPerkPointsBtn", "Add Perk Points");
+        wrappedSameLine(addPerkPointsLabel);
+        if (ImGui::Button(addPerkPointsLabel)) {
+            char command[128]{};
+            std::snprintf(command, sizeof(command), "cgf \"Game.AddPerkPoints\" %d", playerPerkPointsAmount);
+            FormActions::ExecuteConsoleCommand(command);
+        }
+
+        ImGui::SeparatorText(localize("Player", "sAmmunitionSection", "Ammunition"));
+
         ImGui::SetNextItemWidth(inputWidth);
         ImGui::InputInt(localize("Player", "sCurrentWeaponAmmo", "Current Weapon Ammo"), &playerCurrentWeaponAmmoAmount, 10, 100);
         if (playerCurrentWeaponAmmoAmount < 1) {

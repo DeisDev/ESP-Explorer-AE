@@ -7,7 +7,7 @@
 
 namespace ESPExplorerAE
 {
-    class NPCBrowserTab
+    class CellBrowserTab
     {
     public:
         using LocalizeFn = std::function<const char*(std::string_view, std::string_view, const char*)>;

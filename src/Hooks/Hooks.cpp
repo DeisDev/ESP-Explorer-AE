@@ -7,6 +7,7 @@
 #include "Logging/Logger.h"
 
 #include <RE/B/BSGraphics.h>
+#include <RE/M/Main.h>
 
 #include <imgui.h>
 #include <backends/imgui_impl_win32.h>
@@ -30,7 +31,7 @@ namespace ESPExplorerAE
 
         BOOL WINAPI HookedSetCursorPos(int x, int y)
         {
-            if (Hooks::IsMenuVisible()) {
+            if (Hooks::IsMenuVisible() && !Hooks::IsModalDialogActive()) {
                 return TRUE;
             }
 
@@ -43,7 +44,7 @@ namespace ESPExplorerAE
 
         BOOL WINAPI HookedClipCursor(const RECT* rect)
         {
-            if (Hooks::IsMenuVisible()) {
+            if (Hooks::IsMenuVisible() && !Hooks::IsModalDialogActive()) {
                 if (!originalClipCursor) {
                     return FALSE;
                 }
@@ -201,13 +202,23 @@ namespace ESPExplorerAE
         }
 
         if (menuVisible) {
-            ClipCursor(nullptr);
-            ReleaseCapture();
+            if (!cursorReleased) {
+                ClipCursor(nullptr);
+                ReleaseCapture();
+                cursorReleased = true;
+                freeCursorPosValid = false;
+            }
             MaintainFreeCursor(gameWindow);
-            cursorReleased = true;
         } else if (cursorReleased) {
             cursorReleased = false;
             freeCursorPosValid = false;
+
+            if (gameWindow) {
+                RECT windowRect{};
+                if (GetWindowRect(gameWindow, &windowRect) && originalClipCursor) {
+                    originalClipCursor(&windowRect);
+                }
+            }
         }
     }
 
@@ -273,14 +284,18 @@ namespace ESPExplorerAE
                 menuVisible = !menuVisible;
                 Logger::Verbose(std::string("Menu toggled via controller: ") + (menuVisible ? "visible" : "hidden"));
                 UpdateMenuInputState();
+                UpdateGamePause();
             }
         }
 
         if (menuVisible && ImGuiRenderer::IsInitialized()) {
             UpdateMenuInputState();
+            UpdateGamePause();
             ImGuiRenderer::BeginFrame();
             MainWindow::Draw();
             ImGuiRenderer::EndFrame();
+        } else if (ImGuiRenderer::IsInitialized()) {
+            UpdateGamePause();
         }
 
         if (originalPresent) {
@@ -295,6 +310,35 @@ namespace ESPExplorerAE
         return menuVisible;
     }
 
+    HWND Hooks::GetGameWindow()
+    {
+        return gameWindow;
+    }
+
+    void Hooks::SetModalDialogActive(bool active)
+    {
+        modalDialogActive = active;
+    }
+
+    bool Hooks::IsModalDialogActive()
+    {
+        return modalDialogActive;
+    }
+
+    void Hooks::UpdateGamePause()
+    {
+        if (!Config::Get().pauseGameWhenMenuOpen) {
+            return;
+        }
+
+        auto* main = RE::Main::GetSingleton();
+        if (!main) {
+            return;
+        }
+
+        main->freezeTime = menuVisible;
+    }
+
     LRESULT CALLBACK Hooks::WndProcHook(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         if (msg == WM_KEYUP) {
@@ -303,17 +347,23 @@ namespace ESPExplorerAE
                 menuVisible = !menuVisible;
                 Logger::Verbose(std::string("Menu visibility toggled: ") + (menuVisible ? "visible" : "hidden"));
                 UpdateMenuInputState();
+                UpdateGamePause();
                 return 1;
             }
         }
 
-        if ((msg == WM_ACTIVATEAPP || msg == WM_ACTIVATE || msg == WM_KILLFOCUS) && Config::Get().noPauseOnFocusLoss) {
+        if ((msg == WM_ACTIVATEAPP || msg == WM_ACTIVATE || msg == WM_KILLFOCUS) && menuVisible && Config::Get().noPauseOnFocusLoss) {
             return 0;
         }
 
-        if (menuVisible && ImGuiRenderer::IsInitialized()) {
-            UpdateMenuInputState();
+        if (modalDialogActive) {
+            if (originalWndProc) {
+                return CallWindowProc(originalWndProc, hwnd, msg, wParam, lParam);
+            }
+            return DefWindowProc(hwnd, msg, wParam, lParam);
+        }
 
+        if (menuVisible && ImGuiRenderer::IsInitialized()) {
             if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam)) {
                 return 1;
             }
@@ -321,10 +371,6 @@ namespace ESPExplorerAE
             if (IsInputMessage(msg)) {
                 return 1;
             }
-        }
-
-        if (ImGuiRenderer::IsInitialized()) {
-            UpdateMenuInputState();
         }
 
         if (originalWndProc) {

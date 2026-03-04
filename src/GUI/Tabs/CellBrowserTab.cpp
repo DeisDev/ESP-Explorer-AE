@@ -1,9 +1,11 @@
-#include "GUI/Tabs/SpellPerkBrowserTab.h"
+#include "GUI/Tabs/CellBrowserTab.h"
 
 #include "GUI/Widgets/FormActions.h"
 #include "GUI/Widgets/FormTable.h"
 #include "GUI/Widgets/RecordFiltersWidget.h"
 #include "GUI/Widgets/SearchBar.h"
+
+#include <RE/T/TESObjectCELL.h>
 
 #include <imgui.h>
 
@@ -31,7 +33,7 @@ namespace ESPExplorerAE
             bool showNamed,
             bool showUnnamed,
             bool showDeleted,
-            const SpellPerkBrowserTab::FilterEntriesFn& filterEntries)
+            const CellBrowserTab::FilterEntriesFn& filterEntries)
         {
             const bool needsRebuild =
                 cacheState.source != &source ||
@@ -55,9 +57,24 @@ namespace ESPExplorerAE
 
             return cacheState.filtered;
         }
+
+        const char* TryGetEditorID(std::uint32_t formID)
+        {
+            auto* form = RE::TESForm::GetFormByID(formID);
+            if (!form) {
+                return nullptr;
+            }
+
+            const auto* editorID = form->GetFormEditorID();
+            if (!editorID || editorID[0] == '\0') {
+                return nullptr;
+            }
+
+            return editorID;
+        }
     }
 
-    void SpellPerkBrowserTab::Draw(
+    void CellBrowserTab::Draw(
         const FormCache& cache,
         char* searchBuffer,
         std::size_t searchBufferSize,
@@ -79,7 +96,7 @@ namespace ESPExplorerAE
     {
         if (RecordFiltersWidget::Draw(
                 localize,
-                "SpellPerkBrowser",
+                "CellBrowser",
                 RecordFilterState{
                     .showNonPlayable = showNonPlayableRecords,
                     .showUnnamed = showUnnamedRecords,
@@ -87,77 +104,42 @@ namespace ESPExplorerAE
             persistListFilters();
         }
 
-        SearchBar::Draw(localize("Spells", "sSearch", "Spell/Perk Search"), searchBuffer, searchBufferSize, searchText, searchFocusPending);
+        SearchBar::Draw(localize("Cells", "sSearch", "Cell Search"), searchBuffer, searchBufferSize, searchText, searchFocusPending);
         drawPluginFilterStatus();
         ImGui::Separator();
 
-        if (ImGui::BeginTabBar("SpellPerkCategories")) {
-            static LocalFilterCache spellFilterCache{};
-            static LocalFilterCache perkFilterCache{};
+        const FormTableConfig tableConfig{
+            .tableId = "CellTable",
+            .primaryActionLabel = localize("Cells", "sTeleport", "Teleport"),
+            .quantityActionLabel = nullptr,
+            .allowFavorites = true,
+            .disableBulkPrimaryAction = true
+        };
 
-            const auto& filteredSpells = GetFilteredEntries(
-                spellFilterCache,
-                cache.spells,
-                showPlayableRecords,
-                showNonPlayableRecords,
-                showNamedRecords,
-                showUnnamedRecords,
-                showDeletedRecords,
-                filterEntries);
-            const auto& filteredPerks = GetFilteredEntries(
-                perkFilterCache,
-                cache.perks,
-                showPlayableRecords,
-                showNonPlayableRecords,
-                showNamedRecords,
-                showUnnamedRecords,
-                showDeletedRecords,
-                filterEntries);
+        static LocalFilterCache cellFilterCache{};
+        const auto& filteredCells = GetFilteredEntries(
+            cellFilterCache,
+            cache.cells,
+            showPlayableRecords,
+            showNonPlayableRecords,
+            showNamedRecords,
+            showUnnamedRecords,
+            showDeletedRecords,
+            filterEntries);
 
-            const FormTableConfig spellConfig{
-                .tableId = "SpellTable",
-                .primaryActionLabel = localize("Spells", "sAddSpell", "Add Spell"),
-                .allowFavorites = true
-            };
-            const FormTableConfig perkConfig{
-                .tableId = "PerkTable",
-                .primaryActionLabel = localize("Spells", "sAddPerk", "Add Perk"),
-                .allowFavorites = true
-            };
+        ImGui::TextDisabled("%zu %s", filteredCells.size(), localize("Cells", "sResults", "cells"));
 
-            if (ImGui::BeginTabItem(localize("Spells", "sSpells", "Spells"))) {
-                FormTable::Draw(
-                    filteredSpells,
-                    searchText,
-                    selectedPluginFilter,
-                    spellConfig,
-                    [](const FormEntry& entry) {
-                        FormActions::AddSpellToPlayer(entry.formID);
-                    },
-                    {},
-                    {},
-                    &favoriteForms,
-                    contextCallbacks);
-                ImGui::EndTabItem();
-            }
-
-            if (ImGui::BeginTabItem(localize("Spells", "sPerks", "Perks"))) {
-                FormTable::Draw(
-                    filteredPerks,
-                    searchText,
-                    selectedPluginFilter,
-                    perkConfig,
-                    [](const FormEntry& entry) {
-                        FormActions::AddPerkToPlayer(entry.formID);
-                    },
-                    {},
-                    {},
-                    &favoriteForms,
-                    contextCallbacks);
-                ImGui::EndTabItem();
-            }
-
-            ImGui::EndTabBar();
-        }
+        FormTable::Draw(
+            filteredCells,
+            searchText,
+            selectedPluginFilter,
+            tableConfig,
+            [](const FormEntry& entry) {
+                FormActions::TeleportToCell(entry.formID);
+            },
+            {},
+            {},
+            &favoriteForms,
+            contextCallbacks);
     }
 }

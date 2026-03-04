@@ -10,6 +10,7 @@ namespace ESPExplorerAE
         std::uint32_t toggleKey{ 0x2D };
         bool showOnStartup{ false };
         bool noPauseOnFocusLoss{ false };
+        bool pauseGameWhenMenuOpen{ false };
         bool verboseLogging{ true };
         bool hideNonPlayable{ true };
         bool hideDeleted{ true };
@@ -21,15 +22,12 @@ namespace ESPExplorerAE
         bool listShowDeleted{ true };
         bool pluginGlobalSearchMode{ false };
         bool pluginShowUnknownCategories{ false };
-        bool pluginSearchCaseSensitive{ false };
-        bool itemSearchCaseSensitive{ false };
-        bool npcSearchCaseSensitive{ false };
-        bool objectSearchCaseSensitive{ false };
-        bool spellPerkSearchCaseSensitive{ false };
+        bool autoFocusSearchBars{ true };
+        bool showPlayerStatsInStatus{ true };
         bool enableGamepadNav{ true };
         bool showFPSInStatus{ true };
         bool rememberWindowPos{ true };
-        float fontSize{ 16.0f };
+        float fontSize{ 22.0f };
         float windowAlpha{ 0.95f };
         float windowX{ 100.0f };
         float windowY{ 100.0f };
@@ -47,6 +45,7 @@ namespace ESPExplorerAE
         float themePanelG{ 0.14f };
         float themePanelB{ 0.09f };
         float themePanelA{ 0.94f };
+        bool syncPipboyColor{ false };
         std::string lastActiveTab{ "Plugin Browser" };
         std::vector<std::uint32_t> favorites{};
     };

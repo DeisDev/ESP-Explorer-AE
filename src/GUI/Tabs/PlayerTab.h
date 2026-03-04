@@ -18,6 +18,8 @@ namespace ESPExplorerAE
             bool& playerNoClipEnabled,
             int& playerCurrentWeaponAmmoAmount,
             int& playerAllAmmoAmount,
+            int& playerPerkPointsAmount,
+            int& playerLevelAmount,
             const OpenItemGrantPopupFn& openItemGrantPopup,
             const LocalizeFn& localize);
     };

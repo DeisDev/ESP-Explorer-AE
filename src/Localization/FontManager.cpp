@@ -3,6 +3,7 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 
 namespace ESPExplorerAE
@@ -43,6 +44,73 @@ namespace ESPExplorerAE
             config.PixelSnapH = true;
             return atlas->AddFontFromFileTTF(fontPath.string().c_str(), fontSize, &config, glyphRanges);
         }
+
+        ImFont* BuildOneSize(
+            ImFontAtlas* atlas,
+            float fontSize,
+            std::string_view languageCode,
+            const std::filesystem::path& fontsDir)
+        {
+            const auto shareTechMono = fontsDir / "ShareTechMono-Regular.ttf";
+            const auto notoSans = fontsDir / "NotoSans-Regular.ttf";
+            const auto notoSansJP = fontsDir / "NotoSansJP-Regular.ttf";
+            const auto notoSansSC = fontsDir / "NotoSansSC-Regular.ttf";
+            const auto notoSansKR = fontsDir / "NotoSansKR-Regular.ttf";
+
+            const std::string language = std::string(languageCode);
+            const bool isEnglish = StartsWith(language, "en");
+            const bool isRussian = StartsWith(language, "ru") || StartsWith(language, "uk") || StartsWith(language, "be") || StartsWith(language, "bg") || StartsWith(language, "sr");
+            const bool isJapanese = StartsWith(language, "ja");
+            const bool isChinese = StartsWith(language, "zh");
+            const bool isKorean = StartsWith(language, "ko");
+
+            ImFont* font = nullptr;
+
+            if (isEnglish) {
+                font = AddFont(atlas, shareTechMono, fontSize, atlas->GetGlyphRangesDefault(), false);
+                if (!font) {
+                    font = AddFont(atlas, notoSans, fontSize, atlas->GetGlyphRangesDefault(), false);
+                }
+            } else if (isRussian) {
+                font = AddFont(atlas, notoSans, fontSize, atlas->GetGlyphRangesCyrillic(), false);
+            } else if (isJapanese) {
+                font = AddFont(atlas, notoSansJP, fontSize, atlas->GetGlyphRangesJapanese(), false);
+            } else if (isChinese) {
+                font = AddFont(atlas, notoSansSC, fontSize, atlas->GetGlyphRangesChineseFull(), false);
+            } else if (isKorean) {
+                font = AddFont(atlas, notoSansKR, fontSize, atlas->GetGlyphRangesKorean(), false);
+            } else {
+                font = AddFont(atlas, notoSans, fontSize, atlas->GetGlyphRangesDefault(), false);
+            }
+
+            if (!font) {
+                font = AddFont(atlas, notoSans, fontSize, atlas->GetGlyphRangesDefault(), false);
+            }
+
+            if (!font) {
+                font = atlas->AddFontDefault();
+            }
+
+            if (isEnglish) {
+                AddFont(atlas, notoSans, fontSize, atlas->GetGlyphRangesCyrillic(), true);
+                AddFont(atlas, notoSansJP, fontSize, atlas->GetGlyphRangesJapanese(), true);
+                AddFont(atlas, notoSansSC, fontSize, atlas->GetGlyphRangesChineseFull(), true);
+                AddFont(atlas, notoSansKR, fontSize, atlas->GetGlyphRangesKorean(), true);
+            } else if (isRussian) {
+                AddFont(atlas, notoSans, fontSize, atlas->GetGlyphRangesDefault(), true);
+            } else if (isJapanese) {
+                AddFont(atlas, notoSans, fontSize, atlas->GetGlyphRangesDefault(), true);
+                AddFont(atlas, notoSans, fontSize, atlas->GetGlyphRangesCyrillic(), true);
+            } else if (isChinese) {
+                AddFont(atlas, notoSans, fontSize, atlas->GetGlyphRangesDefault(), true);
+                AddFont(atlas, notoSans, fontSize, atlas->GetGlyphRangesCyrillic(), true);
+            } else if (isKorean) {
+                AddFont(atlas, notoSans, fontSize, atlas->GetGlyphRangesDefault(), true);
+                AddFont(atlas, notoSans, fontSize, atlas->GetGlyphRangesCyrillic(), true);
+            }
+
+            return font;
+        }
     }
 
     std::filesystem::path FontManager::ResolveFontsDirectory()
@@ -55,7 +123,7 @@ namespace ESPExplorerAE
         return std::filesystem::path("dist/fonts");
     }
 
-    bool FontManager::Build(float fontSize, std::string_view languageCode)
+    bool FontManager::BuildAll(std::string_view languageCode)
     {
         auto& io = ImGui::GetIO();
         if (!io.Fonts || io.Fonts->Locked) {
@@ -63,72 +131,65 @@ namespace ESPExplorerAE
         }
 
         io.Fonts->Clear();
+        for (int i = 0; i < kPresetCount; ++i) {
+            fonts[i] = nullptr;
+        }
 
+        currentLanguageCode = std::string(languageCode);
         const auto fontsDir = ResolveFontsDirectory();
-        const auto shareTechMono = fontsDir / "ShareTechMono-Regular.ttf";
-        const auto notoSans = fontsDir / "NotoSans-Regular.ttf";
-        const auto notoSansJP = fontsDir / "NotoSansJP-Regular.ttf";
-        const auto notoSansSC = fontsDir / "NotoSansSC-Regular.ttf";
-        const auto notoSansKR = fontsDir / "NotoSansKR-Regular.ttf";
 
-        ImFont* font = nullptr;
-
-        const std::string language = std::string(languageCode);
-        const bool isEnglish = StartsWith(language, "en");
-        const bool isRussian = StartsWith(language, "ru") || StartsWith(language, "uk") || StartsWith(language, "be") || StartsWith(language, "bg") || StartsWith(language, "sr");
-        const bool isJapanese = StartsWith(language, "ja");
-        const bool isChinese = StartsWith(language, "zh");
-        const bool isKorean = StartsWith(language, "ko");
-
-        if (isEnglish) {
-            font = AddFont(io.Fonts, shareTechMono, fontSize, io.Fonts->GetGlyphRangesDefault(), false);
-            if (!font) {
-                font = AddFont(io.Fonts, notoSans, fontSize, io.Fonts->GetGlyphRangesDefault(), false);
+        bool anyBuilt = false;
+        for (int i = 0; i < kPresetCount; ++i) {
+            fonts[i] = BuildOneSize(io.Fonts, kPresetSizes[i], languageCode, fontsDir);
+            if (fonts[i]) {
+                anyBuilt = true;
             }
-        } else if (isRussian) {
-            font = AddFont(io.Fonts, notoSans, fontSize, io.Fonts->GetGlyphRangesCyrillic(), false);
-        } else if (isJapanese) {
-            font = AddFont(io.Fonts, notoSansJP, fontSize, io.Fonts->GetGlyphRangesJapanese(), false);
-        } else if (isChinese) {
-            font = AddFont(io.Fonts, notoSansSC, fontSize, io.Fonts->GetGlyphRangesChineseFull(), false);
-        } else if (isKorean) {
-            font = AddFont(io.Fonts, notoSansKR, fontSize, io.Fonts->GetGlyphRangesKorean(), false);
-        } else {
-            font = AddFont(io.Fonts, notoSans, fontSize, io.Fonts->GetGlyphRangesDefault(), false);
         }
 
-        if (!font) {
-            font = AddFont(io.Fonts, notoSans, fontSize, io.Fonts->GetGlyphRangesDefault(), false);
-        }
-
-        if (!font) {
-            font = io.Fonts->AddFontDefault();
-        }
-
-        if (isEnglish) {
-            AddFont(io.Fonts, notoSans, fontSize, io.Fonts->GetGlyphRangesCyrillic(), true);
-            AddFont(io.Fonts, notoSansJP, fontSize, io.Fonts->GetGlyphRangesJapanese(), true);
-            AddFont(io.Fonts, notoSansSC, fontSize, io.Fonts->GetGlyphRangesChineseFull(), true);
-            AddFont(io.Fonts, notoSansKR, fontSize, io.Fonts->GetGlyphRangesKorean(), true);
-        } else if (isRussian) {
-            AddFont(io.Fonts, notoSans, fontSize, io.Fonts->GetGlyphRangesDefault(), true);
-        } else if (isJapanese) {
-            AddFont(io.Fonts, notoSans, fontSize, io.Fonts->GetGlyphRangesDefault(), true);
-            AddFont(io.Fonts, notoSans, fontSize, io.Fonts->GetGlyphRangesCyrillic(), true);
-        } else if (isChinese) {
-            AddFont(io.Fonts, notoSans, fontSize, io.Fonts->GetGlyphRangesDefault(), true);
-            AddFont(io.Fonts, notoSans, fontSize, io.Fonts->GetGlyphRangesCyrillic(), true);
-        } else if (isKorean) {
-            AddFont(io.Fonts, notoSans, fontSize, io.Fonts->GetGlyphRangesDefault(), true);
-            AddFont(io.Fonts, notoSans, fontSize, io.Fonts->GetGlyphRangesCyrillic(), true);
-        }
-
-        return font != nullptr;
+        return anyBuilt;
     }
 
-    void FontManager::RequestRebuild(float fontSize, std::string_view languageCode)
+    ImFont* FontManager::GetFont(int sizeIndex)
     {
-        pendingFontSize = fontSize;
+        if (sizeIndex < 0 || sizeIndex >= kPresetCount) {
+            sizeIndex = kDefaultSizeIndex;
+        }
+        return fonts[sizeIndex];
+    }
+
+    ImFont* FontManager::GetCurrentFont()
+    {
+        return GetFont(currentSizeIndex);
+    }
+
+    int FontManager::GetCurrentSizeIndex()
+    {
+        return currentSizeIndex;
+    }
+
+    void FontManager::SetCurrentSizeIndex(int index)
+    {
+        if (index >= 0 && index < kPresetCount) {
+            currentSizeIndex = index;
+        }
+    }
+
+    int FontManager::FindClosestSizeIndex(float fontSize)
+    {
+        int best = kDefaultSizeIndex;
+        float bestDiff = std::abs(fontSize - kPresetSizes[kDefaultSizeIndex]);
+        for (int i = 0; i < kPresetCount; ++i) {
+            const float diff = std::abs(fontSize - kPresetSizes[i]);
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    void FontManager::RequestLanguageRebuild(std::string_view languageCode)
+    {
         pendingLanguageCode = std::string(languageCode);
         pendingRebuild = true;
     }
@@ -145,6 +206,6 @@ namespace ESPExplorerAE
         }
 
         pendingRebuild = false;
-        return Build(pendingFontSize, pendingLanguageCode);
+        return BuildAll(pendingLanguageCode);
     }
 }

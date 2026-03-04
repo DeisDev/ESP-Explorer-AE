@@ -1,5 +1,6 @@
 #include "GUI/Widgets/FormTable.h"
 
+#include "GUI/Widgets/ContextMenu.h"
 #include "GUI/Widgets/FormActions.h"
 
 #include "Localization/Language.h"
@@ -21,7 +22,7 @@ namespace ESPExplorerAE
 
         std::unordered_map<std::string, SortState> sortStates{};
         std::unordered_map<std::string, std::unordered_set<std::uint32_t>> selectedRows{};
-        std::unordered_map<std::string, bool> searchCaseSensitive{};
+        std::unordered_map<std::string, int> lastClickedIndex{};
         struct TableRenderCache
         {
             const std::vector<FormEntry>* source{ nullptr };
@@ -44,7 +45,6 @@ namespace ESPExplorerAE
             return value.empty() ? fallback : value.data();
         }
 
-        const char* TryGetEditorID(std::uint32_t formID);
         bool MatchesSearch(const FormEntry& entry, std::string_view query, bool caseSensitive);
 
         const std::vector<FormEntry>& GetProcessedEntries(
@@ -170,48 +170,8 @@ namespace ESPExplorerAE
                 return true;
             }
 
-            const char* editorID = TryGetEditorID(entry.formID);
+            const char* editorID = ContextMenu::TryGetEditorID(entry.formID);
             return editorID && ContainsByMode(editorID, query, caseSensitive);
-        }
-
-        bool IsPerkCategory(std::string_view category)
-        {
-            return category == "Perk" || category == "PERK";
-        }
-
-        bool IsSpellCategory(std::string_view category)
-        {
-            return category == "Spell" || category == "SPEL";
-        }
-
-        bool IsQuestCategory(std::string_view category)
-        {
-            return category == "Quest" || category == "QUST";
-        }
-
-        bool IsTeleportCategory(std::string_view category)
-        {
-            return category == "CELL" || category == "WRLD" || category == "LCTN" || category == "REGN";
-        }
-
-        bool IsSpawnCategory(std::string_view category)
-        {
-            return category == "NPC" || category == "NPC_" || category == "LVLN";
-        }
-
-        const char* TryGetEditorID(std::uint32_t formID)
-        {
-            auto* form = RE::TESForm::GetFormByID(formID);
-            if (!form) {
-                return nullptr;
-            }
-
-            const auto* editorID = form->GetFormEditorID();
-            if (!editorID || editorID[0] == '\0') {
-                return nullptr;
-            }
-
-            return editorID;
         }
     }
 
@@ -221,21 +181,45 @@ namespace ESPExplorerAE
         std::string_view pluginFilter,
         const FormTableConfig& config,
         const PrimaryAction& primaryAction,
+        const BulkPrimaryAction& bulkPrimaryAction,
         const QuantityAction& quantityAction,
         std::unordered_set<std::uint32_t>* favorites,
-        bool* caseSensitiveOverride)
+        const ContextMenuCallbacks* contextCallbacks)
     {
         const std::string tableId = config.tableId ? config.tableId : "FormTable";
 
         auto& sortState = sortStates[tableId];
         auto& selected = selectedRows[tableId];
-        auto& tableCaseSensitive = searchCaseSensitive[tableId];
-        bool caseSensitive = caseSensitiveOverride ? *caseSensitiveOverride : tableCaseSensitive;
-        if (caseSensitiveOverride) {
-            tableCaseSensitive = *caseSensitiveOverride;
-        }
+        auto& lastClicked = lastClickedIndex[tableId];
 
-        const auto& entries = GetProcessedEntries(tableId, sourceEntries, searchText, pluginFilter, caseSensitive, sortState);
+        const auto& entries = GetProcessedEntries(tableId, sourceEntries, searchText, pluginFilter, false, sortState);
+
+        auto invokePrimaryForSelection = [&]() {
+            if (!primaryAction && !bulkPrimaryAction) {
+                return;
+            }
+
+            std::vector<FormEntry> selectedEntries{};
+            selectedEntries.reserve(selected.size());
+            for (const auto& entry : entries) {
+                if (selected.contains(entry.formID)) {
+                    selectedEntries.push_back(entry);
+                }
+            }
+
+            if (selectedEntries.empty()) {
+                return;
+            }
+
+            if (bulkPrimaryAction) {
+                bulkPrimaryAction(selectedEntries);
+                return;
+            }
+
+            for (const auto& entry : selectedEntries) {
+                primaryAction(entry);
+            }
+        };
 
         ImGui::Spacing();
 
@@ -272,52 +256,35 @@ namespace ESPExplorerAE
 
         const std::string bulkButtonLabel = std::string(config.primaryActionLabel ? config.primaryActionLabel : "Action") + " " + L("General", "sSelected", "Selected");
         const bool hasSelection = !selected.empty();
-        if (!hasSelection) {
+        const bool bulkPrimaryDisabled = !hasSelection || (config.disableBulkPrimaryAction && selected.size() > 1);
+        if (bulkPrimaryDisabled) {
             ImGui::BeginDisabled(true);
         }
-        if (drawWrappedButton(bulkButtonLabel.c_str(), firstActionInRow)) {
-            for (const auto& entry : entries) {
-                if (selected.contains(entry.formID) && primaryAction) {
-                    primaryAction(entry);
-                }
+        if (primaryAction || bulkPrimaryAction) {
+            if (drawWrappedButton(bulkButtonLabel.c_str(), firstActionInRow)) {
+                invokePrimaryForSelection();
             }
         }
-        if (!hasSelection) {
-            ImGui::EndDisabled();
-        }
-
-        if (quantityAction && config.quantityActionLabel) {
-            if (!hasSelection) {
-                ImGui::BeginDisabled(true);
-            }
-            if (drawWrappedButton(config.quantityActionLabel, firstActionInRow)) {
-                ImGui::OpenPopup("BulkQuantityPopup");
-            }
-            if (!hasSelection) {
-                ImGui::EndDisabled();
-            }
-
-            if (ImGui::BeginPopup("BulkQuantityPopup")) {
-                if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-                    ImGui::CloseCurrentPopup();
-                }
-
-                ImGui::InputInt(L("General", "sBulkQuantity", "Bulk Quantity"), &pendingBulkQuantity, 1, 10);
-                if (pendingBulkQuantity < 1) {
-                    pendingBulkQuantity = 1;
-                }
-
-                if (ImGui::Button(L("General", "sApplyBulkQuantityAction", "Apply Bulk Quantity Action"))) {
-                    for (const auto& entry : entries) {
-                        if (selected.contains(entry.formID)) {
-                            quantityAction(entry, pendingBulkQuantity);
-                        }
+        if (quantityAction) {
+            const char* qtyLabel = config.quantityActionLabel ? config.quantityActionLabel : L("NPCs", "sSpawnAtPlayer", "Spawn At Player");
+            const std::string bulkQtyLabel = std::string(qtyLabel) + " " + L("General", "sSelected", "Selected");
+            if (drawWrappedButton(bulkQtyLabel.c_str(), firstActionInRow)) {
+                for (const auto& entry : entries) {
+                    if (selected.contains(entry.formID)) {
+                        quantityAction(entry, pendingBulkQuantity);
                     }
-                    ImGui::CloseCurrentPopup();
                 }
-
-                ImGui::EndPopup();
             }
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(100.0f);
+            ImGui::InputInt("##BulkQty", &pendingBulkQuantity, 1, 10);
+            if (pendingBulkQuantity < 1) {
+                pendingBulkQuantity = 1;
+            }
+            firstActionInRow = false;
+        }
+        if (bulkPrimaryDisabled) {
+            ImGui::EndDisabled();
         }
 
         if (config.allowFavorites && favorites) {
@@ -374,13 +341,33 @@ namespace ESPExplorerAE
                 const std::string rowPopupId = "RowContext##" + std::to_string(entry.formID) + std::string(config.tableId);
                 const bool rowIsSelected = selected.contains(entry.formID);
                 const bool isFavoriteRow = config.allowFavorites && favorites && favorites->contains(entry.formID);
+                const auto selectRowOnRightClick = [&]() {
+                    if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+                        if (!selected.contains(entry.formID)) {
+                            selected.clear();
+                            selected.insert(entry.formID);
+                            lastClicked = rowIndex;
+                        }
+                    }
+                };
 
                 ImGui::TableSetColumnIndex(0);
                 std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", entry.formID);
                 const std::string rowSelectableLabel = std::string(formIDBuffer) + "##row" + std::to_string(entry.formID) + std::string(config.tableId);
-                const bool rowClicked = ImGui::Selectable(rowSelectableLabel.c_str(), rowIsSelected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap, ImVec2(0.0f, ImGui::GetTextLineHeight()));
-                if (rowClicked) {
-                    if (ImGui::GetIO().KeyCtrl) {
+                const bool rowClicked = ImGui::Selectable(rowSelectableLabel.c_str(), rowIsSelected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap | ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0.0f, ImGui::GetTextLineHeight()));
+                if (rowClicked && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && primaryAction) {
+                    primaryAction(entry);
+                } else if (rowClicked) {
+                    if (ImGui::GetIO().KeyShift && lastClicked >= 0 && lastClicked < static_cast<int>(entries.size())) {
+                        const int rangeStart = (std::min)(lastClicked, rowIndex);
+                        const int rangeEnd = (std::max)(lastClicked, rowIndex);
+                        if (!ImGui::GetIO().KeyCtrl) {
+                            selected.clear();
+                        }
+                        for (int i = rangeStart; i <= rangeEnd; ++i) {
+                            selected.insert(entries[static_cast<std::size_t>(i)].formID);
+                        }
+                    } else if (ImGui::GetIO().KeyCtrl) {
                         if (rowIsSelected) {
                             selected.erase(entry.formID);
                         } else {
@@ -390,7 +377,9 @@ namespace ESPExplorerAE
                         selected.clear();
                         selected.insert(entry.formID);
                     }
+                    lastClicked = rowIndex;
                 }
+                selectRowOnRightClick();
                 ImGui::OpenPopupOnItemClick(rowPopupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
 
                 ImGui::TableSetColumnIndex(1);
@@ -401,6 +390,7 @@ namespace ESPExplorerAE
                 } else {
                     ImGui::TextUnformatted(displayName);
                 }
+                selectRowOnRightClick();
                 ImGui::OpenPopupOnItemClick(rowPopupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
 
                 if (ImGui::IsItemHovered()) {
@@ -418,11 +408,20 @@ namespace ESPExplorerAE
 
                 ImGui::TableSetColumnIndex(2);
                 ImGui::TextUnformatted(entry.sourcePlugin.c_str());
+                selectRowOnRightClick();
                 ImGui::OpenPopupOnItemClick(rowPopupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
 
                 if (ImGui::BeginPopup(rowPopupId.c_str())) {
-                    if (ImGui::MenuItem(rowIsSelected ? L("General", "sDeselect", "Deselect") : L("General", "sSelect", "Select"))) {
-                        if (rowIsSelected) {
+                    const bool popupRowIsSelected = selected.contains(entry.formID);
+                    const bool multipleSelected = selected.size() > 1 && popupRowIsSelected;
+
+                    if (multipleSelected) {
+                        ImGui::TextDisabled("%zu %s", selected.size(), L("General", "sItemsSelected", "items selected"));
+                        ImGui::Separator();
+                    }
+
+                    if (ImGui::MenuItem(popupRowIsSelected ? L("General", "sDeselect", "Deselect") : L("General", "sSelect", "Select"))) {
+                        if (popupRowIsSelected) {
                             selected.erase(entry.formID);
                         } else {
                             selected.insert(entry.formID);
@@ -431,122 +430,37 @@ namespace ESPExplorerAE
 
                     ImGui::Separator();
 
-                    if (primaryAction) {
-                        const char* actionLabel = config.primaryActionLabel ? config.primaryActionLabel : "Action";
-                        if (ImGui::MenuItem(actionLabel)) {
-                            primaryAction(entry);
+                    if (multipleSelected) {
+                        if ((primaryAction || bulkPrimaryAction) && !config.disableBulkPrimaryAction) {
+                            const char* actionLabel = config.primaryActionLabel ? config.primaryActionLabel : "Action";
+                            std::string bulkLabel = std::string(actionLabel) + " (" + std::to_string(selected.size()) + ")";
+                            if (ImGui::MenuItem(bulkLabel.c_str())) {
+                                invokePrimaryForSelection();
+                            }
                         }
+
+                        if (quantityAction) {
+                            const char* qtyLabel = config.quantityActionLabel ? config.quantityActionLabel : L("NPCs", "sSpawnAtPlayer", "Spawn At Player");
+                            std::string bulkQtyLabel = std::string(qtyLabel) + " (" + std::to_string(selected.size()) + ")";
+                            if (ImGui::MenuItem(bulkQtyLabel.c_str())) {
+                                for (const auto& e : entries) {
+                                    if (selected.contains(e.formID)) {
+                                        quantityAction(e, pendingQuantity);
+                                    }
+                                }
+                            }
+                        }
+
+                        ImGui::Separator();
                     }
 
-                    if (quantityAction && config.quantityActionLabel) {
-                        if (pendingQuantityFormID != entry.formID) {
-                            pendingQuantityFormID = entry.formID;
-                            pendingQuantity = 1;
-                        }
-
-                        if (ImGui::MenuItem(config.quantityActionLabel)) {
-                            quantityAction(entry, pendingQuantity);
-                        }
-
-                        ImGui::SetNextItemWidth(120.0f);
-                        ImGui::InputInt(L("General", "sQuantity", "Quantity"), &pendingQuantity, 1, 10);
-                        if (pendingQuantity < 1) {
-                            pendingQuantity = 1;
-                        }
-                    }
-
-                    if (IsSpawnCategory(entry.category) && !quantityAction) {
-                        if (pendingQuantityFormID != entry.formID) {
-                            pendingQuantityFormID = entry.formID;
-                            pendingQuantity = 1;
-                        }
-
-                        if (ImGui::MenuItem(L("NPCs", "sSpawnAtPlayer", "Spawn At Player"))) {
-                            FormActions::SpawnAtPlayer(entry.formID, static_cast<std::uint32_t>(pendingQuantity));
-                        }
-
-                        ImGui::SetNextItemWidth(120.0f);
-                        ImGui::InputInt(L("General", "sQuantity", "Quantity"), &pendingQuantity, 1, 10);
-                        if (pendingQuantity < 1) {
-                            pendingQuantity = 1;
-                        }
-                    }
-
-                    if (IsSpellCategory(entry.category)) {
-                        if (!primaryAction && ImGui::MenuItem(L("General", "sAddSpell", "Add Spell"))) {
-                            FormActions::AddSpellToPlayer(entry.formID);
-                        }
-                        if (ImGui::MenuItem(L("General", "sRemoveSpell", "Remove Spell"))) {
-                            FormActions::RemoveSpellFromPlayer(entry.formID);
-                        }
-                    }
-
-                    if (IsPerkCategory(entry.category)) {
-                        if (!primaryAction && ImGui::MenuItem(L("General", "sAddPerk", "Add Perk"))) {
-                            FormActions::AddPerkToPlayer(entry.formID);
-                        }
-                        if (ImGui::MenuItem(L("General", "sRemovePerk", "Remove Perk"))) {
-                            FormActions::RemovePerkFromPlayer(entry.formID);
-                        }
-                    }
-
-                if (IsQuestCategory(entry.category)) {
-                    if (ImGui::MenuItem(L("General", "sStartQuest", "Start Quest"))) {
-                        char command[64]{};
-                        std::snprintf(command, sizeof(command), "startquest %08X", entry.formID);
-                        FormActions::ExecuteConsoleCommand(command);
-                    }
-                    if (ImGui::MenuItem(L("General", "sCompleteQuest", "Complete Quest"))) {
-                        char command[64]{};
-                        std::snprintf(command, sizeof(command), "completequest %08X", entry.formID);
-                        FormActions::ExecuteConsoleCommand(command);
-                    }
-                }
-
-                if (IsTeleportCategory(entry.category)) {
-                    const char* editorID = TryGetEditorID(entry.formID);
-                    if (editorID) {
-                        if (ImGui::MenuItem(L("General", "sTeleportCOC", "Teleport (COC)"))) {
-                            std::string command = std::string("coc ") + editorID;
-                            FormActions::ExecuteConsoleCommand(command);
-                        }
+                    if (contextCallbacks) {
+                        ContextMenu::Draw(entry, *contextCallbacks);
                     } else {
-                        ImGui::BeginDisabled(true);
-                        ImGui::MenuItem(L("General", "sTeleportCOC", "Teleport (COC)"));
-                        ImGui::EndDisabled();
+                        ContextMenuCallbacks fallbackCallbacks{};
+                        fallbackCallbacks.favorites = favorites;
+                        ContextMenu::Draw(entry, fallbackCallbacks);
                     }
-                }
-
-                ImGui::Separator();
-                if (ImGui::MenuItem(L("General", "sCopyFormID", "Copy FormID"))) {
-                    FormActions::CopyFormID(entry.formID);
-                }
-
-                if (const char* editorID = TryGetEditorID(entry.formID)) {
-                    if (ImGui::MenuItem(L("General", "sCopyEditorID", "Copy EditorID"))) {
-                        ImGui::SetClipboardText(editorID);
-                    }
-                }
-
-                if (ImGui::MenuItem(L("General", "sCopyRecordSource", "Copy Record Source"))) {
-                    ImGui::SetClipboardText(entry.sourcePlugin.c_str());
-                }
-
-                if (ImGui::MenuItem(L("General", "sCopyName", "Copy Name"))) {
-                    ImGui::SetClipboardText(displayName);
-                }
-
-                if (config.allowFavorites && favorites) {
-                    ImGui::Separator();
-                    const bool isFavorite = favorites->contains(entry.formID);
-                    if (ImGui::MenuItem(isFavorite ? L("General", "sRemoveFavorite", "Remove Favorite") : L("General", "sAddFavorite", "Add Favorite"))) {
-                        if (isFavorite) {
-                            favorites->erase(entry.formID);
-                        } else {
-                            favorites->insert(entry.formID);
-                        }
-                    }
-                }
 
                     ImGui::EndPopup();
                 }
@@ -570,14 +484,52 @@ namespace ESPExplorerAE
             ImGui::Separator();
             ImGui::Spacing();
 
-            bool firstSelectedActionInRow = true;
-            if (primaryAction && drawWrappedButton(config.primaryActionLabel ? config.primaryActionLabel : "Action", firstSelectedActionInRow)) {
-                primaryAction(*selectedEntry);
+            const bool multipleSelected = selected.size() > 1;
+            if (multipleSelected) {
+                ImGui::TextDisabled("%zu %s", selected.size(), L("General", "sItemsSelected", "items selected"));
             }
 
-            if (quantityAction && config.quantityActionLabel) {
-                if (drawWrappedButton(config.quantityActionLabel, firstSelectedActionInRow)) {
-                    quantityAction(*selectedEntry, pendingQuantity);
+            bool firstSelectedActionInRow = true;
+            if (primaryAction || bulkPrimaryAction) {
+                const bool disableThisAction = multipleSelected && config.disableBulkPrimaryAction;
+                const char* label = config.primaryActionLabel ? config.primaryActionLabel : "Action";
+                std::string actionLabel = multipleSelected
+                    ? std::string(label) + " (" + std::to_string(selected.size()) + ")"
+                    : std::string(label);
+
+                if (disableThisAction) {
+                    ImGui::BeginDisabled(true);
+                }
+                if (drawWrappedButton(actionLabel.c_str(), firstSelectedActionInRow)) {
+                    if (multipleSelected) {
+                        invokePrimaryForSelection();
+                    } else if (primaryAction) {
+                        primaryAction(*selectedEntry);
+                    } else {
+                        invokePrimaryForSelection();
+                    }
+                }
+                if (disableThisAction) {
+                    ImGui::EndDisabled();
+                }
+            }
+
+            if (quantityAction) {
+                const char* qtyLabel = config.quantityActionLabel ? config.quantityActionLabel : L("NPCs", "sSpawnAtPlayer", "Spawn At Player");
+                std::string qtyActionLabel = multipleSelected
+                    ? std::string(qtyLabel) + " (" + std::to_string(selected.size()) + ")"
+                    : std::string(qtyLabel);
+
+                if (drawWrappedButton(qtyActionLabel.c_str(), firstSelectedActionInRow)) {
+                    if (multipleSelected) {
+                        for (const auto& e : entries) {
+                            if (selected.contains(e.formID)) {
+                                quantityAction(e, pendingQuantity);
+                            }
+                        }
+                    } else {
+                        quantityAction(*selectedEntry, pendingQuantity);
+                    }
                 }
                 ImGui::SameLine();
                 ImGui::SetNextItemWidth(100.0f);
@@ -589,19 +541,34 @@ namespace ESPExplorerAE
             }
 
             if (config.allowFavorites && favorites) {
-                const bool isFavorite = favorites->contains(selectedEntry->formID);
-                const char* favoriteLabel = isFavorite ? L("General", "sRemoveFavorite", "Remove Favorite") : L("General", "sAddFavorite", "Add Favorite");
-                if (drawWrappedButton(favoriteLabel, firstSelectedActionInRow)) {
-                    if (isFavorite) {
-                        favorites->erase(selectedEntry->formID);
-                    } else {
-                        favorites->insert(selectedEntry->formID);
+                if (multipleSelected) {
+                    if (drawWrappedButton(L("General", "sToggleFavoritesSelected", "Toggle Favorites (Selected)"), firstSelectedActionInRow)) {
+                        for (const auto& e : entries) {
+                            if (!selected.contains(e.formID)) continue;
+                            if (favorites->contains(e.formID)) {
+                                favorites->erase(e.formID);
+                            } else {
+                                favorites->insert(e.formID);
+                            }
+                        }
+                    }
+                } else {
+                    const bool isFavorite = favorites->contains(selectedEntry->formID);
+                    const char* favoriteLabel = isFavorite ? L("General", "sRemoveFavorite", "Remove Favorite") : L("General", "sAddFavorite", "Add Favorite");
+                    if (drawWrappedButton(favoriteLabel, firstSelectedActionInRow)) {
+                        if (isFavorite) {
+                            favorites->erase(selectedEntry->formID);
+                        } else {
+                            favorites->insert(selectedEntry->formID);
+                        }
                     }
                 }
             }
 
-            if (drawWrappedButton(L("General", "sCopyFormID", "Copy FormID"), firstSelectedActionInRow)) {
-                FormActions::CopyFormID(selectedEntry->formID);
+            if (!multipleSelected) {
+                if (drawWrappedButton(L("General", "sCopyFormID", "Copy FormID"), firstSelectedActionInRow)) {
+                    FormActions::CopyFormID(selectedEntry->formID);
+                }
             }
         }
     }
