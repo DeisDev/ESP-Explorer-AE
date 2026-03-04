@@ -35,6 +35,7 @@
 #include <RE/T/TESWeightForm.h>
 
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <algorithm>
 #include <array>
@@ -121,6 +122,31 @@ namespace ESPExplorerAE
 
         ConfirmActionState confirmAction{};
         GlobalValuePopupState globalValuePopup{};
+
+        struct AspectRatioConstraint
+        {
+            float ratio;
+        };
+
+        void KeepAspectRatio(ImGuiSizeCallbackData* data)
+        {
+            const auto* ratioData = static_cast<const AspectRatioConstraint*>(data->UserData);
+            if (!ratioData || ratioData->ratio <= 0.0f) {
+                return;
+            }
+
+            ImVec2 desired = data->DesiredSize;
+            const float widthFromHeight = desired.y * ratioData->ratio;
+            const float heightFromWidth = desired.x / ratioData->ratio;
+
+            if (std::fabs(widthFromHeight - desired.x) < std::fabs(heightFromWidth - desired.y)) {
+                desired.x = widthFromHeight;
+            } else {
+                desired.y = heightFromWidth;
+            }
+
+            data->DesiredSize = desired;
+        }
 
         const char* L(std::string_view section, std::string_view key, const char* fallback)
         {
@@ -329,7 +355,12 @@ namespace ESPExplorerAE
                 confirmAction.openRequested = false;
             }
 
-            ImGui::SetNextWindowSize(ImVec2(460.0f, 180.0f), ImGuiCond_Appearing);
+            const float popupScale = (std::clamp)(Config::Get().fontSize / 20.0f, 0.75f, 1.5f);
+            const float popupWidth = 460.0f * popupScale;
+            const float popupHeight = 180.0f * popupScale;
+            AspectRatioConstraint ratioConstraint{ popupWidth / popupHeight };
+            ImGui::SetNextWindowSize(ImVec2(popupWidth, popupHeight), ImGuiCond_Appearing);
+            ImGui::SetNextWindowSizeConstraints(ImVec2(popupWidth * 0.8f, popupHeight * 0.8f), ImVec2(popupWidth * 1.8f, popupHeight * 1.8f), KeepAspectRatio, &ratioConstraint);
             if (!ImGui::BeginPopupModal("##ConfirmActionPopup", &confirmAction.visible)) {
                 return;
             }
@@ -368,7 +399,12 @@ namespace ESPExplorerAE
                 globalValuePopup.openRequested = false;
             }
 
-            ImGui::SetNextWindowSize(ImVec2(430.0f, 180.0f), ImGuiCond_Appearing);
+            const float popupScale = (std::clamp)(Config::Get().fontSize / 20.0f, 0.75f, 1.5f);
+            const float popupWidth = 430.0f * popupScale;
+            const float popupHeight = 180.0f * popupScale;
+            AspectRatioConstraint ratioConstraint{ popupWidth / popupHeight };
+            ImGui::SetNextWindowSize(ImVec2(popupWidth, popupHeight), ImGuiCond_Appearing);
+            ImGui::SetNextWindowSizeConstraints(ImVec2(popupWidth * 0.8f, popupHeight * 0.8f), ImVec2(popupWidth * 1.8f, popupHeight * 1.8f), KeepAspectRatio, &ratioConstraint);
             if (!ImGui::BeginPopupModal("##SetGlobalValuePopup", &globalValuePopup.visible)) {
                 return;
             }
@@ -922,9 +958,11 @@ namespace ESPExplorerAE
         }
 
         const auto& settings = Config::Get();
+        const float windowScale = (std::clamp)(settings.fontSize / 20.0f, 0.80f, 1.40f);
 
         ImGui::SetNextWindowPos(ImVec2(settings.windowX, settings.windowY), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(settings.windowW, settings.windowH), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSizeConstraints(ImVec2(1280.0f * windowScale, 720.0f * windowScale), ImVec2(4096.0f, 4096.0f));
 
         const auto title = Language::Get("General", "sWindowTitle");
         const auto* windowTitle = title.empty() ? "ESP Explorer AE" : title.data();
@@ -1169,9 +1207,7 @@ namespace ESPExplorerAE
                 }
 
                 if (settings.showMenuResolutionInStatus) {
-                    ImGui::SameLine();
-                    ImGui::TextDisabled("|");
-                    ImGui::SameLine();
+                    ImGui::NewLine();
                     ImGui::TextDisabled("%s: %dx%d", L("Settings", "sResolutionShort", "Res"), static_cast<int>(menuWindowSize.x), static_cast<int>(menuWindowSize.y));
                 }
 

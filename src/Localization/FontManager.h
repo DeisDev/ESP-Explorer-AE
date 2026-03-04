@@ -11,7 +11,7 @@ namespace ESPExplorerAE
     public:
         static constexpr float kPresetSizes[] = { 12.0f, 14.0f, 16.0f, 18.0f, 20.0f, 22.0f, 24.0f };
         static constexpr int kPresetCount = 7;
-        static constexpr int kDefaultSizeIndex = 5;
+        static constexpr int kDefaultSizeIndex = 4;
 
         static bool BuildAll(std::string_view languageCode);
 

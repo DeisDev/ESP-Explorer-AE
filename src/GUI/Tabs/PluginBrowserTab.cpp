@@ -505,7 +505,11 @@ namespace ESPExplorerAE
             context.pluginBrowserCacheGlobalSearchMode = context.pluginGlobalSearchMode;
         }
 
-        const float leftWidth = ImGui::GetContentRegionAvail().x * 0.58f;
+        const float totalWidth = ImGui::GetContentRegionAvail().x;
+        const float minDetailsWidth = 520.0f;
+        const float preferredLeftWidth = totalWidth * 0.52f;
+        const float maxLeftWidth = (std::max)(220.0f, totalWidth - minDetailsWidth - ImGui::GetStyle().ItemSpacing.x);
+        const float leftWidth = (std::clamp)(preferredLeftWidth, 220.0f, maxLeftWidth);
         static std::vector<std::uint32_t> previousVisibleRecordOrder{};
         std::vector<std::uint32_t> currentVisibleRecordOrder{};
         currentVisibleRecordOrder.reserve((std::max)(std::size_t{ 256 }, context.pluginBrowserGlobalSearchResultsCache.size()));
@@ -919,9 +923,33 @@ namespace ESPExplorerAE
                 const bool isConstructible = ContextMenu::IsConstructible(selectedRecord->category);
                 const bool isEquippable = ContextMenu::IsEquippable(selectedRecord->category);
 
-                auto wrappedButton = SharedUtils::DrawWrappedButton;
-
                 bool firstBtn = true;
+                int buttonsInRow = 0;
+                float buttonWidth = 0.0f;
+                auto wrappedButton = [&](const char* label, bool& firstInRow) {
+                    const auto& style = ImGui::GetStyle();
+                    constexpr int kButtonsPerRow = 3;
+
+                    if (buttonsInRow == 0) {
+                        const float rowAvailable = ImGui::GetContentRegionAvail().x;
+                        buttonWidth = (std::max)(96.0f, (rowAvailable - style.ItemSpacing.x * static_cast<float>(kButtonsPerRow - 1)) / static_cast<float>(kButtonsPerRow));
+                    }
+
+                    if (buttonsInRow > 0) {
+                        ImGui::SameLine();
+                    }
+
+                    const bool pressed = ImGui::Button(label, ImVec2(buttonWidth, 0.0f));
+                    ++buttonsInRow;
+                    if (buttonsInRow >= kButtonsPerRow) {
+                        buttonsInRow = 0;
+                        firstInRow = true;
+                    } else {
+                        firstInRow = false;
+                    }
+
+                    return pressed;
+                };
 
                 if (hasMultipleSelection && !selectedEntries.empty()) {
                     if (wrappedButton((std::string(context.localize("General", "sCopyName", "Copy Name")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str(), firstBtn)) {
@@ -968,15 +996,6 @@ namespace ESPExplorerAE
                         }
                     }
                 } else {
-                    const bool isFavorite = context.favoriteForms.contains(selectedRecord->formID);
-                    if (wrappedButton(isFavorite ? context.localize("General", "sRemoveFavorite", "Remove Favorite") : context.localize("General", "sAddFavorite", "Add Favorite"), firstBtn)) {
-                        if (isFavorite) {
-                            context.favoriteForms.erase(selectedRecord->formID);
-                        } else {
-                            context.favoriteForms.insert(selectedRecord->formID);
-                        }
-                    }
-
                     if (wrappedButton(context.localize("General", "sCopyFormID", "Copy FormID"), firstBtn)) {
                         FormActions::CopyFormID(selectedRecord->formID);
                     }
@@ -988,6 +1007,27 @@ namespace ESPExplorerAE
                     if (wrappedButton(context.localize("General", "sCopyName", "Copy Name"), firstBtn)) {
                         ImGui::SetClipboardText(selectedRecord->name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : selectedRecord->name.c_str());
                     }
+
+                    if (canGive) {
+                        if (wrappedButton(context.localize("Items", "sGiveItem", "Give Item"), firstBtn)) {
+                            context.openItemGrantPopup(*selectedRecord);
+                        }
+                    }
+
+                    if (isEquippable) {
+                        if (wrappedButton(context.localize("General", "sEquipItem", "Equip Item"), firstBtn)) {
+                            EquipRecordWithConfiguredAmmo(*selectedRecord, context.equipWeaponAmmoCount);
+                        }
+                    }
+
+                    const bool isFavorite = context.favoriteForms.contains(selectedRecord->formID);
+                    if (wrappedButton(isFavorite ? context.localize("General", "sRemoveFavorite", "Remove Favorite") : context.localize("General", "sAddFavorite", "Add Favorite"), firstBtn)) {
+                        if (isFavorite) {
+                            context.favoriteForms.erase(selectedRecord->formID);
+                        } else {
+                            context.favoriteForms.insert(selectedRecord->formID);
+                        }
+                    }
                 }
 
                 if (hasMultipleSelection && !selectedGiveableEntries.empty()) {
@@ -997,34 +1037,13 @@ namespace ESPExplorerAE
                     }
                 }
 
-                if (canGive) {
-                    if (wrappedButton(context.localize("Items", "sGiveItem", "Give Item"), firstBtn)) {
-                        context.openItemGrantPopup(*selectedRecord);
-                    }
-                }
-
                 if (canSpawn || canGive) {
-                    const auto& style = ImGui::GetStyle();
+                    buttonsInRow = 0;
+                    firstBtn = true;
                     const char* spawnLabel = context.localize("NPCs", "sSpawnAtPlayer", "Spawn At Player");
-                    const float spawnBtnWidth = ImGui::CalcTextSize(spawnLabel).x + style.FramePadding.x * 2.0f;
-                    const float spawnInputWidth = 88.0f;
-                    const float spawnGroupWidth = spawnInputWidth + style.ItemSpacing.x + spawnBtnWidth;
-
-                    if (!firstBtn && ImGui::GetContentRegionAvail().x >= (style.ItemSpacing.x + spawnGroupWidth)) {
-                        ImGui::SameLine();
-                    }
 
                     static int detailSpawnQuantity = 1;
-                    ImGui::SetNextItemWidth(spawnInputWidth);
-                    ImGui::InputInt("##DetailSpawnQty", &detailSpawnQuantity, 1, 10);
-                    if (detailSpawnQuantity < 1) {
-                        detailSpawnQuantity = 1;
-                    }
-                    if (ImGui::GetContentRegionAvail().x >= (style.ItemSpacing.x + spawnBtnWidth)) {
-                        ImGui::SameLine();
-                    }
-                    const float spawnButtonRenderWidth = (std::min)(spawnBtnWidth, ImGui::GetContentRegionAvail().x);
-                    if (ImGui::Button(spawnLabel, ImVec2(spawnButtonRenderWidth, 0.0f))) {
+                    if (wrappedButton(spawnLabel, firstBtn)) {
                         const auto formID = selectedRecord->formID;
                         const auto quantity = static_cast<std::uint32_t>(detailSpawnQuantity);
                         const std::string name = selectedRecord->name;
@@ -1035,7 +1054,20 @@ namespace ESPExplorerAE
                                 FormActions::SpawnAtPlayer(formID, quantity);
                             });
                     }
-                    firstBtn = false;
+
+                    const auto& style = ImGui::GetStyle();
+                    const float quantityWidth = 140.0f;
+                    if (ImGui::GetContentRegionAvail().x >= (style.ItemSpacing.x + quantityWidth)) {
+                        ImGui::SameLine();
+                    }
+                    ImGui::SetNextItemWidth(quantityWidth);
+                    ImGui::InputInt("##DetailSpawnQty", &detailSpawnQuantity, 1, 10);
+                    if (detailSpawnQuantity < 1) {
+                        detailSpawnQuantity = 1;
+                    }
+
+                    buttonsInRow = 0;
+                    firstBtn = true;
                 }
 
                 if (isQuest) {
@@ -1155,12 +1187,6 @@ namespace ESPExplorerAE
                             [formID]() {
                                 FormActions::AddConstructedItemToPlayer(formID);
                             });
-                    }
-                }
-
-                if (isEquippable) {
-                    if (wrappedButton(context.localize("General", "sEquipItem", "Equip Item"), firstBtn)) {
-                        EquipRecordWithConfiguredAmmo(*selectedRecord, context.equipWeaponAmmoCount);
                     }
                 }
 

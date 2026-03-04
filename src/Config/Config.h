@@ -28,12 +28,12 @@ namespace ESPExplorerAE
         bool enableGamepadNav{ true };
         bool showFPSInStatus{ true };
         bool rememberWindowPos{ true };
-        float fontSize{ 22.0f };
+        float fontSize{ 20.0f };
         float windowAlpha{ 0.95f };
         float windowX{ 100.0f };
         float windowY{ 100.0f };
-        float windowW{ 1400.0f };
-        float windowH{ 760.0f };
+        float windowW{ 1440.0f };
+        float windowH{ 810.0f };
         float themeAccentR{ 0.27f };
         float themeAccentG{ 0.94f };
         float themeAccentB{ 0.38f };

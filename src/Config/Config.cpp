@@ -83,13 +83,13 @@ namespace ESPExplorerAE
         settings.pauseGameWhenMenuOpen = ini.GetBoolValue("General", "bPauseGameWhenMenuOpen", false);
         settings.verboseLogging = ini.GetBoolValue("General", "bVerboseLogging", true);
 
-        settings.fontSize = static_cast<float>(ini.GetDoubleValue("UI", "fFontSize", 22.0));
+        settings.fontSize = static_cast<float>(ini.GetDoubleValue("UI", "fFontSize", 20.0));
         settings.windowAlpha = static_cast<float>(ini.GetDoubleValue("UI", "fWindowAlpha", 0.95));
         settings.rememberWindowPos = ini.GetBoolValue("UI", "bRememberWindowPos", true);
         settings.windowX = static_cast<float>(ini.GetDoubleValue("UI", "fWindowX", 100.0));
         settings.windowY = static_cast<float>(ini.GetDoubleValue("UI", "fWindowY", 100.0));
-        settings.windowW = static_cast<float>(ini.GetDoubleValue("UI", "fWindowW", 1400.0));
-        settings.windowH = static_cast<float>(ini.GetDoubleValue("UI", "fWindowH", 760.0));
+        settings.windowW = static_cast<float>(ini.GetDoubleValue("UI", "fWindowW", 1440.0));
+        settings.windowH = static_cast<float>(ini.GetDoubleValue("UI", "fWindowH", 810.0));
         settings.showFPSInStatus = ini.GetBoolValue("UI", "bShowFPSInStatus", true);
         settings.lastActiveTab = ini.GetValue("UI", "sLastActiveTab", "Plugin Browser");
 

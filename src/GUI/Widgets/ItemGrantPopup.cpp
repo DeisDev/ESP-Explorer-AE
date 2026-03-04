@@ -1,16 +1,46 @@
 #include "GUI/Widgets/ItemGrantPopup.h"
 
+#include "Config/Config.h"
 #include "GUI/Widgets/FormActions.h"
 #include "Localization/Language.h"
 
 #include <imgui.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <unordered_set>
 
 namespace ESPExplorerAE
 {
+    namespace
+    {
+        struct AspectRatioConstraint
+        {
+            float ratio;
+        };
+
+        void KeepAspectRatio(ImGuiSizeCallbackData* data)
+        {
+            const auto* ratioData = static_cast<const AspectRatioConstraint*>(data->UserData);
+            if (!ratioData || ratioData->ratio <= 0.0f) {
+                return;
+            }
+
+            ImVec2 desired = data->DesiredSize;
+            const float widthFromHeight = desired.y * ratioData->ratio;
+            const float heightFromWidth = desired.x / ratioData->ratio;
+
+            if (std::fabs(widthFromHeight - desired.x) < std::fabs(heightFromWidth - desired.y)) {
+                desired.x = widthFromHeight;
+            } else {
+                desired.y = heightFromWidth;
+            }
+
+            data->DesiredSize = desired;
+        }
+    }
+
     ItemGrantPopup::State& ItemGrantPopup::GetState()
     {
         static State state{};
@@ -77,9 +107,17 @@ namespace ESPExplorerAE
             state.openRequested = false;
         }
 
-        constexpr float kPopupWidth = 520.0f;
-        ImGui::SetNextWindowSize(ImVec2(kPopupWidth, 0.0f), ImGuiCond_Always);
-        if (!ImGui::BeginPopupModal(popupTitle, &state.visible, ImGuiWindowFlags_NoResize)) {
+        const float popupScale = (std::clamp)(Config::Get().fontSize / 20.0f, 0.75f, 1.5f);
+        const float popupWidth = (std::clamp)(520.0f * popupScale, 420.0f, 900.0f);
+        const float popupHeight = multipleItems ? (std::clamp)(620.0f * popupScale, 420.0f, 980.0f) : (std::clamp)(480.0f * popupScale, 360.0f, 820.0f);
+        const ImVec2 minSize(
+            multipleItems ? (std::max)(440.0f, popupWidth * 0.80f) : (std::max)(420.0f, popupWidth * 0.80f),
+            multipleItems ? (std::max)(480.0f, popupHeight * 0.80f) : (std::max)(380.0f, popupHeight * 0.80f));
+        const ImVec2 maxSize(popupWidth * 1.60f, popupHeight * 1.60f);
+        AspectRatioConstraint ratioConstraint{ popupWidth / popupHeight };
+        ImGui::SetNextWindowSize(ImVec2(popupWidth, popupHeight), ImGuiCond_Appearing);
+        ImGui::SetNextWindowSizeConstraints(minSize, maxSize, KeepAspectRatio, &ratioConstraint);
+        if (!ImGui::BeginPopupModal(popupTitle, &state.visible)) {
             return;
         }
 
@@ -182,8 +220,8 @@ namespace ESPExplorerAE
         };
 
         if (multipleItems) {
-            constexpr float kMultiContentHeight = 380.0f;
-            if (ImGui::BeginChild("ItemGrantPopupItems", ImVec2(0.0f, kMultiContentHeight), false, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
+            const float multiContentHeight = (std::clamp)(380.0f * popupScale, 260.0f, 640.0f);
+            if (ImGui::BeginChild("ItemGrantPopupItems", ImVec2(0.0f, multiContentHeight), false, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
                 ImGui::TextDisabled("%zu %s", state.items.size(), L("General", "sItemsSelected", "items selected"));
                 ImGui::Spacing();
 
