@@ -75,6 +75,7 @@ namespace ESPExplorerAE
         int playerLevelAmount{ 1 };
         std::uint32_t selectedPluginTreeRecordFormID{ 0 };
         std::unordered_set<std::uint32_t> selectedPluginTreeRecordFormIDs{};
+        std::uint32_t pluginTreeLastClickedFormID{ 0 };
         bool showPlayableRecords{ true };
         bool showNonPlayableRecords{ false };
         bool showNamedRecords{ true };
@@ -324,12 +325,12 @@ namespace ESPExplorerAE
         void RenderConfirmActionPopup()
         {
             if (confirmAction.openRequested) {
-                ImGui::OpenPopup("Confirm Action");
+                ImGui::OpenPopup("##ConfirmActionPopup");
                 confirmAction.openRequested = false;
             }
 
             ImGui::SetNextWindowSize(ImVec2(460.0f, 180.0f), ImGuiCond_Appearing);
-            if (!ImGui::BeginPopupModal("Confirm Action", &confirmAction.visible)) {
+            if (!ImGui::BeginPopupModal("##ConfirmActionPopup", &confirmAction.visible)) {
                 return;
             }
 
@@ -338,6 +339,9 @@ namespace ESPExplorerAE
             ImGui::TextWrapped("%s", confirmAction.message.c_str());
             ImGui::Spacing();
 
+            if (ImGui::IsWindowAppearing()) {
+                ImGui::SetKeyboardFocusHere();
+            }
             if (ImGui::Button(L("General", "sConfirm", "Confirm"), ImVec2(110.0f, 0.0f))) {
                 if (confirmAction.callback) {
                     confirmAction.callback();
@@ -360,20 +364,25 @@ namespace ESPExplorerAE
         void RenderGlobalValuePopup()
         {
             if (globalValuePopup.openRequested) {
-                ImGui::OpenPopup("Set Global Value");
+                ImGui::OpenPopup("##SetGlobalValuePopup");
                 globalValuePopup.openRequested = false;
             }
 
             ImGui::SetNextWindowSize(ImVec2(430.0f, 180.0f), ImGuiCond_Appearing);
-            if (!ImGui::BeginPopupModal("Set Global Value", &globalValuePopup.visible)) {
+            if (!ImGui::BeginPopupModal("##SetGlobalValuePopup", &globalValuePopup.visible)) {
                 return;
             }
 
+            ImGui::TextUnformatted(L("General", "sSetGlobal", "Set Global"));
+            ImGui::Separator();
             ImGui::Text("%s: %s", L("General", "sEditorID", "EditorID"), globalValuePopup.editorID.c_str());
             ImGui::SetNextItemWidth(-1.0f);
             ImGui::InputFloat(L("General", "sValue", "Value"), &globalValuePopup.value, 1.0f, 10.0f, "%.3f");
             ImGui::Spacing();
 
+            if (ImGui::IsWindowAppearing()) {
+                ImGui::SetKeyboardFocusHere();
+            }
             if (ImGui::Button(L("General", "sApply", "Apply"), ImVec2(100.0f, 0.0f))) {
                 char command[256]{};
                 std::snprintf(command, sizeof(command), "set %s to %.3f", globalValuePopup.editorID.c_str(), globalValuePopup.value);
@@ -675,6 +684,7 @@ namespace ESPExplorerAE
                 .favoriteForms = favoriteForms,
                 .selectedPluginTreeRecordFormID = selectedPluginTreeRecordFormID,
                 .selectedPluginTreeRecordFormIDs = selectedPluginTreeRecordFormIDs,
+                .pluginTreeLastClickedFormID = pluginTreeLastClickedFormID,
                 .recentPluginRecordFormIDs = recentPluginRecordFormIDs,
                 .pluginBrowserCacheVersion = pluginBrowserCacheVersion,
                 .pluginBrowserCacheSearch = pluginBrowserCacheSearch,
@@ -777,6 +787,7 @@ namespace ESPExplorerAE
         void DrawNPCBrowser(const FormCache& cache)
         {
             auto npcContextCallbacks = BuildContextCallbacks();
+            npcContextCallbacks.showSpawnAtPlayer = false;
             NPCBrowserTab::Draw(
                 cache,
                 npcSearchBuffer,
@@ -807,6 +818,7 @@ namespace ESPExplorerAE
         void DrawObjectBrowser(const FormCache& cache)
         {
             auto objectContextCallbacks = BuildContextCallbacks();
+            objectContextCallbacks.showSpawnAtPlayer = false;
             ObjectBrowserTab::Draw(
                 cache,
                 objectSearchBuffer,
@@ -961,7 +973,7 @@ namespace ESPExplorerAE
 
             const auto& style = ImGui::GetStyle();
             const float footerHeight = ImGui::GetTextLineHeightWithSpacing() + ImGui::GetFrameHeightWithSpacing() + style.ItemSpacing.y + style.WindowPadding.y + 8.0f;
-            if (ImGui::BeginChild("MainContentRegion", ImVec2(0.0f, -footerHeight), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+            if (ImGui::BeginChild("MainContentRegion", ImVec2(0.0f, -footerHeight), ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
                 if (ImGui::BeginTabBar("MainTabs")) {
                     static std::string requestedTab{};
                     if (Config::Get().enableGamepadNav && (GamepadInput::WasTabNextPressed() || GamepadInput::WasTabPrevPressed())) {
@@ -1107,7 +1119,7 @@ namespace ESPExplorerAE
             }
             ImGui::EndChild();
 
-            if (ImGui::BeginChild("StatusBarRegion", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+            if (ImGui::BeginChild("StatusBarRegion", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
                 ImGuiIO& io = ImGui::GetIO();
                 const float fps = io.Framerate;
                 const float frameTime = fps > 0.0f ? (1000.0f / fps) : 0.0f;
@@ -1135,7 +1147,7 @@ namespace ESPExplorerAE
                     ImGui::SameLine();
                     ImGui::TextDisabled("|");
                     ImGui::SameLine();
-                    ImGui::TextDisabled("[Gamepad]");
+                    ImGui::TextDisabled("[%s]", L("Settings", "sGamepadStatus", "Gamepad"));
                 }
 
                 if (settings.showPlayerStatsInStatus) {

@@ -3,6 +3,7 @@
 #include "GUI/Widgets/ContextMenu.h"
 #include "GUI/Widgets/FormActions.h"
 #include "GUI/Widgets/RecordFiltersWidget.h"
+#include "GUI/Widgets/SharedUtils.h"
 
 #include <imgui.h>
 
@@ -47,52 +48,7 @@ namespace ESPExplorerAE
             return true;
         }
 
-        bool ContainsCaseInsensitive(std::string_view text, std::string_view query)
-        {
-            if (query.empty()) {
-                return true;
-            }
 
-            std::string textLower(text.begin(), text.end());
-            std::string queryLower(query.begin(), query.end());
-
-            std::ranges::transform(textLower, textLower.begin(), [](unsigned char ch) {
-                return static_cast<char>(std::tolower(ch));
-            });
-            std::ranges::transform(queryLower, queryLower.begin(), [](unsigned char ch) {
-                return static_cast<char>(std::tolower(ch));
-            });
-
-            return textLower.find(queryLower) != std::string::npos;
-        }
-
-        bool ContainsByMode(std::string_view text, std::string_view query, bool caseSensitive)
-        {
-            if (query.empty()) {
-                return true;
-            }
-
-            if (caseSensitive) {
-                return text.find(query) != std::string::npos;
-            }
-
-            return ContainsCaseInsensitive(text, query);
-        }
-
-        const char* TryGetEditorID(std::uint32_t formID)
-        {
-            auto* form = RE::TESForm::GetFormByID(formID);
-            if (!form) {
-                return nullptr;
-            }
-
-            const auto* editorID = form->GetFormEditorID();
-            if (!editorID || editorID[0] == '\0') {
-                return nullptr;
-            }
-
-            return editorID;
-        }
 
         bool MatchesPluginSearch(const FormEntry& entry, std::string_view query, bool caseSensitive)
         {
@@ -103,46 +59,15 @@ namespace ESPExplorerAE
             char formIDBuffer[16]{};
             std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", entry.formID);
 
-            if (ContainsByMode(entry.name, query, caseSensitive) ||
-                ContainsByMode(entry.category, query, caseSensitive) ||
-                ContainsByMode(entry.sourcePlugin, query, caseSensitive) ||
-                ContainsByMode(formIDBuffer, query, caseSensitive)) {
+            if (SharedUtils::ContainsByMode(entry.name, query, caseSensitive) ||
+                SharedUtils::ContainsByMode(entry.category, query, caseSensitive) ||
+                SharedUtils::ContainsByMode(entry.sourcePlugin, query, caseSensitive) ||
+                SharedUtils::ContainsByMode(formIDBuffer, query, caseSensitive)) {
                 return true;
             }
 
-            const char* editorID = TryGetEditorID(entry.formID);
-            return editorID && ContainsByMode(editorID, query, caseSensitive);
-        }
-
-        bool CanGiveFromTreeCategory(std::string_view category)
-        {
-            return category == "Weapon" || category == "Armor" || category == "Ammo" || category == "Misc" ||
-                   category == "WEAP" || category == "ARMO" || category == "AMMO" || category == "MISC" ||
-                   category == "ALCH" || category == "BOOK" || category == "KEYM" || category == "NOTE" ||
-                   category == "INGR" || category == "CMPO" || category == "OMOD";
-        }
-
-        bool CanSpawnFromTreeCategory(std::string_view category)
-        {
-            return category == "NPC" || category == "NPC_" || category == "LVLN" ||
-                   category == "Activator" || category == "Container" || category == "Static" || category == "Furniture" ||
-                   category == "ACTI" || category == "CONT" || category == "STAT" || category == "FURN" ||
-                   category == "LIGH" || category == "FLOR" || category == "TREE";
-        }
-
-        bool CanTeleportFromTreeCategory(std::string_view category)
-        {
-            return category == "CELL" || category == "WRLD" || category == "LCTN" || category == "REGN";
-        }
-
-        bool IsQuestCategory(std::string_view category)
-        {
-            return category == "QUST" || category == "Quest";
-        }
-
-        bool IsPerkCategory(std::string_view category)
-        {
-            return category == "PERK" || category == "Perk";
+            const char* editorID = ContextMenu::TryGetEditorID(entry.formID);
+            return editorID && SharedUtils::ContainsByMode(editorID, query, caseSensitive);
         }
 
         bool IsDataCategory(std::string_view category)
@@ -162,36 +87,6 @@ namespace ESPExplorerAE
             });
 
             return lowered == "unknown" || lowered == "<unknown>";
-        }
-
-        bool IsSpellLikeCategory(std::string_view category)
-        {
-            return category == "SPEL" || category == "Spell" || category == "MGEF" || category == "Effect";
-        }
-
-        bool IsWeatherCategory(std::string_view category)
-        {
-            return category == "WTHR" || category == "Weather";
-        }
-
-        bool IsSoundCategory(std::string_view category)
-        {
-            return category == "SOUN" || category == "SNDR";
-        }
-
-        bool IsGlobalCategory(std::string_view category)
-        {
-            return category == "GLOB";
-        }
-
-        bool IsOutfitCategory(std::string_view category)
-        {
-            return category == "OTFT";
-        }
-
-        bool IsConstructibleCategory(std::string_view category)
-        {
-            return category == "COBJ";
         }
 
         std::string CategoryDisplayName(std::string_view category, const PluginBrowserTabContext& context)
@@ -255,10 +150,10 @@ namespace ESPExplorerAE
 
         ImVec4 CategoryColor(std::string_view category)
         {
-            if (CanGiveFromTreeCategory(category)) {
+            if (ContextMenu::CanGiveItem(category)) {
                 return ImVec4(0.40f, 0.80f, 0.40f, 1.00f);
             }
-            if (CanSpawnFromTreeCategory(category)) {
+            if (ContextMenu::CanSpawn(category)) {
                 return ImVec4(0.82f, 0.62f, 0.38f, 1.00f);
             }
             if (category == "CELL" || category == "WRLD" || category == "LCTN" || category == "REGN") {
@@ -330,7 +225,24 @@ namespace ESPExplorerAE
 
             for (const auto selectedFormID : context.selectedPluginTreeRecordFormIDs) {
                 const auto* selectedEntry = FindRecordByFormID(cache, selectedFormID, dataVersion);
-                if (!selectedEntry || !CanGiveFromTreeCategory(selectedEntry->category)) {
+                if (!selectedEntry || !ContextMenu::CanGiveItem(selectedEntry->category)) {
+                    continue;
+                }
+
+                selectedEntries.push_back(*selectedEntry);
+            }
+
+            return selectedEntries;
+        }
+
+        std::vector<FormEntry> CollectSelectedEntries(const FormCache& cache, std::uint64_t dataVersion, const PluginBrowserTabContext& context)
+        {
+            std::vector<FormEntry> selectedEntries{};
+            selectedEntries.reserve(context.selectedPluginTreeRecordFormIDs.size());
+
+            for (const auto selectedFormID : context.selectedPluginTreeRecordFormIDs) {
+                const auto* selectedEntry = FindRecordByFormID(cache, selectedFormID, dataVersion);
+                if (!selectedEntry) {
                     continue;
                 }
 
@@ -371,7 +283,7 @@ namespace ESPExplorerAE
             return callbacks;
         }
 
-        void DrawRecordContextMenu(const FormEntry& record, bool isSelected, PluginBrowserTabContext& context)
+        void DrawRecordContextMenu(const FormEntry& record, bool isSelected, const FormCache& cache, std::uint64_t dataVersion, PluginBrowserTabContext& context)
         {
             if (ImGui::MenuItem(isSelected ? context.localize("General", "sDeselect", "Deselect") : context.localize("General", "sSelect", "Select"))) {
                 if (isSelected) {
@@ -379,13 +291,75 @@ namespace ESPExplorerAE
                 } else {
                     context.selectedPluginTreeRecordFormIDs.insert(record.formID);
                     context.selectedPluginTreeRecordFormID = record.formID;
+                    context.pluginTreeLastClickedFormID = record.formID;
                 }
                 EnsurePrimarySelectionValid(context);
             }
 
             ImGui::Separator();
 
+            const bool isMultiSelectedRecord = isSelected && context.selectedPluginTreeRecordFormIDs.size() > 1;
+            if (isMultiSelectedRecord) {
+                const auto selectedGiveableEntries = CollectSelectedGiveableEntries(cache, dataVersion, context);
+                if (!selectedGiveableEntries.empty()) {
+                    std::string grantLabel = std::string(context.localize("Items", "sGiveItem", "Give Item")) + " (" + std::to_string(selectedGiveableEntries.size()) + ")";
+                    if (ImGui::MenuItem(grantLabel.c_str())) {
+                        context.openItemGrantPopupMultiple(selectedGiveableEntries);
+                    }
+                }
+
+                const auto selectedEntries = CollectSelectedEntries(cache, dataVersion, context);
+                if (!selectedEntries.empty()) {
+                    if (ImGui::MenuItem((std::string(context.localize("General", "sCopyFormID", "Copy FormID")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                        std::vector<std::string> values{};
+                        values.reserve(selectedEntries.size());
+                        for (const auto& selectedEntry : selectedEntries) {
+                            char idBuffer[16]{};
+                            std::snprintf(idBuffer, sizeof(idBuffer), "%08X", selectedEntry.formID);
+                            values.emplace_back(idBuffer);
+                        }
+                        const auto text = SharedUtils::BuildParenthesizedList(values);
+                        ImGui::SetClipboardText(text.c_str());
+                    }
+
+                    if (ImGui::MenuItem((std::string(context.localize("General", "sCopyRecordSource", "Copy Record Source")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                        std::vector<std::string> values{};
+                        values.reserve(selectedEntries.size());
+                        for (const auto& selectedEntry : selectedEntries) {
+                            values.push_back(selectedEntry.sourcePlugin);
+                        }
+                        const auto text = SharedUtils::BuildParenthesizedList(values);
+                        ImGui::SetClipboardText(text.c_str());
+                    }
+
+                    if (ImGui::MenuItem((std::string(context.localize("General", "sCopyName", "Copy Name")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                        std::vector<std::string> values{};
+                        values.reserve(selectedEntries.size());
+                        for (const auto& selectedEntry : selectedEntries) {
+                            values.push_back(selectedEntry.name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : selectedEntry.name);
+                        }
+                        const auto text = SharedUtils::BuildParenthesizedList(values);
+                        ImGui::SetClipboardText(text.c_str());
+                    }
+
+                    if (ImGui::MenuItem((std::string(context.localize("General", "sAddFavorite", "Add Favorite")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                        for (const auto& selectedEntry : selectedEntries) {
+                            context.favoriteForms.insert(selectedEntry.formID);
+                        }
+                    }
+
+                    if (ImGui::MenuItem((std::string(context.localize("General", "sRemoveFavorite", "Remove Favorite")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                        for (const auto& selectedEntry : selectedEntries) {
+                            context.favoriteForms.erase(selectedEntry.formID);
+                        }
+                    }
+                }
+
+                ImGui::Separator();
+            }
+
             auto callbacks = BuildContextCallbacks(context);
+            callbacks.hideCopyAndFavoriteActions = isMultiSelectedRecord;
             ContextMenu::Draw(record, callbacks);
         }
     }
@@ -532,15 +506,58 @@ namespace ESPExplorerAE
         }
 
         const float leftWidth = ImGui::GetContentRegionAvail().x * 0.58f;
+        static std::vector<std::uint32_t> previousVisibleRecordOrder{};
+        std::vector<std::uint32_t> currentVisibleRecordOrder{};
+        currentVisibleRecordOrder.reserve((std::max)(std::size_t{ 256 }, context.pluginBrowserGlobalSearchResultsCache.size()));
 
         if (ImGui::BeginChild("PluginTreeLeft", ImVec2(leftWidth, 0.0f), ImGuiChildFlags_Borders)) {
             auto drawRecordSelectable = [&](const FormEntry& record, const char* idPrefix) {
+                currentVisibleRecordOrder.push_back(record.formID);
+
                 const auto* displayName = record.name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : record.name.c_str();
                 char recordLabel[512]{};
                 std::snprintf(recordLabel, sizeof(recordLabel), "%s [%08X]##%s%08X", displayName, record.formID, idPrefix, record.formID);
                 const bool isSelected = context.selectedPluginTreeRecordFormIDs.contains(record.formID);
                 if (ImGui::Selectable(recordLabel, isSelected)) {
-                    if (ImGui::GetIO().KeyCtrl) {
+                    const bool shiftHeld = ImGui::GetIO().KeyShift;
+                    const bool ctrlHeld = ImGui::GetIO().KeyCtrl;
+
+                    if (shiftHeld && context.pluginTreeLastClickedFormID != 0 && !previousVisibleRecordOrder.empty()) {
+                        const auto anchorIt = std::find(previousVisibleRecordOrder.begin(), previousVisibleRecordOrder.end(), context.pluginTreeLastClickedFormID);
+                        const auto currentIt = std::find(previousVisibleRecordOrder.begin(), previousVisibleRecordOrder.end(), record.formID);
+
+                        if (anchorIt != previousVisibleRecordOrder.end() && currentIt != previousVisibleRecordOrder.end()) {
+                            if (!ctrlHeld) {
+                                context.selectedPluginTreeRecordFormIDs.clear();
+                            }
+
+                            auto beginIt = anchorIt;
+                            auto endIt = currentIt;
+                            if (beginIt > endIt) {
+                                std::swap(beginIt, endIt);
+                            }
+
+                            for (auto it = beginIt; it != endIt + 1; ++it) {
+                                context.selectedPluginTreeRecordFormIDs.insert(*it);
+                            }
+
+                            context.selectedPluginTreeRecordFormID = record.formID;
+                            TrackRecentRecord(record.formID, context);
+                        } else if (ctrlHeld) {
+                            if (isSelected) {
+                                context.selectedPluginTreeRecordFormIDs.erase(record.formID);
+                            } else {
+                                context.selectedPluginTreeRecordFormIDs.insert(record.formID);
+                                context.selectedPluginTreeRecordFormID = record.formID;
+                                TrackRecentRecord(record.formID, context);
+                            }
+                        } else {
+                            context.selectedPluginTreeRecordFormIDs.clear();
+                            context.selectedPluginTreeRecordFormIDs.insert(record.formID);
+                            context.selectedPluginTreeRecordFormID = record.formID;
+                            TrackRecentRecord(record.formID, context);
+                        }
+                    } else if (ctrlHeld) {
                         if (isSelected) {
                             context.selectedPluginTreeRecordFormIDs.erase(record.formID);
                         } else {
@@ -555,6 +572,9 @@ namespace ESPExplorerAE
                         context.selectedPluginTreeRecordFormID = record.formID;
                         TrackRecentRecord(record.formID, context);
                     }
+
+                    context.pluginTreeLastClickedFormID = record.formID;
+                    EnsurePrimarySelectionValid(context);
                 }
 
                 if (ImGui::BeginPopupContextItem()) {
@@ -562,15 +582,16 @@ namespace ESPExplorerAE
                         context.selectedPluginTreeRecordFormIDs.clear();
                         context.selectedPluginTreeRecordFormIDs.insert(record.formID);
                         context.selectedPluginTreeRecordFormID = record.formID;
+                        context.pluginTreeLastClickedFormID = record.formID;
                         TrackRecentRecord(record.formID, context);
                     }
 
-                    DrawRecordContextMenu(record, true, context);
+                    DrawRecordContextMenu(record, true, cache, dataVersion, context);
 
                     ImGui::EndPopup();
                 }
 
-                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && CanGiveFromTreeCategory(record.category)) {
+                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ContextMenu::CanGiveItem(record.category)) {
                     context.openItemGrantPopup(record);
                 }
             };
@@ -698,12 +719,14 @@ namespace ESPExplorerAE
             }
         }
         ImGui::EndChild();
+        previousVisibleRecordOrder = std::move(currentVisibleRecordOrder);
 
         ImGui::SameLine();
 
         if (ImGui::BeginChild("PluginTreeDetails", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders)) {
             EnsurePrimarySelectionValid(context);
             const FormEntry* selectedRecord = context.selectedPluginTreeRecordFormID != 0 ? FindRecordByFormID(cache, context.selectedPluginTreeRecordFormID, dataVersion) : nullptr;
+            const auto selectedEntries = CollectSelectedEntries(cache, dataVersion, context);
             const auto selectedGiveableEntries = CollectSelectedGiveableEntries(cache, dataVersion, context);
             const bool hasMultipleSelection = context.selectedPluginTreeRecordFormIDs.size() > 1;
 
@@ -721,8 +744,10 @@ namespace ESPExplorerAE
                     }
                 };
 
-                const float footerHeight = ImGui::GetFrameHeightWithSpacing() * 5.0f;
-                if (ImGui::BeginChild("PluginDetailsInfo", ImVec2(0.0f, -footerHeight), false)) {
+                const float totalAvail = ImGui::GetContentRegionAvail().y;
+                const float minDetailsHeight = ImGui::GetFrameHeightWithSpacing() * 6.0f;
+                const float detailsHeight = (std::max)(minDetailsHeight, totalAvail * 0.55f);
+                if (ImGui::BeginChild("PluginDetailsInfo", ImVec2(0.0f, detailsHeight), false)) {
 
                 ImGui::TextUnformatted(selectedRecord->name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : selectedRecord->name.c_str());
                 drawCopyPopup(selectedRecord->name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : selectedRecord->name);
@@ -878,53 +903,93 @@ namespace ESPExplorerAE
                 }
                 ImGui::EndChild();
 
-                const bool canGive = CanGiveFromTreeCategory(selectedRecord->category);
-                const bool canSpawn = CanSpawnFromTreeCategory(selectedRecord->category);
-                const bool canTeleport = CanTeleportFromTreeCategory(selectedRecord->category);
-                const bool isQuest = IsQuestCategory(selectedRecord->category);
-                const bool isPerk = IsPerkCategory(selectedRecord->category);
-                const bool isSpellLike = IsSpellLikeCategory(selectedRecord->category);
-                const bool isWeather = IsWeatherCategory(selectedRecord->category);
-                const bool isSound = IsSoundCategory(selectedRecord->category);
-                const bool isGlobal = IsGlobalCategory(selectedRecord->category);
-                const bool isOutfit = IsOutfitCategory(selectedRecord->category);
-                const bool isConstructible = IsConstructibleCategory(selectedRecord->category);
-                const bool isEquippable = selectedRecord->category == "WEAP" || selectedRecord->category == "Weapon" || selectedRecord->category == "ARMO" || selectedRecord->category == "Armor";
+                ImGui::Separator();
+                if (ImGui::BeginChild("PluginDetailsActions", ImVec2(0.0f, 0.0f), false)) {
 
-                auto wrappedButton = [](const char* label, bool& firstInRow) {
-                    const auto& style = ImGui::GetStyle();
-                    const float buttonWidth = ImGui::CalcTextSize(label).x + style.FramePadding.x * 2.0f;
+                const bool canGive = ContextMenu::CanGiveItem(selectedRecord->category);
+                const bool canSpawn = ContextMenu::CanSpawn(selectedRecord->category);
+                const bool canTeleport = ContextMenu::CanTeleport(selectedRecord->category);
+                const bool isQuest = ContextMenu::IsQuest(selectedRecord->category);
+                const bool isPerk = ContextMenu::IsPerk(selectedRecord->category);
+                const bool isSpellLike = ContextMenu::IsSpellLike(selectedRecord->category);
+                const bool isWeather = ContextMenu::IsWeather(selectedRecord->category);
+                const bool isSound = ContextMenu::IsSound(selectedRecord->category);
+                const bool isGlobal = ContextMenu::IsGlobal(selectedRecord->category);
+                const bool isOutfit = ContextMenu::IsOutfit(selectedRecord->category);
+                const bool isConstructible = ContextMenu::IsConstructible(selectedRecord->category);
+                const bool isEquippable = ContextMenu::IsEquippable(selectedRecord->category);
 
-                    if (!firstInRow) {
-                        const float needed = style.ItemSpacing.x + buttonWidth;
-                        if (ImGui::GetContentRegionAvail().x >= needed) {
-                            ImGui::SameLine();
-                        }
-                    }
-
-                    const bool pressed = ImGui::Button(label);
-                    firstInRow = false;
-                    return pressed;
-                };
+                auto wrappedButton = SharedUtils::DrawWrappedButton;
 
                 bool firstBtn = true;
 
-                const bool isFavorite = context.favoriteForms.contains(selectedRecord->formID);
-                if (wrappedButton(isFavorite ? context.localize("General", "sRemoveFavorite", "Remove Favorite") : context.localize("General", "sAddFavorite", "Add Favorite"), firstBtn)) {
-                    if (isFavorite) {
-                        context.favoriteForms.erase(selectedRecord->formID);
-                    } else {
-                        context.favoriteForms.insert(selectedRecord->formID);
+                if (hasMultipleSelection && !selectedEntries.empty()) {
+                    if (wrappedButton((std::string(context.localize("General", "sCopyName", "Copy Name")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str(), firstBtn)) {
+                        std::vector<std::string> values{};
+                        values.reserve(selectedEntries.size());
+                        for (const auto& selectedEntry : selectedEntries) {
+                            values.push_back(selectedEntry.name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : selectedEntry.name);
+                        }
+                        const auto text = SharedUtils::BuildParenthesizedList(values);
+                        ImGui::SetClipboardText(text.c_str());
+                    }
+
+                    if (wrappedButton((std::string(context.localize("General", "sCopyFormID", "Copy FormID")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str(), firstBtn)) {
+                        std::vector<std::string> values{};
+                        values.reserve(selectedEntries.size());
+                        for (const auto& selectedEntry : selectedEntries) {
+                            char formBuffer[16]{};
+                            std::snprintf(formBuffer, sizeof(formBuffer), "%08X", selectedEntry.formID);
+                            values.emplace_back(formBuffer);
+                        }
+                        const auto text = SharedUtils::BuildParenthesizedList(values);
+                        ImGui::SetClipboardText(text.c_str());
+                    }
+
+                    if (wrappedButton((std::string(context.localize("General", "sCopyRecordSource", "Copy Record Source")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str(), firstBtn)) {
+                        std::vector<std::string> values{};
+                        values.reserve(selectedEntries.size());
+                        for (const auto& selectedEntry : selectedEntries) {
+                            values.push_back(selectedEntry.sourcePlugin);
+                        }
+                        const auto text = SharedUtils::BuildParenthesizedList(values);
+                        ImGui::SetClipboardText(text.c_str());
+                    }
+
+                    if (wrappedButton((std::string(context.localize("General", "sAddFavorite", "Add Favorite")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str(), firstBtn)) {
+                        for (const auto& selectedEntry : selectedEntries) {
+                            context.favoriteForms.insert(selectedEntry.formID);
+                        }
+                    }
+
+                    if (wrappedButton((std::string(context.localize("General", "sRemoveFavorite", "Remove Favorite")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str(), firstBtn)) {
+                        for (const auto& selectedEntry : selectedEntries) {
+                            context.favoriteForms.erase(selectedEntry.formID);
+                        }
+                    }
+                } else {
+                    const bool isFavorite = context.favoriteForms.contains(selectedRecord->formID);
+                    if (wrappedButton(isFavorite ? context.localize("General", "sRemoveFavorite", "Remove Favorite") : context.localize("General", "sAddFavorite", "Add Favorite"), firstBtn)) {
+                        if (isFavorite) {
+                            context.favoriteForms.erase(selectedRecord->formID);
+                        } else {
+                            context.favoriteForms.insert(selectedRecord->formID);
+                        }
+                    }
+
+                    if (wrappedButton(context.localize("General", "sCopyFormID", "Copy FormID"), firstBtn)) {
+                        FormActions::CopyFormID(selectedRecord->formID);
+                    }
+
+                    if (wrappedButton(context.localize("General", "sCopyRecordSource", "Copy Record Source"), firstBtn)) {
+                        ImGui::SetClipboardText(selectedRecord->sourcePlugin.c_str());
+                    }
+
+                    if (wrappedButton(context.localize("General", "sCopyName", "Copy Name"), firstBtn)) {
+                        ImGui::SetClipboardText(selectedRecord->name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : selectedRecord->name.c_str());
                     }
                 }
 
-                if (wrappedButton(context.localize("General", "sCopyFormID", "Copy FormID"), firstBtn)) {
-                    FormActions::CopyFormID(selectedRecord->formID);
-                }
-
-                ImGui::Separator();
-
-                firstBtn = true;
                 if (hasMultipleSelection && !selectedGiveableEntries.empty()) {
                     std::string giveSelectedLabel = std::string(context.localize("Items", "sGiveItem", "Give Item")) + " (" + std::to_string(selectedGiveableEntries.size()) + ")";
                     if (wrappedButton(giveSelectedLabel.c_str(), firstBtn)) {
@@ -939,22 +1004,27 @@ namespace ESPExplorerAE
                 }
 
                 if (canSpawn || canGive) {
-                    if (!firstBtn) {
-                        const auto& style = ImGui::GetStyle();
-                        const float spawnBtnWidth = ImGui::CalcTextSize(context.localize("NPCs", "sSpawnAtPlayer", "Spawn At Player")).x + style.FramePadding.x * 2.0f;
-                        const float needed = style.ItemSpacing.x + 80.0f + style.ItemSpacing.x + spawnBtnWidth;
-                        if (ImGui::GetContentRegionAvail().x >= needed) {
-                            ImGui::SameLine();
-                        }
+                    const auto& style = ImGui::GetStyle();
+                    const char* spawnLabel = context.localize("NPCs", "sSpawnAtPlayer", "Spawn At Player");
+                    const float spawnBtnWidth = ImGui::CalcTextSize(spawnLabel).x + style.FramePadding.x * 2.0f;
+                    const float spawnInputWidth = 88.0f;
+                    const float spawnGroupWidth = spawnInputWidth + style.ItemSpacing.x + spawnBtnWidth;
+
+                    if (!firstBtn && ImGui::GetContentRegionAvail().x >= (style.ItemSpacing.x + spawnGroupWidth)) {
+                        ImGui::SameLine();
                     }
+
                     static int detailSpawnQuantity = 1;
-                    ImGui::SetNextItemWidth(80.0f);
+                    ImGui::SetNextItemWidth(spawnInputWidth);
                     ImGui::InputInt("##DetailSpawnQty", &detailSpawnQuantity, 1, 10);
                     if (detailSpawnQuantity < 1) {
                         detailSpawnQuantity = 1;
                     }
-                    ImGui::SameLine();
-                    if (ImGui::Button(context.localize("NPCs", "sSpawnAtPlayer", "Spawn At Player"))) {
+                    if (ImGui::GetContentRegionAvail().x >= (style.ItemSpacing.x + spawnBtnWidth)) {
+                        ImGui::SameLine();
+                    }
+                    const float spawnButtonRenderWidth = (std::min)(spawnBtnWidth, ImGui::GetContentRegionAvail().x);
+                    if (ImGui::Button(spawnLabel, ImVec2(spawnButtonRenderWidth, 0.0f))) {
                         const auto formID = selectedRecord->formID;
                         const auto quantity = static_cast<std::uint32_t>(detailSpawnQuantity);
                         const std::string name = selectedRecord->name;
@@ -995,19 +1065,43 @@ namespace ESPExplorerAE
 
                 if (isPerk) {
                     if (wrappedButton(context.localize("General", "sAddPerk", "Add Perk"), firstBtn)) {
-                        FormActions::AddPerkToPlayer(selectedRecord->formID);
+                        const auto formID = selectedRecord->formID;
+                        context.requestActionConfirmation(
+                            context.localize("General", "sConfirmAction", "Confirm Action"),
+                            context.localize("General", "sConfirmAddPerk", "Add selected perk to player?"),
+                            [formID]() {
+                                FormActions::AddPerkToPlayer(formID);
+                            });
                     }
                     if (wrappedButton(context.localize("General", "sRemovePerk", "Remove Perk"), firstBtn)) {
-                        FormActions::RemovePerkFromPlayer(selectedRecord->formID);
+                        const auto formID = selectedRecord->formID;
+                        context.requestActionConfirmation(
+                            context.localize("General", "sConfirmAction", "Confirm Action"),
+                            context.localize("General", "sConfirmRemovePerk", "Remove selected perk from player?"),
+                            [formID]() {
+                                FormActions::RemovePerkFromPlayer(formID);
+                            });
                     }
                 }
 
                 if (isSpellLike) {
                     if (wrappedButton(context.localize("General", "sAddSpellEffect", "Add Spell/Effect"), firstBtn)) {
-                        FormActions::AddSpellToPlayer(selectedRecord->formID);
+                        const auto formID = selectedRecord->formID;
+                        context.requestActionConfirmation(
+                            context.localize("General", "sConfirmAction", "Confirm Action"),
+                            context.localize("General", "sConfirmAddSpellEffect", "Add selected spell/effect to player?"),
+                            [formID]() {
+                                FormActions::AddSpellToPlayer(formID);
+                            });
                     }
                     if (wrappedButton(context.localize("General", "sRemoveSpellEffect", "Remove Spell/Effect"), firstBtn)) {
-                        FormActions::RemoveSpellFromPlayer(selectedRecord->formID);
+                        const auto formID = selectedRecord->formID;
+                        context.requestActionConfirmation(
+                            context.localize("General", "sConfirmAction", "Confirm Action"),
+                            context.localize("General", "sConfirmRemoveSpellEffect", "Remove selected spell/effect from player?"),
+                            [formID]() {
+                                FormActions::RemoveSpellFromPlayer(formID);
+                            });
                     }
                 }
 
@@ -1027,7 +1121,7 @@ namespace ESPExplorerAE
 
                 if (isSound) {
                     if (wrappedButton(context.localize("General", "sPlaySound", "Play Sound"), firstBtn)) {
-                        if (const char* editorID = TryGetEditorID(selectedRecord->formID)) {
+                        if (const char* editorID = ContextMenu::TryGetEditorID(selectedRecord->formID)) {
                             std::string command = std::string("playsound ") + editorID;
                             FormActions::ExecuteConsoleCommand(command);
                         }
@@ -1042,13 +1136,25 @@ namespace ESPExplorerAE
 
                 if (isOutfit) {
                     if (wrappedButton(context.localize("General", "sAddOutfitItems", "Add Outfit Items"), firstBtn)) {
-                        FormActions::AddOutfitItemsToPlayer(selectedRecord->formID);
+                        const auto formID = selectedRecord->formID;
+                        context.requestActionConfirmation(
+                            context.localize("General", "sConfirmAction", "Confirm Action"),
+                            context.localize("General", "sConfirmAddOutfitItems", "Add all items from selected outfit to player?"),
+                            [formID]() {
+                                FormActions::AddOutfitItemsToPlayer(formID);
+                            });
                     }
                 }
 
                 if (isConstructible) {
                     if (wrappedButton(context.localize("General", "sAddCraftedItem", "Add Crafted Item"), firstBtn)) {
-                        FormActions::AddConstructedItemToPlayer(selectedRecord->formID);
+                        const auto formID = selectedRecord->formID;
+                        context.requestActionConfirmation(
+                            context.localize("General", "sConfirmAction", "Confirm Action"),
+                            context.localize("General", "sConfirmAddCraftedItem", "Add crafted output of selected recipe to player?"),
+                            [formID]() {
+                                FormActions::AddConstructedItemToPlayer(formID);
+                            });
                     }
                 }
 
@@ -1076,10 +1182,13 @@ namespace ESPExplorerAE
                         }
                     } else {
                         ImGui::BeginDisabled(true);
-                        ImGui::Button(context.localize("General", "sTeleportCOC", "Teleport (COC)"));
+                        wrappedButton(context.localize("General", "sTeleportCOC", "Teleport (COC)"), firstBtn);
                         ImGui::EndDisabled();
                     }
                 }
+
+                }
+                ImGui::EndChild();
             }
         }
         ImGui::EndChild();

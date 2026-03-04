@@ -13,13 +13,71 @@
 #include <RE/T/TESObjectWEAP.h>
 
 #include <cstdio>
+#include <deque>
+#include <vector>
 
 namespace ESPExplorerAE
 {
     namespace
     {
-        std::string lastUndoCommand{};
+        using UndoEntry = std::vector<std::string>;
+
+        std::deque<UndoEntry> undoHistory{};
+        UndoEntry undoBatch{};
+        bool undoBatchActive{ false };
+        constexpr std::size_t kMaxUndoEntries = 64;
         constexpr std::uint32_t kRightHandEquipIndex = 0;
+
+        void PushUndoEntry(UndoEntry&& entry)
+        {
+            if (entry.empty()) {
+                return;
+            }
+
+            undoHistory.emplace_back(std::move(entry));
+            while (undoHistory.size() > kMaxUndoEntries) {
+                undoHistory.pop_front();
+            }
+        }
+
+        void RecordUndoCommand(std::string command)
+        {
+            if (command.empty()) {
+                return;
+            }
+
+            if (undoBatchActive) {
+                undoBatch.push_back(std::move(command));
+                return;
+            }
+
+            UndoEntry entry{};
+            entry.push_back(std::move(command));
+            PushUndoEntry(std::move(entry));
+        }
+
+        void BeginUndoBatch()
+        {
+            undoBatch.clear();
+            undoBatchActive = true;
+        }
+
+        void CommitUndoBatch()
+        {
+            if (!undoBatchActive) {
+                return;
+            }
+
+            PushUndoEntry(std::move(undoBatch));
+            undoBatch.clear();
+            undoBatchActive = false;
+        }
+
+        void CancelUndoBatch()
+        {
+            undoBatch.clear();
+            undoBatchActive = false;
+        }
 
         void ExecutePlayerCommand(const char* commandName, std::uint32_t formID, std::uint32_t count)
         {
@@ -72,16 +130,18 @@ namespace ESPExplorerAE
 
         char undoCommand[128]{};
         std::snprintf(undoCommand, sizeof(undoCommand), "player.removeitem %08X %u", formID, count);
-        lastUndoCommand = undoCommand;
+        RecordUndoCommand(undoCommand);
     }
 
     void FormActions::GiveToPlayerWithAmmo(std::uint32_t formID, std::uint32_t itemCount, std::uint32_t ammoFormID, std::uint32_t ammoCount)
     {
+        BeginUndoBatch();
         GiveToPlayer(formID, itemCount);
 
         if (ammoFormID != 0 && ammoCount > 0) {
             GiveToPlayer(ammoFormID, ammoCount);
         }
+        CommitUndoBatch();
     }
 
     std::uint32_t FormActions::GetWeaponAmmoFormID(std::uint32_t weaponFormID)
@@ -128,7 +188,6 @@ namespace ESPExplorerAE
 
         ExecutePlayerCommand("placeatme", formID, count);
         Logger::Verbose("Spawn at player form=" + std::to_string(formID) + " count=" + std::to_string(count));
-        lastUndoCommand.clear();
     }
 
     void FormActions::PlaceAtPlayer(std::uint32_t formID, std::uint32_t count)
@@ -139,7 +198,6 @@ namespace ESPExplorerAE
 
         ExecutePlayerCommand("placeatme", formID, count);
         Logger::Verbose("Place at player form=" + std::to_string(formID) + " count=" + std::to_string(count));
-        lastUndoCommand.clear();
     }
 
     void FormActions::AddSpellToPlayer(std::uint32_t formID)
@@ -148,7 +206,7 @@ namespace ESPExplorerAE
 
         char undoCommand[96]{};
         std::snprintf(undoCommand, sizeof(undoCommand), "player.removespell %08X", formID);
-        lastUndoCommand = undoCommand;
+        RecordUndoCommand(undoCommand);
     }
 
     void FormActions::RemoveSpellFromPlayer(std::uint32_t formID)
@@ -157,7 +215,7 @@ namespace ESPExplorerAE
 
         char undoCommand[96]{};
         std::snprintf(undoCommand, sizeof(undoCommand), "player.addspell %08X", formID);
-        lastUndoCommand = undoCommand;
+        RecordUndoCommand(undoCommand);
     }
 
     void FormActions::AddPerkToPlayer(std::uint32_t formID)
@@ -166,7 +224,7 @@ namespace ESPExplorerAE
 
         char undoCommand[96]{};
         std::snprintf(undoCommand, sizeof(undoCommand), "player.removeperk %08X", formID);
-        lastUndoCommand = undoCommand;
+        RecordUndoCommand(undoCommand);
     }
 
     void FormActions::RemovePerkFromPlayer(std::uint32_t formID)
@@ -175,7 +233,7 @@ namespace ESPExplorerAE
 
         char undoCommand[96]{};
         std::snprintf(undoCommand, sizeof(undoCommand), "player.addperk %08X", formID);
-        lastUndoCommand = undoCommand;
+        RecordUndoCommand(undoCommand);
     }
 
     int FormActions::AddOutfitItemsToPlayer(std::uint32_t formID)
@@ -190,6 +248,7 @@ namespace ESPExplorerAE
             return 0;
         }
 
+        BeginUndoBatch();
         int addedCount = 0;
         for (const auto& item : outfit->outfitItems) {
             if (!item) {
@@ -198,6 +257,12 @@ namespace ESPExplorerAE
 
             GiveToPlayer(item->GetFormID(), 1);
             ++addedCount;
+        }
+
+        if (addedCount > 0) {
+            CommitUndoBatch();
+        } else {
+            CancelUndoBatch();
         }
 
         return addedCount;
@@ -248,22 +313,25 @@ namespace ESPExplorerAE
 
         std::string command = std::string("coc ") + editorID;
         ExecuteConsoleCommand(command);
-        lastUndoCommand.clear();
     }
 
     bool FormActions::CanUndoLastAction()
     {
-        return !lastUndoCommand.empty();
+        return !undoHistory.empty();
     }
 
     void FormActions::UndoLastAction()
     {
-        if (lastUndoCommand.empty()) {
+        if (undoHistory.empty()) {
             return;
         }
 
-        RE::Console::ExecuteCommand(lastUndoCommand.c_str());
-        Logger::Verbose(std::string("Undo command executed: ") + lastUndoCommand);
-        lastUndoCommand.clear();
+        auto entry = std::move(undoHistory.back());
+        undoHistory.pop_back();
+
+        for (auto it = entry.rbegin(); it != entry.rend(); ++it) {
+            RE::Console::ExecuteCommand(it->c_str());
+            Logger::Verbose(std::string("Undo command executed: ") + *it);
+        }
     }
 }

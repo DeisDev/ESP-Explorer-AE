@@ -2,6 +2,7 @@
 
 #include "GUI/Widgets/FormActions.h"
 #include "GUI/Widgets/FormTable.h"
+#include "GUI/Widgets/RecordFilterCache.h"
 #include "GUI/Widgets/RecordFiltersWidget.h"
 #include "GUI/Widgets/SearchBar.h"
 
@@ -13,20 +14,8 @@ namespace ESPExplorerAE
 {
     namespace
     {
-        struct LocalFilterCache
-        {
-            const std::vector<FormEntry>* source{ nullptr };
-            std::size_t sourceSize{ 0 };
-            bool showPlayable{ true };
-            bool showNonPlayable{ true };
-            bool showNamed{ true };
-            bool showUnnamed{ true };
-            bool showDeleted{ true };
-            std::vector<FormEntry> filtered{};
-        };
-
         const std::vector<FormEntry>& GetFilteredEntries(
-            LocalFilterCache& cacheState,
+            RecordFilterCache& cacheState,
             const std::vector<FormEntry>& source,
             bool showPlayable,
             bool showNonPlayable,
@@ -35,42 +24,7 @@ namespace ESPExplorerAE
             bool showDeleted,
             const CellBrowserTab::FilterEntriesFn& filterEntries)
         {
-            const bool needsRebuild =
-                cacheState.source != &source ||
-                cacheState.sourceSize != source.size() ||
-                cacheState.showPlayable != showPlayable ||
-                cacheState.showNonPlayable != showNonPlayable ||
-                cacheState.showNamed != showNamed ||
-                cacheState.showUnnamed != showUnnamed ||
-                cacheState.showDeleted != showDeleted;
-
-            if (needsRebuild) {
-                cacheState.filtered = filterEntries(source);
-                cacheState.source = &source;
-                cacheState.sourceSize = source.size();
-                cacheState.showPlayable = showPlayable;
-                cacheState.showNonPlayable = showNonPlayable;
-                cacheState.showNamed = showNamed;
-                cacheState.showUnnamed = showUnnamed;
-                cacheState.showDeleted = showDeleted;
-            }
-
-            return cacheState.filtered;
-        }
-
-        const char* TryGetEditorID(std::uint32_t formID)
-        {
-            auto* form = RE::TESForm::GetFormByID(formID);
-            if (!form) {
-                return nullptr;
-            }
-
-            const auto* editorID = form->GetFormEditorID();
-            if (!editorID || editorID[0] == '\0') {
-                return nullptr;
-            }
-
-            return editorID;
+            return RecordFilterCache::GetFiltered(cacheState, source, showPlayable, showNonPlayable, showNamed, showUnnamed, showDeleted, filterEntries);
         }
     }
 
@@ -116,7 +70,7 @@ namespace ESPExplorerAE
             .disableBulkPrimaryAction = true
         };
 
-        static LocalFilterCache cellFilterCache{};
+        static RecordFilterCache cellFilterCache{};
         const auto& filteredCells = GetFilteredEntries(
             cellFilterCache,
             cache.cells,
@@ -129,13 +83,27 @@ namespace ESPExplorerAE
 
         ImGui::TextDisabled("%zu %s", filteredCells.size(), localize("Cells", "sResults", "cells"));
 
+        const auto requestTeleport = [&](std::uint32_t formID) {
+            if (contextCallbacks && contextCallbacks->requestActionConfirmation) {
+                contextCallbacks->requestActionConfirmation(
+                    localize("General", "sConfirmTeleportTitle", "Confirm Teleport"),
+                    localize("General", "sConfirmTeleport", "Teleport to selected destination?"),
+                    [formID]() {
+                        FormActions::TeleportToCell(formID);
+                    });
+                return;
+            }
+
+            FormActions::TeleportToCell(formID);
+        };
+
         FormTable::Draw(
             filteredCells,
             searchText,
             selectedPluginFilter,
             tableConfig,
-            [](const FormEntry& entry) {
-                FormActions::TeleportToCell(entry.formID);
+            [&](const FormEntry& entry) {
+                requestTeleport(entry.formID);
             },
             {},
             {},

@@ -20,6 +20,8 @@ namespace ESPExplorerAE
         ConfirmActionFn requestActionConfirmation;
         std::unordered_set<std::uint32_t>* favorites{ nullptr };
         int equipWeaponAmmoCount{ 200 };
+        bool showSpawnAtPlayer{ true };
+        bool hideCopyAndFavoriteActions{ false };
     };
 
     class ContextMenu

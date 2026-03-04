@@ -2,6 +2,7 @@
 
 #include "GUI/Widgets/FormActions.h"
 #include "GUI/Widgets/FormTable.h"
+#include "GUI/Widgets/RecordFilterCache.h"
 #include "GUI/Widgets/RecordFiltersWidget.h"
 #include "GUI/Widgets/SearchBar.h"
 
@@ -27,18 +28,6 @@ namespace ESPExplorerAE
             kFemaleOnly
         };
 
-        struct LocalFilterCache
-        {
-            const std::vector<FormEntry>* source{ nullptr };
-            std::size_t sourceSize{ 0 };
-            bool showPlayable{ true };
-            bool showNonPlayable{ true };
-            bool showNamed{ true };
-            bool showUnnamed{ true };
-            bool showDeleted{ true };
-            std::vector<FormEntry> filtered{};
-        };
-
         struct NPCFilterState
         {
             NPCFilterMode mode{ NPCFilterMode::kAll };
@@ -51,7 +40,7 @@ namespace ESPExplorerAE
         };
 
         const std::vector<FormEntry>& GetFilteredEntries(
-            LocalFilterCache& cacheState,
+            RecordFilterCache& cacheState,
             const std::vector<FormEntry>& source,
             bool showPlayable,
             bool showNonPlayable,
@@ -60,27 +49,7 @@ namespace ESPExplorerAE
             bool showDeleted,
             const NPCBrowserTab::FilterEntriesFn& filterEntries)
         {
-            const bool needsRebuild =
-                cacheState.source != &source ||
-                cacheState.sourceSize != source.size() ||
-                cacheState.showPlayable != showPlayable ||
-                cacheState.showNonPlayable != showNonPlayable ||
-                cacheState.showNamed != showNamed ||
-                cacheState.showUnnamed != showUnnamed ||
-                cacheState.showDeleted != showDeleted;
-
-            if (needsRebuild) {
-                cacheState.filtered = filterEntries(source);
-                cacheState.source = &source;
-                cacheState.sourceSize = source.size();
-                cacheState.showPlayable = showPlayable;
-                cacheState.showNonPlayable = showNonPlayable;
-                cacheState.showNamed = showNamed;
-                cacheState.showUnnamed = showUnnamed;
-                cacheState.showDeleted = showDeleted;
-            }
-
-            return cacheState.filtered;
+            return RecordFilterCache::GetFiltered(cacheState, source, showPlayable, showNonPlayable, showNamed, showUnnamed, showDeleted, filterEntries);
         }
 
         std::string GetFactionDisplayName(const RE::TESFaction* faction)
@@ -283,7 +252,7 @@ namespace ESPExplorerAE
             .allowFavorites = true
         };
 
-        static LocalFilterCache npcFilterCache{};
+        static RecordFilterCache npcFilterCache{};
         const auto& filteredNPCs = GetFilteredEntries(
             npcFilterCache,
             cache.npcs,
@@ -446,9 +415,7 @@ namespace ESPExplorerAE
                 FormActions::SpawnAtPlayer(entry.formID, 1);
             },
             {},
-            [](const FormEntry& entry, int quantity) {
-                FormActions::SpawnAtPlayer(entry.formID, static_cast<std::uint32_t>(quantity));
-            },
+            {},
             &favoriteForms,
             contextCallbacks);
     }

@@ -2,6 +2,7 @@
 
 #include "GUI/Widgets/FormActions.h"
 #include "GUI/Widgets/FormTable.h"
+#include "GUI/Widgets/RecordFilterCache.h"
 #include "GUI/Widgets/RecordFiltersWidget.h"
 #include "GUI/Widgets/SearchBar.h"
 
@@ -11,20 +12,8 @@ namespace ESPExplorerAE
 {
     namespace
     {
-        struct LocalFilterCache
-        {
-            const std::vector<FormEntry>* source{ nullptr };
-            std::size_t sourceSize{ 0 };
-            bool showPlayable{ true };
-            bool showNonPlayable{ true };
-            bool showNamed{ true };
-            bool showUnnamed{ true };
-            bool showDeleted{ true };
-            std::vector<FormEntry> filtered{};
-        };
-
         const std::vector<FormEntry>& GetFilteredEntries(
-            LocalFilterCache& cacheState,
+            RecordFilterCache& cacheState,
             const std::vector<FormEntry>& source,
             bool showPlayable,
             bool showNonPlayable,
@@ -33,27 +22,7 @@ namespace ESPExplorerAE
             bool showDeleted,
             const ObjectBrowserTab::FilterEntriesFn& filterEntries)
         {
-            const bool needsRebuild =
-                cacheState.source != &source ||
-                cacheState.sourceSize != source.size() ||
-                cacheState.showPlayable != showPlayable ||
-                cacheState.showNonPlayable != showNonPlayable ||
-                cacheState.showNamed != showNamed ||
-                cacheState.showUnnamed != showUnnamed ||
-                cacheState.showDeleted != showDeleted;
-
-            if (needsRebuild) {
-                cacheState.filtered = filterEntries(source);
-                cacheState.source = &source;
-                cacheState.sourceSize = source.size();
-                cacheState.showPlayable = showPlayable;
-                cacheState.showNonPlayable = showNonPlayable;
-                cacheState.showNamed = showNamed;
-                cacheState.showUnnamed = showUnnamed;
-                cacheState.showDeleted = showDeleted;
-            }
-
-            return cacheState.filtered;
+            return RecordFilterCache::GetFiltered(cacheState, source, showPlayable, showNonPlayable, showNamed, showUnnamed, showDeleted, filterEntries);
         }
     }
 
@@ -92,10 +61,10 @@ namespace ESPExplorerAE
         ImGui::Separator();
 
         if (ImGui::BeginTabBar("ObjectCategories")) {
-            static LocalFilterCache activatorFilterCache{};
-            static LocalFilterCache containerFilterCache{};
-            static LocalFilterCache staticFilterCache{};
-            static LocalFilterCache furnitureFilterCache{};
+            static RecordFilterCache activatorFilterCache{};
+            static RecordFilterCache containerFilterCache{};
+            static RecordFilterCache staticFilterCache{};
+            static RecordFilterCache furnitureFilterCache{};
 
             const auto& filteredActivators = GetFilteredEntries(
                 activatorFilterCache,
@@ -162,9 +131,6 @@ namespace ESPExplorerAE
             auto placeAction = [](const FormEntry& entry) {
                 FormActions::PlaceAtPlayer(entry.formID, 1);
             };
-            auto placeQuantityAction = [](const FormEntry& entry, int quantity) {
-                FormActions::PlaceAtPlayer(entry.formID, static_cast<std::uint32_t>(quantity));
-            };
 
             if (ImGui::BeginTabItem(localize("Objects", "sActivators", "Activators"))) {
                 FormTable::Draw(
@@ -174,7 +140,7 @@ namespace ESPExplorerAE
                     activatorConfig,
                     placeAction,
                     {},
-                    placeQuantityAction,
+                    {},
                     &favoriteForms,
                     contextCallbacks);
                 ImGui::EndTabItem();
@@ -188,7 +154,7 @@ namespace ESPExplorerAE
                     containerConfig,
                     placeAction,
                     {},
-                    placeQuantityAction,
+                    {},
                     &favoriteForms,
                     contextCallbacks);
                 ImGui::EndTabItem();
@@ -202,7 +168,7 @@ namespace ESPExplorerAE
                     staticConfig,
                     placeAction,
                     {},
-                    placeQuantityAction,
+                    {},
                     &favoriteForms,
                     contextCallbacks);
                 ImGui::EndTabItem();
@@ -216,7 +182,7 @@ namespace ESPExplorerAE
                     furnitureConfig,
                     placeAction,
                     {},
-                    placeQuantityAction,
+                    {},
                     &favoriteForms,
                     contextCallbacks);
                 ImGui::EndTabItem();

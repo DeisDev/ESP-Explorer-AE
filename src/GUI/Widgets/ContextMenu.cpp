@@ -110,7 +110,7 @@ namespace ESPExplorerAE
         ImGui::TextUnformatted(displayName);
         ImGui::TextDisabled("%08X  |  %s  |  %s", entry.formID, entry.sourcePlugin.c_str(), entry.category.c_str());
         if (editorID) {
-            ImGui::TextDisabled("EditorID: %s", editorID);
+            ImGui::TextDisabled("%s: %s", L("General", "sEditorID", "EditorID"), editorID);
         }
 
         ImGui::Separator();
@@ -123,7 +123,7 @@ namespace ESPExplorerAE
             }
         }
 
-        if (CanGiveItem(entry.category) || CanSpawn(entry.category)) {
+        if (callbacks.showSpawnAtPlayer && (CanGiveItem(entry.category) || CanSpawn(entry.category))) {
             int& spawnQty = spawnQuantities[entry.formID];
             if (spawnQty < 1) {
                 spawnQty = 1;
@@ -173,19 +173,59 @@ namespace ESPExplorerAE
 
         if (IsSpellLike(entry.category)) {
             if (ImGui::MenuItem(L("General", "sAddSpellEffect", "Add Spell/Effect"))) {
-                FormActions::AddSpellToPlayer(entry.formID);
+                if (callbacks.requestActionConfirmation) {
+                    const auto formID = entry.formID;
+                    callbacks.requestActionConfirmation(
+                        L("General", "sConfirmAction", "Confirm Action"),
+                        L("General", "sConfirmAddSpellEffect", "Add selected spell/effect to player?"),
+                        [formID]() {
+                            FormActions::AddSpellToPlayer(formID);
+                        });
+                } else {
+                    FormActions::AddSpellToPlayer(entry.formID);
+                }
             }
             if (ImGui::MenuItem(L("General", "sRemoveSpellEffect", "Remove Spell/Effect"))) {
-                FormActions::RemoveSpellFromPlayer(entry.formID);
+                if (callbacks.requestActionConfirmation) {
+                    const auto formID = entry.formID;
+                    callbacks.requestActionConfirmation(
+                        L("General", "sConfirmAction", "Confirm Action"),
+                        L("General", "sConfirmRemoveSpellEffect", "Remove selected spell/effect from player?"),
+                        [formID]() {
+                            FormActions::RemoveSpellFromPlayer(formID);
+                        });
+                } else {
+                    FormActions::RemoveSpellFromPlayer(entry.formID);
+                }
             }
         }
 
         if (IsPerk(entry.category)) {
             if (ImGui::MenuItem(L("General", "sAddPerk", "Add Perk"))) {
-                FormActions::AddPerkToPlayer(entry.formID);
+                if (callbacks.requestActionConfirmation) {
+                    const auto formID = entry.formID;
+                    callbacks.requestActionConfirmation(
+                        L("General", "sConfirmAction", "Confirm Action"),
+                        L("General", "sConfirmAddPerk", "Add selected perk to player?"),
+                        [formID]() {
+                            FormActions::AddPerkToPlayer(formID);
+                        });
+                } else {
+                    FormActions::AddPerkToPlayer(entry.formID);
+                }
             }
             if (ImGui::MenuItem(L("General", "sRemovePerk", "Remove Perk"))) {
-                FormActions::RemovePerkFromPlayer(entry.formID);
+                if (callbacks.requestActionConfirmation) {
+                    const auto formID = entry.formID;
+                    callbacks.requestActionConfirmation(
+                        L("General", "sConfirmAction", "Confirm Action"),
+                        L("General", "sConfirmRemovePerk", "Remove selected perk from player?"),
+                        [formID]() {
+                            FormActions::RemovePerkFromPlayer(formID);
+                        });
+                } else {
+                    FormActions::RemovePerkFromPlayer(entry.formID);
+                }
             }
         }
 
@@ -261,13 +301,33 @@ namespace ESPExplorerAE
 
         if (IsOutfit(entry.category)) {
             if (ImGui::MenuItem(L("General", "sAddOutfitItems", "Add Outfit Items"))) {
-                FormActions::AddOutfitItemsToPlayer(entry.formID);
+                if (callbacks.requestActionConfirmation) {
+                    const auto formID = entry.formID;
+                    callbacks.requestActionConfirmation(
+                        L("General", "sConfirmAction", "Confirm Action"),
+                        L("General", "sConfirmAddOutfitItems", "Add all items from selected outfit to player?"),
+                        [formID]() {
+                            FormActions::AddOutfitItemsToPlayer(formID);
+                        });
+                } else {
+                    FormActions::AddOutfitItemsToPlayer(entry.formID);
+                }
             }
         }
 
         if (IsConstructible(entry.category)) {
             if (ImGui::MenuItem(L("General", "sAddCraftedItem", "Add Crafted Item"))) {
-                FormActions::AddConstructedItemToPlayer(entry.formID);
+                if (callbacks.requestActionConfirmation) {
+                    const auto formID = entry.formID;
+                    callbacks.requestActionConfirmation(
+                        L("General", "sConfirmAction", "Confirm Action"),
+                        L("General", "sConfirmAddCraftedItem", "Add crafted output of selected recipe to player?"),
+                        [formID]() {
+                            FormActions::AddConstructedItemToPlayer(formID);
+                        });
+                } else {
+                    FormActions::AddConstructedItemToPlayer(entry.formID);
+                }
             }
         }
 
@@ -296,31 +356,37 @@ namespace ESPExplorerAE
             }
         }
 
-        ImGui::Separator();
+        if (!callbacks.hideCopyAndFavoriteActions) {
+            ImGui::Separator();
 
-        if (ImGui::MenuItem(L("General", "sCopyFormID", "Copy FormID"))) {
-            FormActions::CopyFormID(entry.formID);
-        }
-
-        if (ImGui::MenuItem(L("General", "sCopyRecordSource", "Copy Record Source"))) {
-            ImGui::SetClipboardText(entry.sourcePlugin.c_str());
-        }
-
-        if (editorID) {
-            if (ImGui::MenuItem(L("General", "sCopyEditorID", "Copy EditorID"))) {
-                ImGui::SetClipboardText(editorID);
+            if (ImGui::MenuItem(L("General", "sCopyFormID", "Copy FormID"))) {
+                FormActions::CopyFormID(entry.formID);
             }
-        }
 
-        ImGui::Separator();
+            if (ImGui::MenuItem(L("General", "sCopyRecordSource", "Copy Record Source"))) {
+                ImGui::SetClipboardText(entry.sourcePlugin.c_str());
+            }
 
-        if (callbacks.favorites) {
-            const bool isFavorite = callbacks.favorites->contains(entry.formID);
-            if (ImGui::MenuItem(isFavorite ? L("General", "sRemoveFavorite", "Remove Favorite") : L("General", "sAddFavorite", "Add Favorite"))) {
-                if (isFavorite) {
-                    callbacks.favorites->erase(entry.formID);
-                } else {
-                    callbacks.favorites->insert(entry.formID);
+            if (ImGui::MenuItem(L("General", "sCopyName", "Copy Name"))) {
+                ImGui::SetClipboardText(displayName);
+            }
+
+            if (editorID) {
+                if (ImGui::MenuItem(L("General", "sCopyEditorID", "Copy EditorID"))) {
+                    ImGui::SetClipboardText(editorID);
+                }
+            }
+
+            ImGui::Separator();
+
+            if (callbacks.favorites) {
+                const bool isFavorite = callbacks.favorites->contains(entry.formID);
+                if (ImGui::MenuItem(isFavorite ? L("General", "sRemoveFavorite", "Remove Favorite") : L("General", "sAddFavorite", "Add Favorite"))) {
+                    if (isFavorite) {
+                        callbacks.favorites->erase(entry.formID);
+                    } else {
+                        callbacks.favorites->insert(entry.formID);
+                    }
                 }
             }
         }

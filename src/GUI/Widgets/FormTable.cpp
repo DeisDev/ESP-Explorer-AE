@@ -2,6 +2,7 @@
 
 #include "GUI/Widgets/ContextMenu.h"
 #include "GUI/Widgets/FormActions.h"
+#include "GUI/Widgets/SharedUtils.h"
 
 #include "Localization/Language.h"
 
@@ -122,38 +123,6 @@ namespace ESPExplorerAE
             return cache.entries;
         }
 
-        bool ContainsCaseInsensitive(std::string_view text, std::string_view query)
-        {
-            if (query.empty()) {
-                return true;
-            }
-
-            std::string textLower(text.begin(), text.end());
-            std::string queryLower(query.begin(), query.end());
-
-            std::ranges::transform(textLower, textLower.begin(), [](unsigned char ch) {
-                return static_cast<char>(std::tolower(ch));
-            });
-            std::ranges::transform(queryLower, queryLower.begin(), [](unsigned char ch) {
-                return static_cast<char>(std::tolower(ch));
-            });
-
-            return textLower.find(queryLower) != std::string::npos;
-        }
-
-        bool ContainsByMode(std::string_view text, std::string_view query, bool caseSensitive)
-        {
-            if (query.empty()) {
-                return true;
-            }
-
-            if (caseSensitive) {
-                return text.find(query) != std::string::npos;
-            }
-
-            return ContainsCaseInsensitive(text, query);
-        }
-
         bool MatchesSearch(const FormEntry& entry, std::string_view query, bool caseSensitive)
         {
             if (query.empty()) {
@@ -163,15 +132,15 @@ namespace ESPExplorerAE
             char formIDBuffer[16]{};
             std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", entry.formID);
 
-            if (ContainsByMode(entry.name, query, caseSensitive) ||
-                ContainsByMode(entry.sourcePlugin, query, caseSensitive) ||
-                ContainsByMode(entry.category, query, caseSensitive) ||
-                ContainsByMode(formIDBuffer, query, caseSensitive)) {
+            if (SharedUtils::ContainsByMode(entry.name, query, caseSensitive) ||
+                SharedUtils::ContainsByMode(entry.sourcePlugin, query, caseSensitive) ||
+                SharedUtils::ContainsByMode(entry.category, query, caseSensitive) ||
+                SharedUtils::ContainsByMode(formIDBuffer, query, caseSensitive)) {
                 return true;
             }
 
             const char* editorID = ContextMenu::TryGetEditorID(entry.formID);
-            return editorID && ContainsByMode(editorID, query, caseSensitive);
+            return editorID && SharedUtils::ContainsByMode(editorID, query, caseSensitive);
         }
     }
 
@@ -221,34 +190,22 @@ namespace ESPExplorerAE
             }
         };
 
-        ImGui::Spacing();
-
-        auto drawWrappedButton = [](const char* label, bool& firstInRow) {
-            const auto& style = ImGui::GetStyle();
-            const float buttonWidth = ImGui::CalcTextSize(label).x + style.FramePadding.x * 2.0f;
-
-            if (!firstInRow) {
-                const float needed = style.ItemSpacing.x + buttonWidth;
-                if (ImGui::GetContentRegionAvail().x >= needed) {
-                    ImGui::SameLine();
-                } else {
-                    firstInRow = true;
+        auto collectSelectedEntries = [&]() {
+            std::vector<FormEntry> selectedEntries{};
+            selectedEntries.reserve(selected.size());
+            for (const auto& e : entries) {
+                if (selected.contains(e.formID)) {
+                    selectedEntries.push_back(e);
                 }
             }
-
-            const bool pressed = ImGui::Button(label);
-            firstInRow = false;
-            return pressed;
+            return selectedEntries;
         };
 
-        bool firstActionInRow = true;
+        ImGui::Spacing();
 
-        if (drawWrappedButton(L("General", "sSelectVisible", "Select Visible"), firstActionInRow)) {
-            selected.clear();
-            for (const auto& entry : entries) {
-                selected.insert(entry.formID);
-            }
-        }
+        auto drawWrappedButton = SharedUtils::DrawWrappedButton;
+
+        bool firstActionInRow = true;
 
         if (drawWrappedButton(L("General", "sClearSelection", "Clear Selection"), firstActionInRow)) {
             selected.clear();
@@ -291,7 +248,8 @@ namespace ESPExplorerAE
             if (!hasSelection) {
                 ImGui::BeginDisabled(true);
             }
-            if (drawWrappedButton(L("General", "sToggleFavoritesSelected", "Toggle Favorites (Selected)"), firstActionInRow)) {
+            const std::string topToggleFavoritesLabel = std::string(L("General", "sToggleFavoritesSelected", "Toggle Favorites (Selected)")) + "##Top" + tableId;
+            if (drawWrappedButton(topToggleFavoritesLabel.c_str(), firstActionInRow)) {
                 for (const auto& entry : entries) {
                     if (!selected.contains(entry.formID)) {
                         continue;
@@ -379,6 +337,17 @@ namespace ESPExplorerAE
                     }
                     lastClicked = rowIndex;
                 }
+
+                const bool openContextFromNav = ImGui::IsItemFocused() && ImGui::IsKeyPressed(ImGuiKey_GamepadFaceLeft, false);
+                if (openContextFromNav) {
+                    if (!selected.contains(entry.formID)) {
+                        selected.clear();
+                        selected.insert(entry.formID);
+                        lastClicked = rowIndex;
+                    }
+                    ImGui::OpenPopup(rowPopupId.c_str());
+                }
+
                 selectRowOnRightClick();
                 ImGui::OpenPopupOnItemClick(rowPopupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
 
@@ -431,6 +400,8 @@ namespace ESPExplorerAE
                     ImGui::Separator();
 
                     if (multipleSelected) {
+                        const auto selectedEntries = collectSelectedEntries();
+
                         if ((primaryAction || bulkPrimaryAction) && !config.disableBulkPrimaryAction) {
                             const char* actionLabel = config.primaryActionLabel ? config.primaryActionLabel : "Action";
                             std::string bulkLabel = std::string(actionLabel) + " (" + std::to_string(selected.size()) + ")";
@@ -451,14 +422,65 @@ namespace ESPExplorerAE
                             }
                         }
 
+                        if (!selectedEntries.empty()) {
+                            if (ImGui::MenuItem((std::string(L("General", "sCopyFormID", "Copy FormID")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                                std::vector<std::string> values{};
+                                values.reserve(selectedEntries.size());
+                                for (const auto& selectedEntry : selectedEntries) {
+                                    char idBuffer[16]{};
+                                    std::snprintf(idBuffer, sizeof(idBuffer), "%08X", selectedEntry.formID);
+                                    values.emplace_back(idBuffer);
+                                }
+                                const std::string clipboard = SharedUtils::BuildParenthesizedList(values);
+                                ImGui::SetClipboardText(clipboard.c_str());
+                            }
+
+                            if (ImGui::MenuItem((std::string(L("General", "sCopyRecordSource", "Copy Record Source")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                                std::vector<std::string> values{};
+                                values.reserve(selectedEntries.size());
+                                for (const auto& selectedEntry : selectedEntries) {
+                                    values.push_back(selectedEntry.sourcePlugin);
+                                }
+                                const std::string clipboard = SharedUtils::BuildParenthesizedList(values);
+                                ImGui::SetClipboardText(clipboard.c_str());
+                            }
+
+                            if (ImGui::MenuItem((std::string(L("General", "sCopyName", "Copy Name")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                                std::vector<std::string> values{};
+                                values.reserve(selectedEntries.size());
+                                for (const auto& selectedEntry : selectedEntries) {
+                                    values.push_back(selectedEntry.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : selectedEntry.name);
+                                }
+                                const std::string clipboard = SharedUtils::BuildParenthesizedList(values);
+                                ImGui::SetClipboardText(clipboard.c_str());
+                            }
+
+                            if (favorites) {
+                                if (ImGui::MenuItem((std::string(L("General", "sAddFavorite", "Add Favorite")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                                    for (const auto& selectedEntry : selectedEntries) {
+                                        favorites->insert(selectedEntry.formID);
+                                    }
+                                }
+
+                                if (ImGui::MenuItem((std::string(L("General", "sRemoveFavorite", "Remove Favorite")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                                    for (const auto& selectedEntry : selectedEntries) {
+                                        favorites->erase(selectedEntry.formID);
+                                    }
+                                }
+                            }
+                        }
+
                         ImGui::Separator();
                     }
 
                     if (contextCallbacks) {
-                        ContextMenu::Draw(entry, *contextCallbacks);
+                        ContextMenuCallbacks callbacks = *contextCallbacks;
+                        callbacks.hideCopyAndFavoriteActions = multipleSelected;
+                        ContextMenu::Draw(entry, callbacks);
                     } else {
                         ContextMenuCallbacks fallbackCallbacks{};
                         fallbackCallbacks.favorites = favorites;
+                        fallbackCallbacks.hideCopyAndFavoriteActions = multipleSelected;
                         ContextMenu::Draw(entry, fallbackCallbacks);
                     }
 
@@ -542,7 +564,8 @@ namespace ESPExplorerAE
 
             if (config.allowFavorites && favorites) {
                 if (multipleSelected) {
-                    if (drawWrappedButton(L("General", "sToggleFavoritesSelected", "Toggle Favorites (Selected)"), firstSelectedActionInRow)) {
+                    const std::string bottomToggleFavoritesLabel = std::string(L("General", "sToggleFavoritesSelected", "Toggle Favorites (Selected)")) + "##Bottom" + tableId;
+                    if (drawWrappedButton(bottomToggleFavoritesLabel.c_str(), firstSelectedActionInRow)) {
                         for (const auto& e : entries) {
                             if (!selected.contains(e.formID)) continue;
                             if (favorites->contains(e.formID)) {

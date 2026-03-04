@@ -28,6 +28,7 @@ namespace ESPExplorerAE
         std::unordered_set<std::uint32_t>& favoriteForms;
         std::uint32_t& selectedPluginTreeRecordFormID;
         std::unordered_set<std::uint32_t>& selectedPluginTreeRecordFormIDs;
+        std::uint32_t& pluginTreeLastClickedFormID;
         std::deque<std::uint32_t>& recentPluginRecordFormIDs;
 
         std::uint64_t& pluginBrowserCacheVersion;
