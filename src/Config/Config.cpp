@@ -88,7 +88,7 @@ namespace ESPExplorerAE
         settings.rememberWindowPos = ini.GetBoolValue("UI", "bRememberWindowPos", true);
         settings.windowX = static_cast<float>(ini.GetDoubleValue("UI", "fWindowX", 100.0));
         settings.windowY = static_cast<float>(ini.GetDoubleValue("UI", "fWindowY", 100.0));
-        settings.windowW = static_cast<float>(ini.GetDoubleValue("UI", "fWindowW", 1200.0));
+        settings.windowW = static_cast<float>(ini.GetDoubleValue("UI", "fWindowW", 1400.0));
         settings.windowH = static_cast<float>(ini.GetDoubleValue("UI", "fWindowH", 760.0));
         settings.showFPSInStatus = ini.GetBoolValue("UI", "bShowFPSInStatus", true);
         settings.lastActiveTab = ini.GetValue("UI", "sLastActiveTab", "Plugin Browser");
@@ -119,6 +119,7 @@ namespace ESPExplorerAE
         settings.pluginShowUnknownCategories = ini.GetBoolValue("Filters", "bPluginShowUnknownCategories", false);
         settings.autoFocusSearchBars = ini.GetBoolValue("UI", "bAutoFocusSearchBars", true);
         settings.showPlayerStatsInStatus = ini.GetBoolValue("UI", "bShowPlayerStatsInStatus", true);
+        settings.showMenuResolutionInStatus = ini.GetBoolValue("UI", "bShowMenuResolutionInStatus", false);
 
         settings.enableGamepadNav = ini.GetBoolValue("Controller", "bEnableGamepadNav", true);
 
@@ -181,6 +182,7 @@ namespace ESPExplorerAE
         ini.SetBoolValue("Filters", "bPluginShowUnknownCategories", settings.pluginShowUnknownCategories);
         ini.SetBoolValue("UI", "bAutoFocusSearchBars", settings.autoFocusSearchBars);
         ini.SetBoolValue("UI", "bShowPlayerStatsInStatus", settings.showPlayerStatsInStatus);
+        ini.SetBoolValue("UI", "bShowMenuResolutionInStatus", settings.showMenuResolutionInStatus);
 
         ini.SetBoolValue("Controller", "bEnableGamepadNav", settings.enableGamepadNav);
 

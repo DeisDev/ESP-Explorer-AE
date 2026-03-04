@@ -931,6 +931,7 @@ namespace ESPExplorerAE
 
         if (ImGui::Begin(windowTitle)) {
             bool settingsDirty{ false };
+            const ImVec2 menuWindowSize = ImGui::GetWindowSize();
 
             if (settings.rememberWindowPos) {
                 const ImVec2 pos = ImGui::GetWindowPos();
@@ -1165,6 +1166,13 @@ namespace ESPExplorerAE
                             ImGui::TextDisabled("%s %d  %s %lld  %s %.0f  %s %.0f", L("General", "sLevelShort", ""), level, L("Player", "sCaps", ""), caps, L("Player", "sHealthShort", ""), hp, L("Player", "sActionPointsShort", ""), ap);
                         }
                     }
+                }
+
+                if (settings.showMenuResolutionInStatus) {
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("|");
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("%s: %dx%d", L("Settings", "sResolutionShort", "Res"), static_cast<int>(menuWindowSize.x), static_cast<int>(menuWindowSize.y));
                 }
 
                 const float resetWidth = CalcButtonWidth(L("General", "sResetFilters", "Reset Filters"));

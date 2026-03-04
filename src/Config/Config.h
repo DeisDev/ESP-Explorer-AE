@@ -24,6 +24,7 @@ namespace ESPExplorerAE
         bool pluginShowUnknownCategories{ false };
         bool autoFocusSearchBars{ true };
         bool showPlayerStatsInStatus{ true };
+        bool showMenuResolutionInStatus{ false };
         bool enableGamepadNav{ true };
         bool showFPSInStatus{ true };
         bool rememberWindowPos{ true };
@@ -31,7 +32,7 @@ namespace ESPExplorerAE
         float windowAlpha{ 0.95f };
         float windowX{ 100.0f };
         float windowY{ 100.0f };
-        float windowW{ 1200.0f };
+        float windowW{ 1400.0f };
         float windowH{ 760.0f };
         float themeAccentR{ 0.27f };
         float themeAccentG{ 0.94f };

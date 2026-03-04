@@ -492,6 +492,13 @@ namespace ESPExplorerAE
         }
 
         ImGui::Spacing();
+
+        if (ImGui::TreeNodeEx(std::string(L("Settings", "sDebugSection", "Debug") + std::string("##SettingsDebugSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+            changed = ImGui::Checkbox(L("Settings", "sShowMenuResolutionStatus", "Show Menu Resolution In Status Bar"), &settings.showMenuResolutionInStatus) || changed;
+            ImGui::TreePop();
+        }
+
+        ImGui::Spacing();
         ImGui::Spacing();
         ImGui::SeparatorText(L("Settings", "sAboutSection", "About"));
         ImGui::Spacing();
