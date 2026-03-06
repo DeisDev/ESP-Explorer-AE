@@ -11,6 +11,7 @@ namespace ESPExplorerAE
         bool showOnStartup{ false };
         bool noPauseOnFocusLoss{ false };
         bool pauseGameWhenMenuOpen{ false };
+        bool hidePlayerHUDWhenMenuOpen{ false };
         bool verboseLogging{ true };
         bool hideNonPlayable{ true };
         bool hideDeleted{ true };
@@ -26,6 +27,7 @@ namespace ESPExplorerAE
         bool showPlayerStatsInStatus{ false };
         bool showMenuResolutionInStatus{ false };
         bool pluginAdvancedDetailsView{ false };
+        int recentRecordsLimit{ 25 };
         bool enableGamepadNav{ true };
         bool showFPSInStatus{ true };
         bool rememberWindowPos{ true };

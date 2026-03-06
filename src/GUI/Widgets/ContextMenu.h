@@ -13,11 +13,15 @@ namespace ESPExplorerAE
         using OpenItemGrantFn = std::function<void(const FormEntry&)>;
         using OpenGlobalValueFn = std::function<void(std::uint32_t)>;
         using ConfirmActionFn = std::function<void(std::string, std::string, std::function<void()>)>;
+        using CanSpawnFn = std::function<bool(const FormEntry&)>;
+        using SpawnActionFn = std::function<void(const FormEntry&, std::uint32_t)>;
 
         LocalizeFn localize;
         OpenItemGrantFn openItemGrantPopup;
         OpenGlobalValueFn openGlobalValuePopup;
         ConfirmActionFn requestActionConfirmation;
+        CanSpawnFn canSpawnEntry;
+        SpawnActionFn spawnEntry;
         std::unordered_set<std::uint32_t>* favorites{ nullptr };
         int equipWeaponAmmoCount{ 200 };
         bool showSpawnAtPlayer{ true };

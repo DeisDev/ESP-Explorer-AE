@@ -22,9 +22,12 @@ namespace ESPExplorerAE
         static void AttachWindowHook(HWND hwnd);
         static void UpdateMenuInputState();
         static void UpdateGamePause();
+        static void UpdateHUDVisibility();
 
         static inline bool menuVisible{ false };
         static inline bool cursorReleased{ false };
+        static inline bool hudVisibilityManaged{ false };
+        static inline bool hudWasVisibleBeforeHide{ false };
         static inline bool modalDialogActive{ false };
         static inline HWND gameWindow{ nullptr };
         static inline WNDPROC originalWndProc{ nullptr };

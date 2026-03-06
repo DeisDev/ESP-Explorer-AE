@@ -2,45 +2,17 @@
 
 #include "Config/Config.h"
 #include "GUI/Widgets/FormActions.h"
+#include "GUI/Widgets/ModalUtils.h"
 #include "Localization/Language.h"
 
 #include <imgui.h>
 
 #include <algorithm>
-#include <cmath>
 #include <cstdio>
 #include <unordered_set>
 
 namespace ESPExplorerAE
 {
-    namespace
-    {
-        struct AspectRatioConstraint
-        {
-            float ratio;
-        };
-
-        void KeepAspectRatio(ImGuiSizeCallbackData* data)
-        {
-            const auto* ratioData = static_cast<const AspectRatioConstraint*>(data->UserData);
-            if (!ratioData || ratioData->ratio <= 0.0f) {
-                return;
-            }
-
-            ImVec2 desired = data->DesiredSize;
-            const float widthFromHeight = desired.y * ratioData->ratio;
-            const float heightFromWidth = desired.x / ratioData->ratio;
-
-            if (std::fabs(widthFromHeight - desired.x) < std::fabs(heightFromWidth - desired.y)) {
-                desired.x = widthFromHeight;
-            } else {
-                desired.y = heightFromWidth;
-            }
-
-            data->DesiredSize = desired;
-        }
-    }
-
     ItemGrantPopup::State& ItemGrantPopup::GetState()
     {
         static State state{};
@@ -114,9 +86,7 @@ namespace ESPExplorerAE
             multipleItems ? (std::max)(440.0f, popupWidth * 0.80f) : (std::max)(420.0f, popupWidth * 0.80f),
             multipleItems ? (std::max)(480.0f, popupHeight * 0.80f) : (std::max)(380.0f, popupHeight * 0.80f));
         const ImVec2 maxSize(popupWidth * 1.60f, popupHeight * 1.60f);
-        AspectRatioConstraint ratioConstraint{ popupWidth / popupHeight };
-        ImGui::SetNextWindowSize(ImVec2(popupWidth, popupHeight), ImGuiCond_Appearing);
-        ImGui::SetNextWindowSizeConstraints(minSize, maxSize, KeepAspectRatio, &ratioConstraint);
+        ModalUtils::SetNextPopupWindowSizing(ImVec2(popupWidth, popupHeight), minSize, maxSize);
         if (!ImGui::BeginPopupModal(popupTitle, &state.visible)) {
             return;
         }

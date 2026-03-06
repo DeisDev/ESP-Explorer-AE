@@ -15,6 +15,7 @@
 #include "GUI/Widgets/FormActions.h"
 #include "GUI/Widgets/FormTable.h"
 #include "GUI/Widgets/ItemGrantPopup.h"
+#include "GUI/Widgets/MainWindowPopups.h"
 #include "GUI/Widgets/SearchBar.h"
 #include "Hooks/Hooks.h"
 #include "Input/GamepadInput.h"
@@ -35,7 +36,6 @@
 #include <RE/T/TESWeightForm.h>
 
 #include <cctype>
-#include <cmath>
 #include <cstdio>
 #include <algorithm>
 #include <array>
@@ -101,52 +101,6 @@ namespace ESPExplorerAE
         std::deque<std::uint32_t> recentPluginRecordFormIDs{};
         bool refreshDataRequested{ false };
         bool refreshDataInProgress{ false };
-
-        struct ConfirmActionState
-        {
-            bool openRequested{ false };
-            bool visible{ false };
-            std::string title{};
-            std::string message{};
-            std::function<void()> callback{};
-        };
-
-        struct GlobalValuePopupState
-        {
-            bool openRequested{ false };
-            bool visible{ false };
-            std::uint32_t formID{ 0 };
-            std::string editorID{};
-            float value{ 0.0f };
-        };
-
-        ConfirmActionState confirmAction{};
-        GlobalValuePopupState globalValuePopup{};
-
-        struct AspectRatioConstraint
-        {
-            float ratio;
-        };
-
-        void KeepAspectRatio(ImGuiSizeCallbackData* data)
-        {
-            const auto* ratioData = static_cast<const AspectRatioConstraint*>(data->UserData);
-            if (!ratioData || ratioData->ratio <= 0.0f) {
-                return;
-            }
-
-            ImVec2 desired = data->DesiredSize;
-            const float widthFromHeight = desired.y * ratioData->ratio;
-            const float heightFromWidth = desired.x / ratioData->ratio;
-
-            if (std::fabs(widthFromHeight - desired.x) < std::fabs(heightFromWidth - desired.y)) {
-                desired.x = widthFromHeight;
-            } else {
-                desired.y = heightFromWidth;
-            }
-
-            data->DesiredSize = desired;
-        }
 
         const char* L(std::string_view section, std::string_view key, const char* fallback)
         {
@@ -301,139 +255,6 @@ namespace ESPExplorerAE
             }
 
             return nullptr;
-        }
-
-        void TrackRecentRecord(std::uint32_t formID)
-        {
-            if (formID == 0) {
-                return;
-            }
-
-            recentPluginRecordFormIDs.erase(
-                std::remove(recentPluginRecordFormIDs.begin(), recentPluginRecordFormIDs.end(), formID),
-                recentPluginRecordFormIDs.end());
-            recentPluginRecordFormIDs.push_front(formID);
-
-            constexpr std::size_t kMaxRecentRecords = 50;
-            while (recentPluginRecordFormIDs.size() > kMaxRecentRecords) {
-                recentPluginRecordFormIDs.pop_back();
-            }
-        }
-
-        void RequestActionConfirmation(std::string title, std::string message, std::function<void()> callback)
-        {
-            confirmAction.title = std::move(title);
-            confirmAction.message = std::move(message);
-            confirmAction.callback = std::move(callback);
-            confirmAction.openRequested = true;
-            confirmAction.visible = true;
-        }
-
-        void OpenGlobalValuePopup(std::uint32_t formID)
-        {
-            auto* form = RE::TESForm::GetFormByID(formID);
-            if (!form) {
-                return;
-            }
-
-            const auto* editorID = form->GetFormEditorID();
-            if (!editorID || editorID[0] == '\0') {
-                return;
-            }
-
-            globalValuePopup.formID = formID;
-            globalValuePopup.editorID = editorID;
-            globalValuePopup.value = 0.0f;
-            globalValuePopup.openRequested = true;
-            globalValuePopup.visible = true;
-        }
-
-        void RenderConfirmActionPopup()
-        {
-            if (confirmAction.openRequested) {
-                ImGui::OpenPopup("##ConfirmActionPopup");
-                confirmAction.openRequested = false;
-            }
-
-            const float popupScale = (std::clamp)(Config::Get().fontSize / 20.0f, 0.75f, 1.5f);
-            const float popupWidth = 460.0f * popupScale;
-            const float popupHeight = 180.0f * popupScale;
-            AspectRatioConstraint ratioConstraint{ popupWidth / popupHeight };
-            ImGui::SetNextWindowSize(ImVec2(popupWidth, popupHeight), ImGuiCond_Appearing);
-            ImGui::SetNextWindowSizeConstraints(ImVec2(popupWidth * 0.8f, popupHeight * 0.8f), ImVec2(popupWidth * 1.8f, popupHeight * 1.8f), KeepAspectRatio, &ratioConstraint);
-            if (!ImGui::BeginPopupModal("##ConfirmActionPopup", &confirmAction.visible)) {
-                return;
-            }
-
-            ImGui::TextUnformatted(confirmAction.title.empty() ? L("General", "sConfirm", "") : confirmAction.title.c_str());
-            ImGui::Separator();
-            ImGui::TextWrapped("%s", confirmAction.message.c_str());
-            ImGui::Spacing();
-
-            if (ImGui::IsWindowAppearing()) {
-                ImGui::SetKeyboardFocusHere();
-            }
-            if (ImGui::Button(L("General", "sConfirm", "Confirm"), ImVec2(110.0f, 0.0f))) {
-                if (confirmAction.callback) {
-                    confirmAction.callback();
-                }
-                confirmAction.callback = {};
-                confirmAction.visible = false;
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button(L("General", "sCancel", "Cancel"), ImVec2(110.0f, 0.0f))) {
-                confirmAction.callback = {};
-                confirmAction.visible = false;
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::EndPopup();
-        }
-
-        void RenderGlobalValuePopup()
-        {
-            if (globalValuePopup.openRequested) {
-                ImGui::OpenPopup("##SetGlobalValuePopup");
-                globalValuePopup.openRequested = false;
-            }
-
-            const float popupScale = (std::clamp)(Config::Get().fontSize / 20.0f, 0.75f, 1.5f);
-            const float popupWidth = 430.0f * popupScale;
-            const float popupHeight = 180.0f * popupScale;
-            AspectRatioConstraint ratioConstraint{ popupWidth / popupHeight };
-            ImGui::SetNextWindowSize(ImVec2(popupWidth, popupHeight), ImGuiCond_Appearing);
-            ImGui::SetNextWindowSizeConstraints(ImVec2(popupWidth * 0.8f, popupHeight * 0.8f), ImVec2(popupWidth * 1.8f, popupHeight * 1.8f), KeepAspectRatio, &ratioConstraint);
-            if (!ImGui::BeginPopupModal("##SetGlobalValuePopup", &globalValuePopup.visible)) {
-                return;
-            }
-
-            ImGui::TextUnformatted(L("General", "sSetGlobal", "Set Global"));
-            ImGui::Separator();
-            ImGui::Text("%s: %s", L("General", "sEditorID", "EditorID"), globalValuePopup.editorID.c_str());
-            ImGui::SetNextItemWidth(-1.0f);
-            ImGui::InputFloat(L("General", "sValue", "Value"), &globalValuePopup.value, 1.0f, 10.0f, "%.3f");
-            ImGui::Spacing();
-
-            if (ImGui::IsWindowAppearing()) {
-                ImGui::SetKeyboardFocusHere();
-            }
-            if (ImGui::Button(L("General", "sApply", "Apply"), ImVec2(100.0f, 0.0f))) {
-                char command[256]{};
-                std::snprintf(command, sizeof(command), "set %s to %.3f", globalValuePopup.editorID.c_str(), globalValuePopup.value);
-                FormActions::ExecuteConsoleCommand(command);
-                globalValuePopup.visible = false;
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button(L("General", "sCancel", "Cancel"), ImVec2(100.0f, 0.0f))) {
-                globalValuePopup.visible = false;
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::EndPopup();
         }
 
         const char* PluginTypeColorTag(std::string_view type)
@@ -750,10 +571,10 @@ namespace ESPExplorerAE
                     OpenItemGrantPopupMultiple(entries);
                 },
                 .openGlobalValuePopup = [](std::uint32_t formID) {
-                    OpenGlobalValuePopup(formID);
+                    MainWindowPopups::OpenGlobalValuePopup(formID);
                 },
                 .requestActionConfirmation = [](std::string title, std::string message, std::function<void()> callback) {
-                    RequestActionConfirmation(std::move(title), std::move(message), std::move(callback));
+                    MainWindowPopups::RequestActionConfirmation(std::move(title), std::move(message), std::move(callback));
                 }
             };
 
@@ -768,10 +589,10 @@ namespace ESPExplorerAE
                 OpenItemGrantPopup(entry);
             };
             cb.openGlobalValuePopup = [](std::uint32_t formID) {
-                OpenGlobalValuePopup(formID);
+                MainWindowPopups::OpenGlobalValuePopup(formID);
             };
             cb.requestActionConfirmation = [](std::string title, std::string message, std::function<void()> callback) {
-                RequestActionConfirmation(std::move(title), std::move(message), std::move(callback));
+                MainWindowPopups::RequestActionConfirmation(std::move(title), std::move(message), std::move(callback));
             };
             cb.favorites = &favoriteForms;
             cb.equipWeaponAmmoCount = playerCurrentWeaponAmmoAmount;
@@ -824,7 +645,6 @@ namespace ESPExplorerAE
         void DrawNPCBrowser(const FormCache& cache)
         {
             auto npcContextCallbacks = BuildContextCallbacks();
-            npcContextCallbacks.showSpawnAtPlayer = false;
             NPCBrowserTab::Draw(
                 cache,
                 npcSearchBuffer,
@@ -855,7 +675,6 @@ namespace ESPExplorerAE
         void DrawObjectBrowser(const FormCache& cache)
         {
             auto objectContextCallbacks = BuildContextCallbacks();
-            objectContextCallbacks.showSpawnAtPlayer = false;
             ObjectBrowserTab::Draw(
                 cache,
                 objectSearchBuffer,
@@ -1012,7 +831,8 @@ namespace ESPExplorerAE
             }
 
             const auto& style = ImGui::GetStyle();
-            const float footerHeight = ImGui::GetTextLineHeightWithSpacing() + ImGui::GetFrameHeightWithSpacing() + style.ItemSpacing.y + style.WindowPadding.y + 8.0f;
+            const float footerTextRows = settings.showMenuResolutionInStatus ? 2.0f : 1.0f;
+            const float footerHeight = ImGui::GetTextLineHeightWithSpacing() * footerTextRows + ImGui::GetFrameHeightWithSpacing() + style.ItemSpacing.y + style.WindowPadding.y + 10.0f;
             if (ImGui::BeginChild("MainContentRegion", ImVec2(0.0f, -footerHeight), ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
                 if (ImGui::BeginTabBar("MainTabs")) {
                     static std::string requestedTab{};
@@ -1151,8 +971,7 @@ namespace ESPExplorerAE
                     }
 
                     ItemGrantPopup::Draw(L);
-                    RenderConfirmActionPopup();
-                    RenderGlobalValuePopup();
+                    MainWindowPopups::Draw(L);
 
                     ImGui::EndTabBar();
                 }
@@ -1163,6 +982,8 @@ namespace ESPExplorerAE
                 ImGuiIO& io = ImGui::GetIO();
                 const float fps = io.Framerate;
                 const float frameTime = fps > 0.0f ? (1000.0f / fps) : 0.0f;
+                const float statusStartY = ImGui::GetCursorPosY();
+                const float statusRowHeight = ImGui::GetTextLineHeightWithSpacing();
 
                 if (settings.showFPSInStatus) {
                     ImGui::Text("%s: %zu  %s: %zu  %s: %zu  |  %.0f %s  %.1fms",
@@ -1211,20 +1032,11 @@ namespace ESPExplorerAE
                     }
                 }
 
-                if (settings.showMenuResolutionInStatus) {
-                    ImGui::NewLine();
-                    ImGui::TextDisabled("%s: %dx%d", L("Settings", "sResolutionShort", "Res"), static_cast<int>(menuWindowSize.x), static_cast<int>(menuWindowSize.y));
-                }
-
                 const float resetWidth = CalcButtonWidth(L("General", "sResetFilters", "Reset Filters"));
                 const float undoWidth = CalcButtonWidth(L("General", "sUndoLastAction", "Undo Last Action"));
                 const float actionsWidth = resetWidth + style.ItemSpacing.x + undoWidth;
                 const float actionStartX = ImGui::GetWindowContentRegionMax().x - actionsWidth;
-                if (actionStartX > ImGui::GetCursorPosX()) {
-                    ImGui::SameLine(actionStartX);
-                } else {
-                    ImGui::SameLine();
-                }
+                ImGui::SetCursorPos(ImVec2((std::max)(actionStartX, ImGui::GetCursorPosX()), statusStartY));
 
                 if (ImGui::Button(L("General", "sResetFilters", "Reset Filters"))) {
                     ResetQuickFilters();
@@ -1239,6 +1051,11 @@ namespace ESPExplorerAE
                 }
                 if (!canUndo) {
                     ImGui::EndDisabled();
+                }
+
+                if (settings.showMenuResolutionInStatus) {
+                    ImGui::SetCursorPosY(statusStartY + statusRowHeight + 2.0f);
+                    ImGui::TextDisabled("%s: %dx%d", L("Settings", "sResolutionShort", "Res"), static_cast<int>(menuWindowSize.x), static_cast<int>(menuWindowSize.y));
                 }
             }
             ImGui::EndChild();

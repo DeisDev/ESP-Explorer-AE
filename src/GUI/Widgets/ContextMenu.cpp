@@ -106,6 +106,7 @@ namespace ESPExplorerAE
 
         const auto* displayName = entry.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : entry.name.c_str();
         const auto* editorID = TryGetEditorID(entry.formID);
+        const bool canSpawnEntry = callbacks.canSpawnEntry ? callbacks.canSpawnEntry(entry) : CanSpawn(entry.category);
 
         ImGui::TextUnformatted(displayName);
         ImGui::TextDisabled("%08X  |  %s  |  %s", entry.formID, entry.sourcePlugin.c_str(), entry.category.c_str());
@@ -123,7 +124,7 @@ namespace ESPExplorerAE
             }
         }
 
-        if (callbacks.showSpawnAtPlayer && (CanGiveItem(entry.category) || CanSpawn(entry.category))) {
+        if (callbacks.showSpawnAtPlayer && (CanGiveItem(entry.category) || canSpawnEntry)) {
             int& spawnQty = spawnQuantities[entry.formID];
             if (spawnQty < 1) {
                 spawnQty = 1;
@@ -133,18 +134,27 @@ namespace ESPExplorerAE
             const char* spawnLabel = L("NPCs", "sSpawnAtPlayer", "Spawn At Player");
 
             if (ImGui::MenuItem(spawnLabel)) {
-                if (CanSpawn(entry.category) && callbacks.requestActionConfirmation) {
+                if (canSpawnEntry && callbacks.requestActionConfirmation) {
                     const auto formID = entry.formID;
                     const auto quantity = static_cast<std::uint32_t>(spawnQty);
                     const std::string name = entry.name;
+                    const auto spawnAction = callbacks.spawnEntry;
                     callbacks.requestActionConfirmation(
                         L("General", "sConfirmSpawnTitle", "Confirm Spawn"),
                         std::string(L("General", "sConfirmSpawnMessage", "Spawn selected record at player?")) + "\n" + (name.empty() ? L("General", "sUnnamed", "<Unnamed>") : name),
-                        [formID, quantity]() {
+                        [entry, formID, quantity, spawnAction]() {
+                            if (spawnAction) {
+                                spawnAction(entry, quantity);
+                                return;
+                            }
                             FormActions::SpawnAtPlayer(formID, quantity);
                         });
                 } else {
-                    FormActions::SpawnAtPlayer(entry.formID, static_cast<std::uint32_t>(spawnQty));
+                    if (callbacks.spawnEntry) {
+                        callbacks.spawnEntry(entry, static_cast<std::uint32_t>(spawnQty));
+                    } else {
+                        FormActions::SpawnAtPlayer(entry.formID, static_cast<std::uint32_t>(spawnQty));
+                    }
                 }
             }
 

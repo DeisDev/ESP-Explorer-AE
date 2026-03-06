@@ -1,5 +1,6 @@
 #include "Config/Config.h"
 
+#include <algorithm>
 #include <charconv>
 #include <cstdio>
 
@@ -81,6 +82,7 @@ namespace ESPExplorerAE
         settings.showOnStartup = ini.GetBoolValue("General", "bShowOnStartup", false);
         settings.noPauseOnFocusLoss = ini.GetBoolValue("General", "bNoPauseOnFocusLoss", false);
         settings.pauseGameWhenMenuOpen = ini.GetBoolValue("General", "bPauseGameWhenMenuOpen", false);
+        settings.hidePlayerHUDWhenMenuOpen = ini.GetBoolValue("General", "bHidePlayerHUDWhenMenuOpen", false);
         settings.verboseLogging = ini.GetBoolValue("General", "bVerboseLogging", true);
 
         settings.fontSize = static_cast<float>(ini.GetDoubleValue("UI", "fFontSize", 20.0));
@@ -111,12 +113,13 @@ namespace ESPExplorerAE
         settings.hideDeleted = ini.GetBoolValue("Filters", "bHideDeleted", true);
         settings.hideNoName = ini.GetBoolValue("Filters", "bHideNoName", true);
         settings.listShowPlayable = ini.GetBoolValue("Filters", "bListShowPlayable", true);
-        settings.listShowNonPlayable = ini.GetBoolValue("Filters", "bListShowNonPlayable", true);
+        settings.listShowNonPlayable = ini.GetBoolValue("Filters", "bListShowNonPlayable", false);
         settings.listShowNamed = ini.GetBoolValue("Filters", "bListShowNamed", true);
-        settings.listShowUnnamed = ini.GetBoolValue("Filters", "bListShowUnnamed", true);
+        settings.listShowUnnamed = ini.GetBoolValue("Filters", "bListShowUnnamed", false);
         settings.listShowDeleted = ini.GetBoolValue("Filters", "bListShowDeleted", true);
         settings.pluginGlobalSearchMode = ini.GetBoolValue("Filters", "bPluginGlobalSearchMode", false);
         settings.pluginShowUnknownCategories = ini.GetBoolValue("Filters", "bPluginShowUnknownCategories", false);
+        settings.recentRecordsLimit = (std::clamp)(static_cast<int>(ini.GetLongValue("UI", "iRecentRecordsLimit", 25)), 5, 100);
         settings.autoFocusSearchBars = ini.GetBoolValue("UI", "bAutoFocusSearchBars", true);
         settings.showPlayerStatsInStatus = ini.GetBoolValue("UI", "bShowPlayerStatsInStatus", false);
         settings.showMenuResolutionInStatus = ini.GetBoolValue("UI", "bShowMenuResolutionInStatus", false);
@@ -145,6 +148,7 @@ namespace ESPExplorerAE
         ini.SetBoolValue("General", "bShowOnStartup", settings.showOnStartup);
         ini.SetBoolValue("General", "bNoPauseOnFocusLoss", settings.noPauseOnFocusLoss);
         ini.SetBoolValue("General", "bPauseGameWhenMenuOpen", settings.pauseGameWhenMenuOpen);
+        ini.SetBoolValue("General", "bHidePlayerHUDWhenMenuOpen", settings.hidePlayerHUDWhenMenuOpen);
         ini.SetBoolValue("General", "bVerboseLogging", settings.verboseLogging);
 
         ini.SetDoubleValue("UI", "fFontSize", settings.fontSize);
@@ -181,6 +185,7 @@ namespace ESPExplorerAE
         ini.SetBoolValue("Filters", "bListShowDeleted", settings.listShowDeleted);
         ini.SetBoolValue("Filters", "bPluginGlobalSearchMode", settings.pluginGlobalSearchMode);
         ini.SetBoolValue("Filters", "bPluginShowUnknownCategories", settings.pluginShowUnknownCategories);
+        ini.SetLongValue("UI", "iRecentRecordsLimit", (std::clamp)(settings.recentRecordsLimit, 5, 100));
         ini.SetBoolValue("UI", "bAutoFocusSearchBars", settings.autoFocusSearchBars);
         ini.SetBoolValue("UI", "bShowPlayerStatsInStatus", settings.showPlayerStatsInStatus);
         ini.SetBoolValue("UI", "bShowMenuResolutionInStatus", settings.showMenuResolutionInStatus);

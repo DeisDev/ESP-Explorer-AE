@@ -300,11 +300,21 @@ namespace ESPExplorerAE
     void SettingsTab::Draw()
     {
         auto& settings = Config::GetMutable();
+        const auto& style = ImGui::GetStyle();
+        const auto sectionSpacing = []() {
+            ImGui::Dummy(ImVec2(0.0f, 8.0f));
+        };
+        const auto blockSpacing = []() {
+            ImGui::Dummy(ImVec2(0.0f, 4.0f));
+        };
 
         if (!ImGui::BeginChild("SettingsScrollRegion", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
             ImGui::EndChild();
             return;
         }
+
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(style.ItemSpacing.x, style.ItemSpacing.y + 6.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x + 2.0f, style.FramePadding.y + 2.0f));
 
         const auto languages = Language::ListAvailableLanguages();
         auto currentLanguage = settings.language;
@@ -320,6 +330,7 @@ namespace ESPExplorerAE
         }
 
         if (ImGui::TreeNodeEx(std::string(L("Settings", "sGeneralSection", "General") + std::string("##SettingsGeneralSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+            sectionSpacing();
             ImGui::Text("%s: %s", L("Settings", "sToggleKey", "Toggle Key"), KeyNameFromVK(settings.toggleKey).c_str());
             ImGui::SameLine();
             if (ImGui::Button(waitingForToggleKey ? L("Settings", "sPressAnyKey", "Press any key...") : L("Settings", "sCaptureKey", "Capture Key"))) {
@@ -335,21 +346,27 @@ namespace ESPExplorerAE
             changed = ImGui::Checkbox(L("Settings", "sShowOnStartup", "Show On Startup"), &settings.showOnStartup) || changed;
             changed = ImGui::Checkbox(L("Settings", "sNoPauseOnFocusLoss", "Do Not Pause On Focus Loss"), &settings.noPauseOnFocusLoss) || changed;
             changed = ImGui::Checkbox(L("Settings", "sPauseGameWhenMenuOpen", "Pause Game When Menu Open"), &settings.pauseGameWhenMenuOpen) || changed;
+            changed = ImGui::Checkbox(L("Settings", "sHidePlayerHUDWhenMenuOpen", "Hide Player HUD When Menu Open"), &settings.hidePlayerHUDWhenMenuOpen) || changed;
             if (ImGui::Checkbox(L("Settings", "sVerboseLogging", "Verbose Logging"), &settings.verboseLogging)) {
                 Logger::SetVerboseEnabled(settings.verboseLogging);
                 changed = true;
             }
+            sectionSpacing();
             ImGui::TreePop();
         }
 
         ImGui::Spacing();
 
         if (ImGui::TreeNodeEx(std::string(L("Settings", "sInterfaceSection", "Interface") + std::string("##SettingsInterfaceSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+            sectionSpacing();
             changed = ImGui::Checkbox(L("Settings", "sRememberWindowPos", "Remember Window Position"), &settings.rememberWindowPos) || changed;
             changed = ImGui::Checkbox(L("Settings", "sShowFPSStatus", "Show FPS In Status Bar"), &settings.showFPSInStatus) || changed;
             changed = ImGui::Checkbox(L("Settings", "sShowPlayerStats", "Show Player Stats In Status Bar"), &settings.showPlayerStatsInStatus) || changed;
             changed = ImGui::Checkbox(L("Settings", "sAutoFocusSearch", "Auto-Focus Search Bars"), &settings.autoFocusSearchBars) || changed;
             changed = ImGui::Checkbox(L("Settings", "sAdvancedPluginDetails", "Advanced Plugin Browser Details"), &settings.pluginAdvancedDetailsView) || changed;
+            changed = ImGui::SliderInt(L("Settings", "sRecentRecordsLimit", "Max Recent Records Displayed"), &settings.recentRecordsLimit, 5, 100) || changed;
+            settings.recentRecordsLimit = (std::clamp)(settings.recentRecordsLimit, 5, 100);
+            sectionSpacing();
 
             {
                 int currentIdx = FontManager::GetCurrentSizeIndex();
@@ -372,13 +389,16 @@ namespace ESPExplorerAE
                     ImGui::EndCombo();
                 }
             }
+            blockSpacing();
             changed = ImGui::SliderFloat(L("Settings", "sWindowOpacity", "Window Opacity"), &settings.windowAlpha, 0.50f, 1.0f, "%.2f") || changed;
+            sectionSpacing();
             ImGui::TreePop();
         }
 
         ImGui::Spacing();
 
         if (ImGui::TreeNodeEx(std::string(L("Settings", "sThemeSection", "Theme") + std::string("##SettingsThemeSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+            sectionSpacing();
             if (ImGui::BeginCombo(L("Settings", "sColorPreset", ""), L("Settings", "sSelectPreset", ""))) {
                 for (int i = 0; i < kColorPresetCount; ++i) {
                     const auto& preset = kColorPresets[i];
@@ -394,6 +414,7 @@ namespace ESPExplorerAE
                 ImGui::EndCombo();
             }
 
+            blockSpacing();
             if (ImGui::Checkbox(L("Settings", "sSyncPipboyColor", "Sync With Pip-Boy Color"), &settings.syncPipboyColor)) {
                 if (settings.syncPipboyColor) {
                     ApplyPipboyColorToTheme(settings);
@@ -414,6 +435,7 @@ namespace ESPExplorerAE
             }
 
             if (!settings.syncPipboyColor) {
+                sectionSpacing();
                 float accentColor[4]{ settings.themeAccentR, settings.themeAccentG, settings.themeAccentB, settings.themeAccentA };
                 if (ImGui::ColorEdit4(L("Settings", "sThemeAccent", "Theme Accent"), accentColor, ImGuiColorEditFlags_NoInputs)) {
                     settings.themeAccentR = accentColor[0];
@@ -450,17 +472,20 @@ namespace ESPExplorerAE
                 }
             }
 
+            sectionSpacing();
             if (ImGui::Button(L("Settings", "sResetTheme", "Reset Theme"))) {
                 ApplyColorPreset(settings, kColorPresets[0]);
                 settings.syncPipboyColor = false;
                 changed = true;
             }
+            sectionSpacing();
             ImGui::TreePop();
         }
 
         ImGui::Spacing();
 
         if (ImGui::TreeNodeEx(std::string(L("Settings", "sLocalizationSection", "Localization") + std::string("##SettingsLocalizationSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+            sectionSpacing();
             if (ImGui::BeginCombo(L("Settings", "sLanguage", "Language"), currentLanguage.c_str())) {
                 for (const auto& code : languages) {
                     const bool selected = code == currentLanguage;
@@ -476,26 +501,31 @@ namespace ESPExplorerAE
                 }
                 ImGui::EndCombo();
             }
+            sectionSpacing();
             ImGui::TreePop();
         }
 
         ImGui::Spacing();
 
         if (ImGui::TreeNodeEx(std::string(L("Settings", "sControllerSection", "Controller") + std::string("##SettingsControllerSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+            sectionSpacing();
             changed = ImGui::Checkbox(L("Settings", "sEnableGamepadNav", ""), &settings.enableGamepadNav) || changed;
-            ImGui::Spacing();
+            sectionSpacing();
             ImGui::TextDisabled("%s: %s", L("Settings", "sGamepadStatus", ""), GamepadInput::IsGamepadConnected() ? L("Settings", "sConnected", "") : L("Settings", "sDisconnected", ""));
             ImGui::TextDisabled("%s: %s", L("Settings", "sControllerToggle", ""), L("Settings", "sToggleCombo", ""));
             ImGui::TextDisabled("%s: %s / %s", L("Settings", "sNavigation", ""), L("Settings", "sDPad", ""), L("Settings", "sLeftStick", ""));
             ImGui::TextDisabled("%s: %s  |  %s: %s", L("Settings", "sConfirm", ""), L("Settings", "sButtonA", ""), L("Settings", "sGoBack", ""), L("Settings", "sButtonB", ""));
             ImGui::TextDisabled("%s: %s", L("Settings", "sTabSwitch", ""), L("Settings", "sShoulderButtons", ""));
+            sectionSpacing();
             ImGui::TreePop();
         }
 
         ImGui::Spacing();
 
         if (ImGui::TreeNodeEx(std::string(L("Settings", "sDebugSection", "Debug") + std::string("##SettingsDebugSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+            sectionSpacing();
             changed = ImGui::Checkbox(L("Settings", "sShowMenuResolutionStatus", "Show Menu Resolution In Status Bar"), &settings.showMenuResolutionInStatus) || changed;
+            sectionSpacing();
             ImGui::TreePop();
         }
 
@@ -512,6 +542,8 @@ namespace ESPExplorerAE
         if (ImGui::Button(L("Settings", "sOpenNexusMods", "Open Nexus Mods Page"))) {
             ShellExecuteA(nullptr, "open", kNexusModsUrl, nullptr, nullptr, SW_SHOWNORMAL);
         }
+
+        ImGui::PopStyleVar(2);
 
         AutoPersist(changed);
         if (languageChanged) {

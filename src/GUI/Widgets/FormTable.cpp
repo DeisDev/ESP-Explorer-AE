@@ -403,13 +403,6 @@ namespace ESPExplorerAE
                     if (multipleSelected) {
                         const auto selectedEntries = collectSelectedEntries();
 
-                        if (primaryAction) {
-                            const char* actionLabel = config.primaryActionLabel ? config.primaryActionLabel : "Action";
-                            if (ImGui::MenuItem(actionLabel)) {
-                                primaryAction(entry);
-                            }
-                        }
-
                         if ((primaryAction || bulkPrimaryAction) && !config.disableBulkPrimaryAction) {
                             const char* actionLabel = config.primaryActionLabel ? config.primaryActionLabel : "Action";
                             std::string bulkLabel = std::string(actionLabel) + " (" + std::to_string(selected.size()) + ")";
@@ -509,10 +502,19 @@ namespace ESPExplorerAE
         ImGui::TextDisabled("%s: %zu  |  %s: %zu", L("General", "sVisible", "Visible"), entries.size(), L("General", "sSelectedShort", "Sel"), selected.size());
 
         const FormEntry* selectedEntry = nullptr;
-        for (const auto& entry : entries) {
-            if (selected.contains(entry.formID)) {
-                selectedEntry = &entry;
-                break;
+        if (lastClicked >= 0 && lastClicked < static_cast<int>(entries.size())) {
+            const auto& lastClickedEntry = entries[static_cast<std::size_t>(lastClicked)];
+            if (selected.contains(lastClickedEntry.formID)) {
+                selectedEntry = &lastClickedEntry;
+            }
+        }
+
+        if (!selectedEntry) {
+            for (const auto& entry : entries) {
+                if (selected.contains(entry.formID)) {
+                    selectedEntry = &entry;
+                    break;
+                }
             }
         }
 

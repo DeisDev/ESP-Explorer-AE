@@ -285,17 +285,20 @@ namespace ESPExplorerAE
                 Logger::Verbose(std::string("Menu toggled via controller: ") + (menuVisible ? "visible" : "hidden"));
                 UpdateMenuInputState();
                 UpdateGamePause();
+                UpdateHUDVisibility();
             }
         }
 
         if (menuVisible && ImGuiRenderer::IsInitialized()) {
             UpdateMenuInputState();
             UpdateGamePause();
+            UpdateHUDVisibility();
             ImGuiRenderer::BeginFrame();
             MainWindow::Draw();
             ImGuiRenderer::EndFrame();
         } else if (ImGuiRenderer::IsInitialized()) {
             UpdateGamePause();
+            UpdateHUDVisibility();
         }
 
         if (originalPresent) {
@@ -339,6 +342,41 @@ namespace ESPExplorerAE
         main->freezeTime = menuVisible;
     }
 
+    void Hooks::UpdateHUDVisibility()
+    {
+        const bool shouldHideHUD = menuVisible && Config::Get().hidePlayerHUDWhenMenuOpen;
+        auto* queue = RE::UIMessageQueue::GetSingleton();
+
+        if (shouldHideHUD) {
+            if (hudVisibilityManaged || !queue) {
+                return;
+            }
+
+            auto* ui = RE::UI::GetSingleton();
+            if (!ui) {
+                return;
+            }
+
+            hudWasVisibleBeforeHide = ui->GetMenuOpen(RE::HUDMenu::MENU_NAME);
+            if (hudWasVisibleBeforeHide) {
+                queue->AddMessage(RE::HUDMenu::MENU_NAME, RE::UI_MESSAGE_TYPE::kHide);
+            }
+            hudVisibilityManaged = true;
+            return;
+        }
+
+        if (!hudVisibilityManaged || !queue) {
+            return;
+        }
+
+        if (hudWasVisibleBeforeHide) {
+            queue->AddMessage(RE::HUDMenu::MENU_NAME, RE::UI_MESSAGE_TYPE::kShow);
+        }
+
+        hudVisibilityManaged = false;
+        hudWasVisibleBeforeHide = false;
+    }
+
     LRESULT CALLBACK Hooks::WndProcHook(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         if (msg == WM_KEYUP) {
@@ -348,6 +386,7 @@ namespace ESPExplorerAE
                 Logger::Verbose(std::string("Menu visibility toggled: ") + (menuVisible ? "visible" : "hidden"));
                 UpdateMenuInputState();
                 UpdateGamePause();
+                UpdateHUDVisibility();
                 return 1;
             }
         }

@@ -406,6 +406,19 @@ namespace ESPExplorerAE
             }
         }
 
+        ContextMenuCallbacks npcContextCallbacks{};
+        const ContextMenuCallbacks* effectiveContextCallbacks = contextCallbacks;
+        if (contextCallbacks) {
+            npcContextCallbacks = *contextCallbacks;
+            npcContextCallbacks.canSpawnEntry = [](const FormEntry&) {
+                return true;
+            };
+            npcContextCallbacks.spawnEntry = [](const FormEntry& entry, std::uint32_t quantity) {
+                FormActions::SpawnAtPlayer(entry.formID, quantity);
+            };
+            effectiveContextCallbacks = &npcContextCallbacks;
+        }
+
         FormTable::Draw(
             displayEntries,
             searchText,
@@ -417,6 +430,6 @@ namespace ESPExplorerAE
             {},
             {},
             &favoriteForms,
-            contextCallbacks);
+            effectiveContextCallbacks);
     }
 }
