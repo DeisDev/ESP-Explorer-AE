@@ -1,20 +1,12 @@
 #include "GUI/Tabs/PluginBrowserTab.h"
 
 #include "GUI/Widgets/ContextMenu.h"
+#include "GUI/Widgets/FormDetailsView.h"
 #include "GUI/Widgets/FormActions.h"
 #include "GUI/Widgets/RecordFiltersWidget.h"
 #include "GUI/Widgets/SharedUtils.h"
 
 #include <imgui.h>
-
-#include <RE/B/BGSKeywordForm.h>
-#include <RE/T/TESFullName.h>
-#include <RE/T/TESNPC.h>
-#include <RE/T/TESObjectARMO.h>
-#include <RE/T/TESObjectWEAP.h>
-#include <RE/T/TESSound.h>
-#include <RE/T/TESValueForm.h>
-#include <RE/T/TESWeightForm.h>
 
 #include <algorithm>
 #include <cctype>
@@ -87,6 +79,23 @@ namespace ESPExplorerAE
             });
 
             return lowered == "unknown" || lowered == "<unknown>";
+        }
+
+        const PluginInfo* FindPluginInfo(std::string_view pluginName, const std::vector<PluginInfo>& plugins)
+        {
+            const auto it = std::ranges::find_if(plugins, [pluginName](const PluginInfo& plugin) {
+                return plugin.filename == pluginName;
+            });
+            return it != plugins.end() ? &(*it) : nullptr;
+        }
+
+        std::string BuildPluginDisplayName(std::string_view pluginName, const std::vector<PluginInfo>& plugins)
+        {
+            if (const auto* plugin = FindPluginInfo(pluginName, plugins); plugin && !plugin->formIDPrefix.empty()) {
+                return std::string(pluginName) + " [" + plugin->formIDPrefix + "]";
+            }
+
+            return std::string(pluginName);
         }
 
         std::string CategoryDisplayName(std::string_view category, const PluginBrowserTabContext& context)
@@ -408,7 +417,8 @@ namespace ESPExplorerAE
         }
 
         if (!context.selectedPluginFilter.empty()) {
-            ImGui::Text("%s: %s", context.localize("PluginBrowser", "sActiveFilter", "Active"), context.selectedPluginFilter.c_str());
+            const std::string activePluginLabel = BuildPluginDisplayName(context.selectedPluginFilter, plugins);
+            ImGui::Text("%s: %s", context.localize("PluginBrowser", "sActiveFilter", "Active"), activePluginLabel.c_str());
         }
 
         if (RecordFiltersWidget::Draw(
@@ -673,7 +683,7 @@ namespace ESPExplorerAE
                     totalRecords += list.size();
                 }
 
-                const std::string pluginLabel = pluginName + " (" + std::to_string(totalRecords) + ")";
+                const std::string pluginLabel = BuildPluginDisplayName(pluginName, plugins) + " (" + std::to_string(totalRecords) + ")";
                 if (ImGui::TreeNode(pluginLabel.c_str())) {
                     if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
                         context.selectedPluginFilter = pluginName;
@@ -737,173 +747,15 @@ namespace ESPExplorerAE
             if (!selectedRecord) {
                 ImGui::TextUnformatted(context.localize("PluginBrowser", "sSelectRecordHint", "Select a record to view details."));
             } else {
-                int detailCopyPopupCounter = 0;
-                auto drawCopyPopup = [&](std::string_view value) {
-                    const std::string popupID = "DetailCopyPopup##" + std::to_string(detailCopyPopupCounter++);
-                    if (ImGui::BeginPopupContextItem(popupID.c_str())) {
-                        if (ImGui::MenuItem(context.localize("General", "sCopy", "Copy"))) {
-                            ImGui::SetClipboardText(std::string(value).c_str());
-                        }
-                        ImGui::EndPopup();
-                    }
-                };
-
                 const float totalAvail = ImGui::GetContentRegionAvail().y;
                 const float minDetailsHeight = ImGui::GetFrameHeightWithSpacing() * 6.0f;
                 const float detailsHeight = (std::max)(minDetailsHeight, totalAvail * 0.55f);
                 if (ImGui::BeginChild("PluginDetailsInfo", ImVec2(0.0f, detailsHeight), false)) {
-
-                ImGui::TextUnformatted(selectedRecord->name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : selectedRecord->name.c_str());
-                drawCopyPopup(selectedRecord->name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : selectedRecord->name);
-                ImGui::SameLine();
-                ImGui::TextDisabled("%08X", selectedRecord->formID);
-                char selectedFormIDBuffer[16]{};
-                std::snprintf(selectedFormIDBuffer, sizeof(selectedFormIDBuffer), "%08X", selectedRecord->formID);
-                drawCopyPopup(selectedFormIDBuffer);
-                ImGui::Separator();
-
-                ImGui::Text("%s: %s", context.localize("General", "sPlugin", "Plugin"), selectedRecord->sourcePlugin.c_str());
-                drawCopyPopup(selectedRecord->sourcePlugin);
-                const auto displayCategory = CategoryDisplayName(selectedRecord->category, context);
-                if (displayCategory == selectedRecord->category) {
-                    ImGui::Text("%s: %s", context.localize("General", "sCategory", "Category"), selectedRecord->category.c_str());
-                    drawCopyPopup(selectedRecord->category);
-                } else {
-                    ImGui::Text("%s: %s [%s]", context.localize("General", "sCategory", "Category"), displayCategory.data(), selectedRecord->category.c_str());
-                    drawCopyPopup(std::string(displayCategory) + " [" + selectedRecord->category + "]");
-                }
-                ImGui::Text("%s: %s", context.localize("General", "sPlayable", "Playable"), selectedRecord->isPlayable ? context.localize("General", "sYes", "Yes") : context.localize("General", "sNo", "No"));
-                drawCopyPopup(selectedRecord->isPlayable ? context.localize("General", "sYes", "Yes") : context.localize("General", "sNo", "No"));
-                ImGui::Text("%s: %s", context.localize("General", "sDeleted", "Deleted"), selectedRecord->isDeleted ? context.localize("General", "sYes", "Yes") : context.localize("General", "sNo", "No"));
-                drawCopyPopup(selectedRecord->isDeleted ? context.localize("General", "sYes", "Yes") : context.localize("General", "sNo", "No"));
-
-                auto* form = RE::TESForm::GetFormByID(selectedRecord->formID);
-                if (form) {
-                    const auto* editorID = form->GetFormEditorID();
-                    ImGui::Text("%s: %s", context.localize("General", "sEditorID", "EditorID"), (editorID && editorID[0] != '\0') ? editorID : context.localize("General", "sNone", "None"));
-                    drawCopyPopup((editorID && editorID[0] != '\0') ? std::string(editorID) : context.localize("General", "sNone", "None"));
-                    ImGui::Text("%s: %s", context.localize("General", "sType", "Type"), form->GetFormTypeString());
-                    drawCopyPopup(form->GetFormTypeString());
-                    ImGui::Text("%s: %u", context.localize("General", "sReferenceCount", "Reference Count"), DataManager::GetPlacedReferenceCount(selectedRecord->formID));
-                    {
-                        char referenceCountBuffer[32]{};
-                        std::snprintf(referenceCountBuffer, sizeof(referenceCountBuffer), "%u", DataManager::GetPlacedReferenceCount(selectedRecord->formID));
-                        drawCopyPopup(referenceCountBuffer);
-                    }
-
-                    if (const auto* valueForm = form->As<RE::TESValueForm>()) {
-                        ImGui::Text("%s: %d", context.localize("General", "sValue", "Value"), valueForm->GetFormValue());
-                        char valueBuffer[32]{};
-                        std::snprintf(valueBuffer, sizeof(valueBuffer), "%d", valueForm->GetFormValue());
-                        drawCopyPopup(valueBuffer);
-                    }
-
-                    if (const auto* weightForm = form->As<RE::TESWeightForm>()) {
-                        ImGui::Text("%s: %.2f", context.localize("General", "sWeight", "Weight"), weightForm->GetFormWeight());
-                        char weightBuffer[32]{};
-                        std::snprintf(weightBuffer, sizeof(weightBuffer), "%.2f", weightForm->GetFormWeight());
-                        drawCopyPopup(weightBuffer);
-                    }
-
-                    if (const auto* weaponForm = form->As<RE::TESObjectWEAP>()) {
-                        ImGui::Text("%s: %u", context.localize("General", "sDamage", "Damage"), weaponForm->weaponData.attackDamage);
-                        char damageBuffer[32]{};
-                        std::snprintf(damageBuffer, sizeof(damageBuffer), "%u", weaponForm->weaponData.attackDamage);
-                        drawCopyPopup(damageBuffer);
-                        if (weaponForm->weaponData.attackSeconds > 0.0f) {
-                            ImGui::Text("%s: %.2f", context.localize("General", "sFireRate", "Fire Rate"), 1.0f / weaponForm->weaponData.attackSeconds);
-                            char fireRateBuffer[32]{};
-                            std::snprintf(fireRateBuffer, sizeof(fireRateBuffer), "%.2f", 1.0f / weaponForm->weaponData.attackSeconds);
-                            drawCopyPopup(fireRateBuffer);
-                        }
-                        if (weaponForm->weaponData.ammo) {
-                            const auto ammoFormID = weaponForm->weaponData.ammo->GetFormID();
-                            auto* ammoForm = RE::TESForm::GetFormByID(ammoFormID);
-                            std::string ammoName{};
-                            if (ammoForm) {
-                                const auto maybeName = RE::TESFullName::GetFullName(*ammoForm);
-                                if (!maybeName.empty()) {
-                                    ammoName = std::string(maybeName);
-                                }
-                            }
-                            if (!ammoName.empty()) {
-                                ImGui::Text("%s: %s", context.localize("Items", "sAmmo", "Ammo"), ammoName.c_str());
-                                drawCopyPopup(ammoName);
-                            } else {
-                                ImGui::Text("%s: %08X", context.localize("Items", "sAmmo", "Ammo"), ammoFormID);
-                                char ammoBuffer[16]{};
-                                std::snprintf(ammoBuffer, sizeof(ammoBuffer), "%08X", ammoFormID);
-                                drawCopyPopup(ammoBuffer);
-                            }
-                        }
-                    }
-
-                    if (const auto* armorForm = form->As<RE::TESObjectARMO>()) {
-                        ImGui::Text("%s: %u", context.localize("General", "sArmorRating", "Armor Rating"), armorForm->armorData.rating);
-                        char armorBuffer[32]{};
-                        std::snprintf(armorBuffer, sizeof(armorBuffer), "%u", armorForm->armorData.rating);
-                        drawCopyPopup(armorBuffer);
-                    }
-
-                    if (const auto* npcForm = form->As<RE::TESNPC>()) {
-                        ImGui::Text("%s: %d", context.localize("General", "sLevel", "Level"), npcForm->GetLevel());
-                        char levelBuffer[32]{};
-                        std::snprintf(levelBuffer, sizeof(levelBuffer), "%d", npcForm->GetLevel());
-                        drawCopyPopup(levelBuffer);
-                        if (const auto* raceForm = npcForm->GetFormRace()) {
-                            const auto raceName = RE::TESFullName::GetFullName(*raceForm);
-                            if (!raceName.empty()) {
-                                const std::string raceNameString{ raceName };
-                                ImGui::Text("%s: %s", context.localize("General", "sRace", "Race"), raceNameString.c_str());
-                                drawCopyPopup(raceNameString);
-                            }
-                        }
-                    }
-
-                    if (const auto* soundForm = form->As<RE::TESSound>()) {
-                        if (soundForm->descriptor) {
-                            const auto* descriptorEditorID = soundForm->descriptor->GetFormEditorID();
-                            if (descriptorEditorID && descriptorEditorID[0] != '\0') {
-                                ImGui::Text("%s: %s", context.localize("General", "sDescriptor", "Descriptor"), descriptorEditorID);
-                                drawCopyPopup(descriptorEditorID);
-                            } else {
-                                ImGui::Text("%s: %08X", context.localize("General", "sDescriptor", "Descriptor"), soundForm->descriptor->GetFormID());
-                                char descriptorBuffer[16]{};
-                                std::snprintf(descriptorBuffer, sizeof(descriptorBuffer), "%08X", soundForm->descriptor->GetFormID());
-                                drawCopyPopup(descriptorBuffer);
-                            }
-                        } else {
-                            ImGui::TextDisabled("%s: %s", context.localize("General", "sDescriptor", "Descriptor"), context.localize("General", "sNone", "None"));
-                            drawCopyPopup(context.localize("General", "sNone", "None"));
-                        }
-                    }
-
-                    if (const auto keywordForm = form->As<RE::BGSKeywordForm>()) {
-                        ImGui::Separator();
-                        ImGui::TextUnformatted(context.localize("General", "sKeywords", "Keywords"));
-                        int displayed = 0;
-                        keywordForm->ForEachKeyword([&displayed, &context](RE::BGSKeyword* keyword) {
-                            if (!keyword || displayed >= 40) {
-                                return displayed >= 40 ? RE::BSContainer::ForEachResult::kStop : RE::BSContainer::ForEachResult::kContinue;
-                            }
-                            const auto text = keyword->formEditorID.c_str();
-                            const auto keywordLabel = (text && text[0] != '\0') ? text : context.localize("General", "sUnnamedKeyword", "<UnnamedKeyword>");
-                            ImGui::BulletText("%s", keywordLabel);
-                            const std::string keywordPopupID = "KeywordCopyPopup##" + std::to_string(displayed);
-                            if (ImGui::BeginPopupContextItem(keywordPopupID.c_str())) {
-                                if (ImGui::MenuItem(context.localize("General", "sCopy", "Copy"))) {
-                                    ImGui::SetClipboardText(keywordLabel);
-                                }
-                                ImGui::EndPopup();
-                            }
-                            ++displayed;
-                            return RE::BSContainer::ForEachResult::kContinue;
-                        });
-                        if (displayed == 0) {
-                            ImGui::TextDisabled("%s", context.localize("General", "sNoKeywords", "<No keywords>"));
-                        }
-                    }
-                }
+                    FormDetailsViewContext detailsContext{
+                        .localize = context.localize,
+                        .showAdvancedDetailsView = context.showAdvancedDetailsView
+                    };
+                    FormDetailsView::Draw(*selectedRecord, detailsContext);
                 }
                 ImGui::EndChild();
 

@@ -11,6 +11,7 @@ namespace ESPExplorerAE
     {
         const char* tableId{ "FormTable" };
         const char* primaryActionLabel{ "Action" };
+        const char* secondaryActionLabel{ nullptr };
         const char* quantityActionLabel{ nullptr };
         bool allowFavorites{ false };
         bool disableBulkPrimaryAction{ false };
@@ -21,6 +22,7 @@ namespace ESPExplorerAE
     public:
         using PrimaryAction = std::function<void(const FormEntry&)>;
         using BulkPrimaryAction = std::function<void(const std::vector<FormEntry>&)>;
+        using BulkSecondaryAction = std::function<void(const std::vector<FormEntry>&)>;
         using QuantityAction = std::function<void(const FormEntry&, int)>;
 
         static void Draw(
@@ -32,6 +34,7 @@ namespace ESPExplorerAE
             const BulkPrimaryAction& bulkPrimaryAction = {},
             const QuantityAction& quantityAction = {},
             std::unordered_set<std::uint32_t>* favorites = nullptr,
-            const ContextMenuCallbacks* contextCallbacks = nullptr);
+            const ContextMenuCallbacks* contextCallbacks = nullptr,
+            const BulkSecondaryAction& bulkSecondaryAction = {});
     };
 }

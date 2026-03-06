@@ -23,8 +23,9 @@ namespace ESPExplorerAE
         bool pluginGlobalSearchMode{ false };
         bool pluginShowUnknownCategories{ false };
         bool autoFocusSearchBars{ true };
-        bool showPlayerStatsInStatus{ true };
+        bool showPlayerStatsInStatus{ false };
         bool showMenuResolutionInStatus{ false };
+        bool pluginAdvancedDetailsView{ false };
         bool enableGamepadNav{ true };
         bool showFPSInStatus{ true };
         bool rememberWindowPos{ true };

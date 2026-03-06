@@ -118,8 +118,9 @@ namespace ESPExplorerAE
         settings.pluginGlobalSearchMode = ini.GetBoolValue("Filters", "bPluginGlobalSearchMode", false);
         settings.pluginShowUnknownCategories = ini.GetBoolValue("Filters", "bPluginShowUnknownCategories", false);
         settings.autoFocusSearchBars = ini.GetBoolValue("UI", "bAutoFocusSearchBars", true);
-        settings.showPlayerStatsInStatus = ini.GetBoolValue("UI", "bShowPlayerStatsInStatus", true);
+        settings.showPlayerStatsInStatus = ini.GetBoolValue("UI", "bShowPlayerStatsInStatus", false);
         settings.showMenuResolutionInStatus = ini.GetBoolValue("UI", "bShowMenuResolutionInStatus", false);
+        settings.pluginAdvancedDetailsView = ini.GetBoolValue("UI", "bPluginAdvancedDetailsView", false);
 
         settings.enableGamepadNav = ini.GetBoolValue("Controller", "bEnableGamepadNav", true);
 
@@ -183,6 +184,7 @@ namespace ESPExplorerAE
         ini.SetBoolValue("UI", "bAutoFocusSearchBars", settings.autoFocusSearchBars);
         ini.SetBoolValue("UI", "bShowPlayerStatsInStatus", settings.showPlayerStatsInStatus);
         ini.SetBoolValue("UI", "bShowMenuResolutionInStatus", settings.showMenuResolutionInStatus);
+        ini.SetBoolValue("UI", "bPluginAdvancedDetailsView", settings.pluginAdvancedDetailsView);
 
         ini.SetBoolValue("Controller", "bEnableGamepadNav", settings.enableGamepadNav);
 

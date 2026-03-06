@@ -5,6 +5,7 @@
 
 #include <concepts>
 #include <cctype>
+#include <cstdio>
 
 #include <RE/T/TESAmmo.h>
 #include <RE/T/TESDataHandler.h>
@@ -29,6 +30,18 @@ namespace ESPExplorerAE
 {
     namespace
     {
+        std::string FormatPluginFormIDPrefix(const RE::TESFile& file)
+        {
+            char buffer[16]{};
+            if (file.IsLight()) {
+                std::snprintf(buffer, sizeof(buffer), "FE %03X", file.GetSmallFileCompileIndex());
+            } else {
+                std::snprintf(buffer, sizeof(buffer), "%02X", file.GetCompileIndex());
+            }
+
+            return buffer;
+        }
+
         bool HasNonPlayableKeyword(const RE::TESForm* form)
         {
             if (!form) {
@@ -171,6 +184,7 @@ namespace ESPExplorerAE
             info.lightOrder = 0;
             info.isLight = file->IsLight();
             info.type = info.isLight ? "ESL" : (file->flags.all(RE::TESFile::RecordFlag::kMaster) ? "ESM" : "ESP");
+            info.formIDPrefix = FormatPluginFormIDPrefix(*file);
             newPlugins.push_back(std::move(info));
         }
 
@@ -192,6 +206,7 @@ namespace ESPExplorerAE
             info.lightOrder = file->GetSmallFileCompileIndex();
             info.isLight = true;
             info.type = "ESL";
+            info.formIDPrefix = FormatPluginFormIDPrefix(*file);
             lightPlugins.push_back(std::move(info));
         }
 

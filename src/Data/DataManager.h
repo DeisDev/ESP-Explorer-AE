@@ -38,6 +38,7 @@ namespace ESPExplorerAE
         std::uint32_t loadOrder;
         std::uint32_t lightOrder;
         bool isLight;
+        std::string formIDPrefix;
     };
 
     struct FormCategoryCounts

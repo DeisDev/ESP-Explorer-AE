@@ -22,6 +22,7 @@ namespace ESPExplorerAE
         bool& showDeletedRecords;
         bool& showUnknownCategories;
         bool& pluginGlobalSearchMode;
+        bool& showAdvancedDetailsView;
         int& equipWeaponAmmoCount;
         bool* searchFocusPending;
 

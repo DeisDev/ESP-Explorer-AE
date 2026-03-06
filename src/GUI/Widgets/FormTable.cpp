@@ -153,7 +153,8 @@ namespace ESPExplorerAE
         const BulkPrimaryAction& bulkPrimaryAction,
         const QuantityAction& quantityAction,
         std::unordered_set<std::uint32_t>* favorites,
-        const ContextMenuCallbacks* contextCallbacks)
+        const ContextMenuCallbacks* contextCallbacks,
+        const BulkSecondaryAction& bulkSecondaryAction)
     {
         const std::string tableId = config.tableId ? config.tableId : "FormTable";
 
@@ -402,11 +403,25 @@ namespace ESPExplorerAE
                     if (multipleSelected) {
                         const auto selectedEntries = collectSelectedEntries();
 
+                        if (primaryAction) {
+                            const char* actionLabel = config.primaryActionLabel ? config.primaryActionLabel : "Action";
+                            if (ImGui::MenuItem(actionLabel)) {
+                                primaryAction(entry);
+                            }
+                        }
+
                         if ((primaryAction || bulkPrimaryAction) && !config.disableBulkPrimaryAction) {
                             const char* actionLabel = config.primaryActionLabel ? config.primaryActionLabel : "Action";
                             std::string bulkLabel = std::string(actionLabel) + " (" + std::to_string(selected.size()) + ")";
                             if (ImGui::MenuItem(bulkLabel.c_str())) {
                                 invokePrimaryForSelection();
+                            }
+                        }
+
+                        if (bulkSecondaryAction && config.secondaryActionLabel) {
+                            std::string bulkSecondaryLabel = std::string(config.secondaryActionLabel) + " (" + std::to_string(selected.size()) + ")";
+                            if (ImGui::MenuItem(bulkSecondaryLabel.c_str())) {
+                                bulkSecondaryAction(selectedEntries);
                             }
                         }
 

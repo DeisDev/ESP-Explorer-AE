@@ -715,6 +715,7 @@ namespace ESPExplorerAE
                 .showDeletedRecords = showDeletedRecords,
                 .showUnknownCategories = showUnknownCategories,
                 .pluginGlobalSearchMode = pluginGlobalSearchMode,
+                .showAdvancedDetailsView = Config::GetMutable().pluginAdvancedDetailsView,
                 .equipWeaponAmmoCount = playerCurrentWeaponAmmoAmount,
                 .searchFocusPending = &tabSearchFocusPending,
                 .favoriteForms = favoriteForms,
@@ -1191,18 +1192,22 @@ namespace ESPExplorerAE
 
                 if (settings.showPlayerStatsInStatus) {
                     auto* player = RE::PlayerCharacter::GetSingleton();
-                    if (player) {
-                        auto* av = RE::ActorValue::GetSingleton();
-                        if (av && av->health && av->actionPoints) {
-                            const auto level = player->GetLevel();
-                            const auto caps = player->GetGoldAmount();
-                            const float hp = player->GetActorValue(*av->health);
-                            const float ap = player->GetActorValue(*av->actionPoints);
-                            ImGui::SameLine();
-                            ImGui::TextDisabled("|");
-                            ImGui::SameLine();
-                            ImGui::TextDisabled("%s %d  %s %lld  %s %.0f  %s %.0f", L("General", "sLevelShort", ""), level, L("Player", "sCaps", ""), caps, L("Player", "sHealthShort", ""), hp, L("Player", "sActionPointsShort", ""), ap);
-                        }
+                    auto* av = RE::ActorValue::GetSingleton();
+                    auto* ui = RE::UI::GetSingleton();
+                    const bool inMainMenu = ui && ui->GetMenuOpen<RE::MainMenu>();
+
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("|");
+                    ImGui::SameLine();
+
+                    if (player && av && av->health && av->actionPoints && !inMainMenu) {
+                        const auto level = player->GetLevel();
+                        const auto caps = player->GetGoldAmount();
+                        const float hp = player->GetActorValue(*av->health);
+                        const float ap = player->GetActorValue(*av->actionPoints);
+                        ImGui::TextDisabled("%s %d  %s %lld  %s %.0f  %s %.0f", L("General", "sLevelShort", ""), level, L("Player", "sCaps", ""), caps, L("Player", "sHealthShort", ""), hp, L("Player", "sActionPointsShort", ""), ap);
+                    } else {
+                        ImGui::TextDisabled("%s --  %s --  %s --  %s --", L("General", "sLevelShort", ""), L("Player", "sCaps", ""), L("Player", "sHealthShort", ""), L("Player", "sActionPointsShort", ""));
                     }
                 }
 

@@ -86,11 +86,13 @@ namespace ESPExplorerAE
             const FormTableConfig spellConfig{
                 .tableId = "SpellTable",
                 .primaryActionLabel = localize("Spells", "sAddSpell", "Add Spell"),
+                .secondaryActionLabel = localize("General", "sRemoveSpellEffect", "Remove Spell/Effect"),
                 .allowFavorites = true
             };
             const FormTableConfig perkConfig{
                 .tableId = "PerkTable",
                 .primaryActionLabel = localize("Spells", "sAddPerk", "Add Perk"),
+                .secondaryActionLabel = localize("General", "sRemovePerk", "Remove Perk"),
                 .allowFavorites = true
             };
 
@@ -106,7 +108,12 @@ namespace ESPExplorerAE
                     {},
                     {},
                     &favoriteForms,
-                    contextCallbacks);
+                    contextCallbacks,
+                    [](const std::vector<FormEntry>& entries) {
+                        for (const auto& entry : entries) {
+                            FormActions::RemoveSpellFromPlayer(entry.formID);
+                        }
+                    });
                 ImGui::EndTabItem();
             }
 
@@ -122,7 +129,12 @@ namespace ESPExplorerAE
                     {},
                     {},
                     &favoriteForms,
-                    contextCallbacks);
+                    contextCallbacks,
+                    [](const std::vector<FormEntry>& entries) {
+                        for (const auto& entry : entries) {
+                            FormActions::RemovePerkFromPlayer(entry.formID);
+                        }
+                    });
                 ImGui::EndTabItem();
             }
 
