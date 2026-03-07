@@ -11,8 +11,9 @@ namespace ESPExplorerAE
         bool showOnStartup{ false };
         bool noPauseOnFocusLoss{ false };
         bool pauseGameWhenMenuOpen{ false };
-        bool hidePlayerHUDWhenMenuOpen{ false };
+        bool hidePlayerHUDWhenMenuOpen{ true };
         bool verboseLogging{ true };
+        bool showLogsTab{ true };
         bool hideNonPlayable{ true };
         bool hideDeleted{ true };
         bool hideNoName{ true };

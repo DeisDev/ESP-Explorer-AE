@@ -26,6 +26,8 @@ namespace ESPExplorerAE
 
         static inline bool menuVisible{ false };
         static inline bool cursorReleased{ false };
+        static inline bool pauseStateManaged{ false };
+        static inline bool freezeTimeWasEnabledBeforeMenu{ false };
         static inline bool hudVisibilityManaged{ false };
         static inline bool hudWasVisibleBeforeHide{ false };
         static inline bool modalDialogActive{ false };

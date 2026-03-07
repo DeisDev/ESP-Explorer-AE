@@ -347,10 +347,6 @@ namespace ESPExplorerAE
             changed = ImGui::Checkbox(L("Settings", "sNoPauseOnFocusLoss", "Do Not Pause On Focus Loss"), &settings.noPauseOnFocusLoss) || changed;
             changed = ImGui::Checkbox(L("Settings", "sPauseGameWhenMenuOpen", "Pause Game When Menu Open"), &settings.pauseGameWhenMenuOpen) || changed;
             changed = ImGui::Checkbox(L("Settings", "sHidePlayerHUDWhenMenuOpen", "Hide Player HUD When Menu Open"), &settings.hidePlayerHUDWhenMenuOpen) || changed;
-            if (ImGui::Checkbox(L("Settings", "sVerboseLogging", "Verbose Logging"), &settings.verboseLogging)) {
-                Logger::SetVerboseEnabled(settings.verboseLogging);
-                changed = true;
-            }
             sectionSpacing();
             ImGui::TreePop();
         }
@@ -516,6 +512,19 @@ namespace ESPExplorerAE
             ImGui::TextDisabled("%s: %s / %s", L("Settings", "sNavigation", ""), L("Settings", "sDPad", ""), L("Settings", "sLeftStick", ""));
             ImGui::TextDisabled("%s: %s  |  %s: %s", L("Settings", "sConfirm", ""), L("Settings", "sButtonA", ""), L("Settings", "sGoBack", ""), L("Settings", "sButtonB", ""));
             ImGui::TextDisabled("%s: %s", L("Settings", "sTabSwitch", ""), L("Settings", "sShoulderButtons", ""));
+            sectionSpacing();
+            ImGui::TreePop();
+        }
+
+        ImGui::Spacing();
+
+        if (ImGui::TreeNodeEx(std::string(L("Settings", "sLoggingSection", "Logging") + std::string("##SettingsLoggingSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+            sectionSpacing();
+            changed = ImGui::Checkbox(L("Settings", "sShowLogsTab", "Show Logs Tab"), &settings.showLogsTab) || changed;
+            if (ImGui::Checkbox(L("Settings", "sVerboseLogging", "Verbose Logging"), &settings.verboseLogging)) {
+                Logger::SetVerboseEnabled(settings.verboseLogging);
+                changed = true;
+            }
             sectionSpacing();
             ImGui::TreePop();
         }

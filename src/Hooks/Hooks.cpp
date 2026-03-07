@@ -12,6 +12,7 @@
 #include <imgui.h>
 #include <backends/imgui_impl_win32.h>
 
+#include <array>
 #include <cstdlib>
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -29,9 +30,54 @@ namespace ESPExplorerAE
         bool freeCursorPosValid{ false };
         POINT freeCursorPos{ 0, 0 };
 
+        bool IsBlockingGameMenuOpen()
+        {
+            auto* ui = RE::UI::GetSingleton();
+            if (!ui) {
+                return false;
+            }
+
+            static const std::array<RE::BSFixedString, 10> blockingMenuNames{
+                RE::BSFixedString("BarterMenu"),
+                RE::BSFixedString("ContainerMenu"),
+                RE::BSFixedString("DialogueMenu"),
+                RE::BSFixedString("LevelUpMenu"),
+                RE::BSFixedString("LockpickingMenu"),
+                RE::BSFixedString("LooksMenu"),
+                RE::BSFixedString("PauseMenu"),
+                RE::BSFixedString("PipboyMenu"),
+                RE::BSFixedString("SleepWaitMenu"),
+                RE::BSFixedString("TerminalMenu")
+            };
+
+            for (const auto& menuName : blockingMenuNames) {
+                if (ui->GetMenuOpen(menuName)) {
+                    return true;
+                }
+            }
+
+            return ui->GetMenuOpen(RE::BSFixedString("PipboyWorkshopMenu")) ||
+                   ui->GetMenuOpen(RE::BSFixedString("WorkshopMenu"));
+        }
+
+        bool ShouldCaptureMenuInput()
+        {
+            return Hooks::IsMenuVisible() && !Hooks::IsModalDialogActive() && !IsBlockingGameMenuOpen();
+        }
+
+        bool ShouldRenderMenu()
+        {
+            return Hooks::IsMenuVisible() && !IsBlockingGameMenuOpen();
+        }
+
+        bool ShouldManageGameState()
+        {
+            return Hooks::IsMenuVisible() && !IsBlockingGameMenuOpen();
+        }
+
         BOOL WINAPI HookedSetCursorPos(int x, int y)
         {
-            if (Hooks::IsMenuVisible() && !Hooks::IsModalDialogActive()) {
+            if (ShouldCaptureMenuInput()) {
                 return TRUE;
             }
 
@@ -44,7 +90,7 @@ namespace ESPExplorerAE
 
         BOOL WINAPI HookedClipCursor(const RECT* rect)
         {
-            if (Hooks::IsMenuVisible() && !Hooks::IsModalDialogActive()) {
+            if (ShouldCaptureMenuInput()) {
                 if (!originalClipCursor) {
                     return FALSE;
                 }
@@ -194,14 +240,15 @@ namespace ESPExplorerAE
         }
 
         ImGuiIO& io = ImGui::GetIO();
+        const bool shouldCaptureInput = ShouldCaptureMenuInput();
 
-        if (GamepadInput::IsUsingGamepad() && menuVisible) {
+        if (GamepadInput::IsUsingGamepad() && shouldCaptureInput) {
             io.MouseDrawCursor = false;
         } else {
-            io.MouseDrawCursor = menuVisible;
+            io.MouseDrawCursor = shouldCaptureInput;
         }
 
-        if (menuVisible) {
+        if (shouldCaptureInput) {
             if (!cursorReleased) {
                 ClipCursor(nullptr);
                 ReleaseCapture();
@@ -283,22 +330,17 @@ namespace ESPExplorerAE
             if (GamepadInput::WasMenuTogglePressed()) {
                 menuVisible = !menuVisible;
                 Logger::Verbose(std::string("Menu toggled via controller: ") + (menuVisible ? "visible" : "hidden"));
-                UpdateMenuInputState();
-                UpdateGamePause();
-                UpdateHUDVisibility();
             }
-        }
 
-        if (menuVisible && ImGuiRenderer::IsInitialized()) {
             UpdateMenuInputState();
             UpdateGamePause();
             UpdateHUDVisibility();
-            ImGuiRenderer::BeginFrame();
-            MainWindow::Draw();
-            ImGuiRenderer::EndFrame();
-        } else if (ImGuiRenderer::IsInitialized()) {
-            UpdateGamePause();
-            UpdateHUDVisibility();
+
+            if (ShouldRenderMenu()) {
+                ImGuiRenderer::BeginFrame();
+                MainWindow::Draw();
+                ImGuiRenderer::EndFrame();
+            }
         }
 
         if (originalPresent) {
@@ -330,16 +372,29 @@ namespace ESPExplorerAE
 
     void Hooks::UpdateGamePause()
     {
-        if (!Config::Get().pauseGameWhenMenuOpen) {
-            return;
-        }
-
         auto* main = RE::Main::GetSingleton();
         if (!main) {
             return;
         }
 
-        main->freezeTime = menuVisible;
+        const bool shouldPause = Config::Get().pauseGameWhenMenuOpen && ShouldManageGameState();
+        if (shouldPause) {
+            if (!pauseStateManaged) {
+                freezeTimeWasEnabledBeforeMenu = main->freezeTime;
+                pauseStateManaged = true;
+            }
+
+            main->freezeTime = true;
+            return;
+        }
+
+        if (!pauseStateManaged) {
+            return;
+        }
+
+        main->freezeTime = freezeTimeWasEnabledBeforeMenu;
+        freezeTimeWasEnabledBeforeMenu = false;
+        pauseStateManaged = false;
     }
 
     void Hooks::UpdateHUDVisibility()
@@ -391,7 +446,7 @@ namespace ESPExplorerAE
             }
         }
 
-        if ((msg == WM_ACTIVATEAPP || msg == WM_ACTIVATE || msg == WM_KILLFOCUS) && menuVisible && Config::Get().noPauseOnFocusLoss) {
+        if ((msg == WM_ACTIVATEAPP || msg == WM_ACTIVATE || msg == WM_KILLFOCUS) && ShouldRenderMenu() && Config::Get().noPauseOnFocusLoss) {
             return 0;
         }
 
@@ -402,7 +457,7 @@ namespace ESPExplorerAE
             return DefWindowProc(hwnd, msg, wParam, lParam);
         }
 
-        if (menuVisible && ImGuiRenderer::IsInitialized()) {
+        if (ShouldCaptureMenuInput() && ImGuiRenderer::IsInitialized()) {
             if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam)) {
                 return 1;
             }

@@ -131,6 +131,23 @@ namespace ESPExplorerAE
             ImGui::Text("%s: %s", L("PluginBrowser", "sFilter", "Filter"), selectedPluginFilter.empty() ? L("General", "sNone", "None") : selectedPluginFilter.c_str());
         }
 
+        void TrackRecentRecord(std::uint32_t formID)
+        {
+            if (formID == 0) {
+                return;
+            }
+
+            const std::size_t maxRecentRecords = static_cast<std::size_t>((std::clamp)(Config::Get().recentRecordsLimit, 5, 100));
+            recentPluginRecordFormIDs.erase(
+                std::remove(recentPluginRecordFormIDs.begin(), recentPluginRecordFormIDs.end(), formID),
+                recentPluginRecordFormIDs.end());
+            recentPluginRecordFormIDs.push_front(formID);
+
+            while (recentPluginRecordFormIDs.size() > maxRecentRecords) {
+                recentPluginRecordFormIDs.pop_back();
+            }
+        }
+
         float CalcButtonWidth(const char* label, float minimumWidth = 0.0f)
         {
             const auto& style = ImGui::GetStyle();
@@ -175,6 +192,9 @@ namespace ESPExplorerAE
             favoriteForms.clear();
             favoriteForms.insert(settings.favorites.begin(), settings.favorites.end());
             activeMainTab = settings.lastActiveTab;
+            if (!settings.showLogsTab && activeMainTab == "Logs") {
+                activeMainTab = "Plugin Browser";
+            }
             showPlayableRecords = true;
             showNonPlayableRecords = settings.listShowNonPlayable;
             showNamedRecords = true;
@@ -594,6 +614,9 @@ namespace ESPExplorerAE
             cb.requestActionConfirmation = [](std::string title, std::string message, std::function<void()> callback) {
                 MainWindowPopups::RequestActionConfirmation(std::move(title), std::move(message), std::move(callback));
             };
+            cb.trackRecentRecord = [](std::uint32_t formID) {
+                TrackRecentRecord(formID);
+            };
             cb.favorites = &favoriteForms;
             cb.equipWeaponAmmoCount = playerCurrentWeaponAmmoAmount;
             return cb;
@@ -791,6 +814,10 @@ namespace ESPExplorerAE
             bool settingsDirty{ false };
             const ImVec2 menuWindowSize = ImGui::GetWindowSize();
 
+            if (!settings.showLogsTab && activeMainTab == "Logs") {
+                activeMainTab = "Plugin Browser";
+            }
+
             if (settings.rememberWindowPos) {
                 const ImVec2 pos = ImGui::GetWindowPos();
                 const ImVec2 size = ImGui::GetWindowSize();
@@ -836,19 +863,23 @@ namespace ESPExplorerAE
             if (ImGui::BeginChild("MainContentRegion", ImVec2(0.0f, -footerHeight), ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
                 if (ImGui::BeginTabBar("MainTabs")) {
                     static std::string requestedTab{};
-                    if (Config::Get().enableGamepadNav && (GamepadInput::WasTabNextPressed() || GamepadInput::WasTabPrevPressed())) {
-                        constexpr std::array<std::string_view, 9> tabOrder{
-                            "Plugin Browser",
-                            "Player",
-                            "Item Browser",
-                            "NPC Browser",
-                            "Cell Browser",
-                            "Object Browser",
-                            "Spells & Perks",
-                            "Settings",
-                            "Logs"
-                        };
+                    std::vector<std::string_view> tabOrder{
+                        "Plugin Browser",
+                        "Player",
+                        "Item Browser",
+                        "NPC Browser",
+                        "Cell Browser",
+                        "Object Browser",
+                        "Spells & Perks",
+                        "Settings"
+                    };
+                    if (settings.showLogsTab) {
+                        tabOrder.push_back("Logs");
+                    } else if (requestedTab == "Logs") {
+                        requestedTab.clear();
+                    }
 
+                    if (Config::Get().enableGamepadNav && (GamepadInput::WasTabNextPressed() || GamepadInput::WasTabPrevPressed())) {
                         std::size_t currentIndex = 0;
                         for (std::size_t i = 0; i < tabOrder.size(); ++i) {
                             if (activeMainTab == tabOrder[i]) {
@@ -962,12 +993,14 @@ namespace ESPExplorerAE
                         ImGui::EndTabItem();
                     }
 
-                    if (ImGui::BeginTabItem(L("Logs", "sTabName", "Logs"), nullptr,
-                        tabFlags("Logs"))) {
-                        activeMainTab = "Logs";
-                        focusTabIfRequested("Logs");
-                        LogViewerTab::Draw(L);
-                        ImGui::EndTabItem();
+                    if (settings.showLogsTab) {
+                        if (ImGui::BeginTabItem(L("Logs", "sTabName", "Logs"), nullptr,
+                            tabFlags("Logs"))) {
+                            activeMainTab = "Logs";
+                            focusTabIfRequested("Logs");
+                            LogViewerTab::Draw(L);
+                            ImGui::EndTabItem();
+                        }
                     }
 
                     ItemGrantPopup::Draw(L);

@@ -202,6 +202,12 @@ namespace ESPExplorerAE
             return selectedEntries;
         };
 
+        auto trackRecentRecord = [&](const FormEntry& entry) {
+            if (contextCallbacks && contextCallbacks->trackRecentRecord) {
+                contextCallbacks->trackRecentRecord(entry.formID);
+            }
+        };
+
         ImGui::Spacing();
 
         auto drawWrappedButton = SharedUtils::DrawWrappedButton;
@@ -306,6 +312,7 @@ namespace ESPExplorerAE
                             selected.clear();
                             selected.insert(entry.formID);
                             lastClicked = rowIndex;
+                            trackRecentRecord(entry);
                         }
                     }
                 };
@@ -314,9 +321,7 @@ namespace ESPExplorerAE
                 std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", entry.formID);
                 const std::string rowSelectableLabel = std::string(formIDBuffer) + "##row" + std::to_string(entry.formID) + std::string(config.tableId);
                 const bool rowClicked = ImGui::Selectable(rowSelectableLabel.c_str(), rowIsSelected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap | ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0.0f, ImGui::GetTextLineHeight()));
-                if (rowClicked && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && primaryAction) {
-                    primaryAction(entry);
-                } else if (rowClicked) {
+                if (rowClicked) {
                     if (ImGui::GetIO().KeyShift && lastClicked >= 0 && lastClicked < static_cast<int>(entries.size())) {
                         const int rangeStart = (std::min)(lastClicked, rowIndex);
                         const int rangeEnd = (std::max)(lastClicked, rowIndex);
@@ -337,6 +342,14 @@ namespace ESPExplorerAE
                         selected.insert(entry.formID);
                     }
                     lastClicked = rowIndex;
+
+                    if (selected.contains(entry.formID)) {
+                        trackRecentRecord(entry);
+                    }
+
+                    if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && primaryAction) {
+                        primaryAction(entry);
+                    }
                 }
 
                 const bool openContextFromNav = ImGui::IsItemFocused() && ImGui::IsKeyPressed(ImGuiKey_GamepadFaceLeft, false);
@@ -345,6 +358,7 @@ namespace ESPExplorerAE
                         selected.clear();
                         selected.insert(entry.formID);
                         lastClicked = rowIndex;
+                        trackRecentRecord(entry);
                     }
                     ImGui::OpenPopup(rowPopupId.c_str());
                 }
@@ -395,6 +409,7 @@ namespace ESPExplorerAE
                             selected.erase(entry.formID);
                         } else {
                             selected.insert(entry.formID);
+                            trackRecentRecord(entry);
                         }
                     }
 

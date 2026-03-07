@@ -82,8 +82,10 @@ namespace ESPExplorerAE
         settings.showOnStartup = ini.GetBoolValue("General", "bShowOnStartup", false);
         settings.noPauseOnFocusLoss = ini.GetBoolValue("General", "bNoPauseOnFocusLoss", false);
         settings.pauseGameWhenMenuOpen = ini.GetBoolValue("General", "bPauseGameWhenMenuOpen", false);
-        settings.hidePlayerHUDWhenMenuOpen = ini.GetBoolValue("General", "bHidePlayerHUDWhenMenuOpen", false);
-        settings.verboseLogging = ini.GetBoolValue("General", "bVerboseLogging", true);
+        settings.hidePlayerHUDWhenMenuOpen = ini.GetBoolValue("General", "bHidePlayerHUDWhenMenuOpen", true);
+        settings.verboseLogging = ini.GetValue("Logging", "bVerboseLogging", nullptr) ?
+                          ini.GetBoolValue("Logging", "bVerboseLogging", true) :
+                          ini.GetBoolValue("General", "bVerboseLogging", true);
 
         settings.fontSize = static_cast<float>(ini.GetDoubleValue("UI", "fFontSize", 20.0));
         settings.windowAlpha = static_cast<float>(ini.GetDoubleValue("UI", "fWindowAlpha", 0.95));
@@ -126,6 +128,7 @@ namespace ESPExplorerAE
         settings.pluginAdvancedDetailsView = ini.GetBoolValue("UI", "bPluginAdvancedDetailsView", false);
 
         settings.enableGamepadNav = ini.GetBoolValue("Controller", "bEnableGamepadNav", true);
+        settings.showLogsTab = ini.GetBoolValue("Logging", "bShowLogsTab", true);
 
         settings.favorites = ParseFavorites(ini.GetValue("Favorites", "sFormIDs", ""));
 
@@ -192,6 +195,9 @@ namespace ESPExplorerAE
         ini.SetBoolValue("UI", "bPluginAdvancedDetailsView", settings.pluginAdvancedDetailsView);
 
         ini.SetBoolValue("Controller", "bEnableGamepadNav", settings.enableGamepadNav);
+
+        ini.SetBoolValue("Logging", "bVerboseLogging", settings.verboseLogging);
+        ini.SetBoolValue("Logging", "bShowLogsTab", settings.showLogsTab);
 
         const auto favorites = SerializeFavorites(settings.favorites);
         ini.SetValue("Favorites", "sFormIDs", favorites.c_str());

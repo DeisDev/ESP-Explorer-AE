@@ -15,6 +15,7 @@ namespace ESPExplorerAE
         using ConfirmActionFn = std::function<void(std::string, std::string, std::function<void()>)>;
         using CanSpawnFn = std::function<bool(const FormEntry&)>;
         using SpawnActionFn = std::function<void(const FormEntry&, std::uint32_t)>;
+        using TrackRecentRecordFn = std::function<void(std::uint32_t)>;
 
         LocalizeFn localize;
         OpenItemGrantFn openItemGrantPopup;
@@ -22,6 +23,7 @@ namespace ESPExplorerAE
         ConfirmActionFn requestActionConfirmation;
         CanSpawnFn canSpawnEntry;
         SpawnActionFn spawnEntry;
+        TrackRecentRecordFn trackRecentRecord;
         std::unordered_set<std::uint32_t>* favorites{ nullptr };
         int equipWeaponAmmoCount{ 200 };
         bool showSpawnAtPlayer{ true };
