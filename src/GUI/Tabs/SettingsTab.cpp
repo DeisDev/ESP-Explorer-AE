@@ -184,11 +184,66 @@ namespace ESPExplorerAE
                 return false;
             }
 
-            Config::Save();
+            Config::RequestSave();
             return true;
         }
 
-        std::string GetGameVersionText()
+        constexpr auto kStartupTabLastActive = "__last__";
+
+        struct StartupTabOption
+        {
+            const char* value;
+            const char* section;
+            const char* key;
+            const char* fallback;
+        };
+
+        constexpr StartupTabOption kStartupTabOptions[] = {
+            { kStartupTabLastActive, "Settings", "sStartupTabLastActive", "Last Active Tab" },
+            { "Plugin Browser", "PluginBrowser", "sBrowserTab", "Plugin Browser" },
+            { "Player", "Player", "sTabName", "Player" },
+            { "Item Browser", "Items", "sBrowserTab", "Item Browser" },
+            { "NPC Browser", "NPCs", "sBrowserTab", "NPC Browser" },
+            { "Cell Browser", "Cells", "sBrowserTab", "Cell Browser" },
+            { "Object Browser", "Objects", "sBrowserTab", "Object Browser" },
+            { "Spells & Perks", "Spells", "sBrowserTab", "Spells & Perks" },
+            { "Settings", "Settings", "sTabName", "Settings" },
+            { "Logs", "Logs", "sTabName", "Logs" },
+        };
+
+        const StartupTabOption* FindStartupTabOption(std::string_view value)
+        {
+            for (const auto& option : kStartupTabOptions) {
+                if (value == option.value) {
+                    return &option;
+                }
+            }
+
+            return &kStartupTabOptions[0];
+        }
+
+        void ResetVisualSettings(Settings& settings)
+        {
+            const Settings defaults{};
+            settings.rememberWindowPos = defaults.rememberWindowPos;
+            settings.fontSize = defaults.fontSize;
+            settings.windowAlpha = defaults.windowAlpha;
+            settings.themeAccentR = defaults.themeAccentR;
+            settings.themeAccentG = defaults.themeAccentG;
+            settings.themeAccentB = defaults.themeAccentB;
+            settings.themeAccentA = defaults.themeAccentA;
+            settings.themeWindowR = defaults.themeWindowR;
+            settings.themeWindowG = defaults.themeWindowG;
+            settings.themeWindowB = defaults.themeWindowB;
+            settings.themeWindowA = defaults.themeWindowA;
+            settings.themePanelR = defaults.themePanelR;
+            settings.themePanelG = defaults.themePanelG;
+            settings.themePanelB = defaults.themePanelB;
+            settings.themePanelA = defaults.themePanelA;
+            settings.syncPipboyColor = defaults.syncPipboyColor;
+        }
+
+        const std::string& GetGameVersionText()
         {
             static const std::string cachedVersion = []() {
                 if (const auto version = REL::GetFileVersion(std::string_view("Fallout4.exe")); version.has_value()) {
@@ -198,6 +253,48 @@ namespace ESPExplorerAE
             }();
 
             return cachedVersion;
+        }
+
+        const std::string& GetModVersionText()
+        {
+            static const std::string cachedVersion = []() {
+                return F4SE::GetPluginVersion().string();
+            }();
+
+            return cachedVersion;
+        }
+
+        const std::vector<std::string>& GetAvailableLanguages()
+        {
+            static const std::vector<std::string> cachedLanguages = Language::ListAvailableLanguages();
+            return cachedLanguages;
+        }
+
+        const std::string& GetToggleKeyText(std::uint32_t vk)
+        {
+            static std::uint32_t cachedVK = (std::numeric_limits<std::uint32_t>::max)();
+            static std::string cachedName;
+
+            if (cachedVK != vk) {
+                cachedVK = vk;
+                cachedName = KeyNameFromVK(vk);
+            }
+
+            return cachedName;
+        }
+
+        bool BeginSection(const char* id, const char* label)
+        {
+            ImGui::PushID(id);
+            const bool open = ImGui::TreeNodeEx(label, ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding);
+            ImGui::PopID();
+            return open;
+        }
+
+        const std::array<const char*, FontManager::kPresetCount>& GetFontSizeLabels()
+        {
+            static const std::array<const char*, FontManager::kPresetCount> labels = { "12 px", "14 px", "16 px", "18 px", "20 px", "22 px", "24 px" };
+            return labels;
         }
 
         struct ColorPreset
@@ -262,13 +359,8 @@ namespace ESPExplorerAE
             return true;
         }
 
-        void ApplyPipboyColorToTheme(Settings& settings)
+        void ApplyPipboyColorToTheme(Settings& settings, float r, float g, float b)
         {
-            float r = 0.0f, g = 0.0f, b = 0.0f;
-            if (!TryReadPipboyColor(r, g, b)) {
-                return;
-            }
-
             const float maxComp = (std::max)({ r, g, b, 0.01f });
             const float normR = r / maxComp;
             const float normG = g / maxComp;
@@ -290,11 +382,37 @@ namespace ESPExplorerAE
             settings.themePanelA = 0.94f;
         }
 
-        std::string GetModVersionText()
+        void ApplyPipboyColorToTheme(Settings& settings)
         {
-            const auto version = F4SE::GetPluginVersion();
-            return version.string();
+            float r = 0.0f, g = 0.0f, b = 0.0f;
+            if (!TryReadPipboyColor(r, g, b)) {
+                return;
+            }
+
+            ApplyPipboyColorToTheme(settings, r, g, b);
         }
+
+        struct PipboyColorCache
+        {
+            float r{ 0.0f };
+            float g{ 0.0f };
+            float b{ 0.0f };
+            bool valid{ false };
+        };
+
+        PipboyColorCache PollPipboyColorCache(bool forceRefresh = false)
+        {
+            static PipboyColorCache cachedColor{};
+            static int pollCounter{ 0 };
+
+            if (forceRefresh || ++pollCounter >= 60) {
+                pollCounter = 0;
+                cachedColor.valid = TryReadPipboyColor(cachedColor.r, cachedColor.g, cachedColor.b);
+            }
+
+            return cachedColor;
+        }
+
     }
 
     void SettingsTab::Draw()
@@ -316,7 +434,8 @@ namespace ESPExplorerAE
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(style.ItemSpacing.x, style.ItemSpacing.y + 6.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(style.FramePadding.x + 2.0f, style.FramePadding.y + 2.0f));
 
-        const auto languages = Language::ListAvailableLanguages();
+        const auto& languages = GetAvailableLanguages();
+        const auto& fontSizeLabels = GetFontSizeLabels();
         auto currentLanguage = settings.language;
         if (currentLanguage.empty()) {
             currentLanguage = "en";
@@ -324,14 +443,15 @@ namespace ESPExplorerAE
 
         bool changed = false;
         bool languageChanged = false;
+        const auto pipboyColor = settings.syncPipboyColor ? PollPipboyColorCache() : PipboyColorCache{};
 
         if (CaptureToggleKey(settings)) {
             changed = true;
         }
 
-        if (ImGui::TreeNodeEx(std::string(L("Settings", "sGeneralSection", "General") + std::string("##SettingsGeneralSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+        if (BeginSection("SettingsGeneralSection", L("Settings", "sGeneralSection", "General"))) {
             sectionSpacing();
-            ImGui::Text("%s: %s", L("Settings", "sToggleKey", "Toggle Key"), KeyNameFromVK(settings.toggleKey).c_str());
+            ImGui::Text("%s: %s", L("Settings", "sToggleKey", "Toggle Key"), GetToggleKeyText(settings.toggleKey).c_str());
             ImGui::SameLine();
             if (ImGui::Button(waitingForToggleKey ? L("Settings", "sPressAnyKey", "Press any key...") : L("Settings", "sCaptureKey", "Capture Key"))) {
                 waitingForToggleKey = true;
@@ -353,7 +473,7 @@ namespace ESPExplorerAE
 
         ImGui::Spacing();
 
-        if (ImGui::TreeNodeEx(std::string(L("Settings", "sInterfaceSection", "Interface") + std::string("##SettingsInterfaceSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+        if (BeginSection("SettingsInterfaceSection", L("Settings", "sInterfaceSection", "Interface"))) {
             sectionSpacing();
             changed = ImGui::Checkbox(L("Settings", "sRememberWindowPos", "Remember Window Position"), &settings.rememberWindowPos) || changed;
             changed = ImGui::Checkbox(L("Settings", "sShowFPSStatus", "Show FPS In Status Bar"), &settings.showFPSInStatus) || changed;
@@ -365,15 +485,29 @@ namespace ESPExplorerAE
             sectionSpacing();
 
             {
+                const auto* startupOption = FindStartupTabOption(settings.startupTab);
+                if (ImGui::BeginCombo(L("Settings", "sStartupTab", "Startup Tab"), L(startupOption->section, startupOption->key, startupOption->fallback))) {
+                    for (const auto& option : kStartupTabOptions) {
+                        const bool selected = settings.startupTab == option.value;
+                        if (ImGui::Selectable(L(option.section, option.key, option.fallback), selected)) {
+                            settings.startupTab = option.value;
+                            changed = true;
+                        }
+                        if (selected) {
+                            ImGui::SetItemDefaultFocus();
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+            }
+            blockSpacing();
+
+            {
                 int currentIdx = FontManager::GetCurrentSizeIndex();
-                char previewBuf[16]{};
-                std::snprintf(previewBuf, sizeof(previewBuf), "%.0f px", FontManager::kPresetSizes[currentIdx]);
-                if (ImGui::BeginCombo(L("Settings", "sFontSize", "Font Size"), previewBuf)) {
+                if (ImGui::BeginCombo(L("Settings", "sFontSize", "Font Size"), fontSizeLabels[currentIdx])) {
                     for (int i = 0; i < FontManager::kPresetCount; ++i) {
-                        char label[16]{};
-                        std::snprintf(label, sizeof(label), "%.0f px", FontManager::kPresetSizes[i]);
                         const bool selected = (i == currentIdx);
-                        if (ImGui::Selectable(label, selected)) {
+                        if (ImGui::Selectable(fontSizeLabels[i], selected)) {
                             FontManager::SetCurrentSizeIndex(i);
                             settings.fontSize = FontManager::kPresetSizes[i];
                             changed = true;
@@ -387,25 +521,50 @@ namespace ESPExplorerAE
             }
             blockSpacing();
             changed = ImGui::SliderFloat(L("Settings", "sWindowOpacity", "Window Opacity"), &settings.windowAlpha, 0.50f, 1.0f, "%.2f") || changed;
+            blockSpacing();
+            if (ImGui::Button(L("Settings", "sResetVisualSettings", "Reset Visual Settings"))) {
+                ImGui::OpenPopup("ResetVisualSettingsPopup");
+            }
+
+            if (ImGui::BeginPopupModal(L("Settings", "sResetVisualSettingsTitle", "Reset Visual Settings"), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                ImGui::TextWrapped("%s", L("Settings", "sResetVisualSettingsWarning", "This will reset font size, window opacity, and theme colors to their defaults."));
+                ImGui::Spacing();
+
+                if (ImGui::Button(L("Settings", "sResetVisualSettingsConfirm", "Reset Visuals"))) {
+                    ResetVisualSettings(settings);
+                    FontManager::SetCurrentSizeIndex(FontManager::FindClosestSizeIndex(settings.fontSize));
+                    changed = true;
+                    ImGui::CloseCurrentPopup();
+                }
+
+                ImGui::SameLine();
+                if (ImGui::Button(L("General", "sCancel", "Cancel"))) {
+                    ImGui::CloseCurrentPopup();
+                }
+
+                ImGui::EndPopup();
+            }
             sectionSpacing();
             ImGui::TreePop();
         }
 
         ImGui::Spacing();
 
-        if (ImGui::TreeNodeEx(std::string(L("Settings", "sThemeSection", "Theme") + std::string("##SettingsThemeSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+        if (BeginSection("SettingsThemeSection", L("Settings", "sThemeSection", "Theme"))) {
             sectionSpacing();
             if (ImGui::BeginCombo(L("Settings", "sColorPreset", ""), L("Settings", "sSelectPreset", ""))) {
                 for (int i = 0; i < kColorPresetCount; ++i) {
                     const auto& preset = kColorPresets[i];
                     ImVec4 previewColor(preset.accentR, preset.accentG, preset.accentB, preset.accentA);
-                    ImGui::ColorButton(("##PresetColor" + std::to_string(i)).c_str(), previewColor, ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoBorder, ImVec2(14, 14));
+                    ImGui::PushID(i);
+                    ImGui::ColorButton("##PresetColor", previewColor, ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoBorder, ImVec2(14, 14));
                     ImGui::SameLine();
                     if (ImGui::Selectable(L("Settings", preset.key, ""), false)) {
                         ApplyColorPreset(settings, preset);
                         settings.syncPipboyColor = false;
                         changed = true;
                     }
+                    ImGui::PopID();
                 }
                 ImGui::EndCombo();
             }
@@ -413,7 +572,10 @@ namespace ESPExplorerAE
             blockSpacing();
             if (ImGui::Checkbox(L("Settings", "sSyncPipboyColor", "Sync With Pip-Boy Color"), &settings.syncPipboyColor)) {
                 if (settings.syncPipboyColor) {
-                    ApplyPipboyColorToTheme(settings);
+                    const auto refreshedPipboyColor = PollPipboyColorCache(true);
+                    if (refreshedPipboyColor.valid) {
+                        ApplyPipboyColorToTheme(settings, refreshedPipboyColor.r, refreshedPipboyColor.g, refreshedPipboyColor.b);
+                    }
                 }
                 changed = true;
             }
@@ -423,10 +585,8 @@ namespace ESPExplorerAE
             }
 
             if (settings.syncPipboyColor) {
-                static int pipboyPollCounter{ 0 };
-                if (++pipboyPollCounter >= 60) {
-                    pipboyPollCounter = 0;
-                    ApplyPipboyColorToTheme(settings);
+                if (pipboyColor.valid) {
+                    ApplyPipboyColorToTheme(settings, pipboyColor.r, pipboyColor.g, pipboyColor.b);
                 }
             }
 
@@ -459,12 +619,11 @@ namespace ESPExplorerAE
                     changed = true;
                 }
             } else {
-                float pipR = 0, pipG = 0, pipB = 0;
-                if (TryReadPipboyColor(pipR, pipG, pipB)) {
-                    ImVec4 pipColor(pipR, pipG, pipB, 1.0f);
+                if (pipboyColor.valid) {
+                    ImVec4 pipColor(pipboyColor.r, pipboyColor.g, pipboyColor.b, 1.0f);
                     ImGui::ColorButton("##PipboyPreview", pipColor, ImGuiColorEditFlags_NoTooltip, ImVec2(14, 14));
                     ImGui::SameLine();
-                    ImGui::TextDisabled("%s: R=%.2f G=%.2f B=%.2f", L("Settings", "sPipboyColor", ""), pipR, pipG, pipB);
+                    ImGui::TextDisabled("%s: R=%.2f G=%.2f B=%.2f", L("Settings", "sPipboyColor", ""), pipboyColor.r, pipboyColor.g, pipboyColor.b);
                 }
             }
 
@@ -480,7 +639,7 @@ namespace ESPExplorerAE
 
         ImGui::Spacing();
 
-        if (ImGui::TreeNodeEx(std::string(L("Settings", "sLocalizationSection", "Localization") + std::string("##SettingsLocalizationSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+        if (BeginSection("SettingsLocalizationSection", L("Settings", "sLocalizationSection", "Localization"))) {
             sectionSpacing();
             if (ImGui::BeginCombo(L("Settings", "sLanguage", "Language"), currentLanguage.c_str())) {
                 for (const auto& code : languages) {
@@ -503,7 +662,7 @@ namespace ESPExplorerAE
 
         ImGui::Spacing();
 
-        if (ImGui::TreeNodeEx(std::string(L("Settings", "sControllerSection", "Controller") + std::string("##SettingsControllerSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+        if (BeginSection("SettingsControllerSection", L("Settings", "sControllerSection", "Controller"))) {
             sectionSpacing();
             changed = ImGui::Checkbox(L("Settings", "sEnableGamepadNav", ""), &settings.enableGamepadNav) || changed;
             sectionSpacing();
@@ -518,7 +677,7 @@ namespace ESPExplorerAE
 
         ImGui::Spacing();
 
-        if (ImGui::TreeNodeEx(std::string(L("Settings", "sLoggingSection", "Logging") + std::string("##SettingsLoggingSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+        if (BeginSection("SettingsLoggingSection", L("Settings", "sLoggingSection", "Logging"))) {
             sectionSpacing();
             changed = ImGui::Checkbox(L("Settings", "sShowLogsTab", "Show Logs Tab"), &settings.showLogsTab) || changed;
             if (ImGui::Checkbox(L("Settings", "sVerboseLogging", "Verbose Logging"), &settings.verboseLogging)) {
@@ -531,11 +690,40 @@ namespace ESPExplorerAE
 
         ImGui::Spacing();
 
-        if (ImGui::TreeNodeEx(std::string(L("Settings", "sDebugSection", "Debug") + std::string("##SettingsDebugSection")).c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+        if (BeginSection("SettingsDebugSection", L("Settings", "sDebugSection", "Debug"))) {
             sectionSpacing();
             changed = ImGui::Checkbox(L("Settings", "sShowMenuResolutionStatus", "Show Menu Resolution In Status Bar"), &settings.showMenuResolutionInStatus) || changed;
             sectionSpacing();
             ImGui::TreePop();
+        }
+
+        ImGui::Spacing();
+        if (ImGui::Button(L("Settings", "sResetAllSettings", "Reset All Settings"))) {
+            ImGui::OpenPopup("ResetAllSettingsPopup");
+        }
+
+        if (ImGui::BeginPopupModal(L("Settings", "sResetAllSettingsTitle", "Reset All Settings"), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextWrapped("%s", L("Settings", "sResetAllSettingsWarning", "This will reset all saved settings, window state, filters, favorites, theme, and language to their defaults."));
+            ImGui::Spacing();
+
+            if (ImGui::Button(L("Settings", "sResetAllSettingsConfirm", "Reset to Defaults"))) {
+                const bool resetLanguage = settings.language != Settings{}.language;
+                Config::ResetToDefaults();
+                waitingForToggleKey = false;
+                currentLanguage = settings.language;
+                FontManager::SetCurrentSizeIndex(FontManager::FindClosestSizeIndex(settings.fontSize));
+                Logger::SetVerboseEnabled(settings.verboseLogging);
+                changed = true;
+                languageChanged = languageChanged || resetLanguage;
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button(L("General", "sCancel", "Cancel"))) {
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
         }
 
         ImGui::Spacing();

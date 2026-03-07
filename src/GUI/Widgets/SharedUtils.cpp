@@ -5,23 +5,25 @@
 
 namespace ESPExplorerAE
 {
+    namespace
+    {
+        char FoldCase(unsigned char ch)
+        {
+            return static_cast<char>(std::tolower(ch));
+        }
+    }
+
     bool SharedUtils::ContainsCaseInsensitive(std::string_view text, std::string_view query)
     {
         if (query.empty()) {
             return true;
         }
 
-        std::string textLower(text.begin(), text.end());
-        std::string queryLower(query.begin(), query.end());
-
-        std::ranges::transform(textLower, textLower.begin(), [](unsigned char ch) {
-            return static_cast<char>(std::tolower(ch));
-        });
-        std::ranges::transform(queryLower, queryLower.begin(), [](unsigned char ch) {
-            return static_cast<char>(std::tolower(ch));
+        const auto match = std::search(text.begin(), text.end(), query.begin(), query.end(), [](char left, char right) {
+            return FoldCase(static_cast<unsigned char>(left)) == FoldCase(static_cast<unsigned char>(right));
         });
 
-        return textLower.find(queryLower) != std::string::npos;
+        return match != text.end();
     }
 
     bool SharedUtils::ContainsByMode(std::string_view text, std::string_view query, bool caseSensitive)

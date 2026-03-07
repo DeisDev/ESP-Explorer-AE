@@ -14,6 +14,7 @@ namespace ESPExplorerAE
         static constexpr int kDefaultSizeIndex = 4;
 
         static bool BuildAll(std::string_view languageCode);
+        static bool EnsureCurrentFontBuilt();
 
         static ImFont* GetFont(int sizeIndex);
         static ImFont* GetCurrentFont();

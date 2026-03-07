@@ -2,12 +2,20 @@
 
 #include <algorithm>
 #include <charconv>
+#include <chrono>
 #include <cstdio>
 
 namespace ESPExplorerAE
 {
     namespace
     {
+        constexpr auto kSaveDebounce = std::chrono::milliseconds(300);
+
+        Settings pendingSettings{};
+        std::filesystem::path pendingConfigPath{};
+        std::chrono::steady_clock::time_point pendingSaveDeadline{};
+        bool pendingSaveRequested{ false };
+
         std::vector<std::uint32_t> ParseFavorites(const std::string_view csv)
         {
             std::vector<std::uint32_t> result;
@@ -61,6 +69,73 @@ namespace ESPExplorerAE
         return std::filesystem::path("Data/F4SE/Plugins/ESPExplorerAE.ini");
     }
 
+    static bool SaveSnapshot(const Settings& settingsSnapshot, const std::filesystem::path& path)
+    {
+        std::filesystem::create_directories(path.parent_path());
+
+        CSimpleIniA ini;
+        ini.SetUnicode();
+
+        ini.SetValue("General", "sLanguage", settingsSnapshot.language.c_str());
+        ini.SetLongValue("General", "iToggleKey", static_cast<long>(settingsSnapshot.toggleKey));
+        ini.SetBoolValue("General", "bShowOnStartup", settingsSnapshot.showOnStartup);
+        ini.SetBoolValue("General", "bNoPauseOnFocusLoss", settingsSnapshot.noPauseOnFocusLoss);
+        ini.SetBoolValue("General", "bPauseGameWhenMenuOpen", settingsSnapshot.pauseGameWhenMenuOpen);
+        ini.SetBoolValue("General", "bHidePlayerHUDWhenMenuOpen", settingsSnapshot.hidePlayerHUDWhenMenuOpen);
+        ini.SetBoolValue("General", "bVerboseLogging", settingsSnapshot.verboseLogging);
+
+        ini.SetDoubleValue("UI", "fFontSize", settingsSnapshot.fontSize);
+        ini.SetDoubleValue("UI", "fWindowAlpha", settingsSnapshot.windowAlpha);
+        ini.SetBoolValue("UI", "bRememberWindowPos", settingsSnapshot.rememberWindowPos);
+        ini.SetValue("UI", "sStartupTab", settingsSnapshot.startupTab.c_str());
+        ini.SetDoubleValue("UI", "fWindowX", settingsSnapshot.windowX);
+        ini.SetDoubleValue("UI", "fWindowY", settingsSnapshot.windowY);
+        ini.SetDoubleValue("UI", "fWindowW", settingsSnapshot.windowW);
+        ini.SetDoubleValue("UI", "fWindowH", settingsSnapshot.windowH);
+        ini.SetBoolValue("UI", "bShowFPSInStatus", settingsSnapshot.showFPSInStatus);
+        ini.SetValue("UI", "sLastActiveTab", settingsSnapshot.lastActiveTab.c_str());
+
+        ini.SetDoubleValue("Theme", "fAccentR", settingsSnapshot.themeAccentR);
+        ini.SetDoubleValue("Theme", "fAccentG", settingsSnapshot.themeAccentG);
+        ini.SetDoubleValue("Theme", "fAccentB", settingsSnapshot.themeAccentB);
+        ini.SetDoubleValue("Theme", "fAccentA", settingsSnapshot.themeAccentA);
+        ini.SetDoubleValue("Theme", "fWindowR", settingsSnapshot.themeWindowR);
+        ini.SetDoubleValue("Theme", "fWindowG", settingsSnapshot.themeWindowG);
+        ini.SetDoubleValue("Theme", "fWindowB", settingsSnapshot.themeWindowB);
+        ini.SetDoubleValue("Theme", "fWindowA", settingsSnapshot.themeWindowA);
+        ini.SetDoubleValue("Theme", "fPanelR", settingsSnapshot.themePanelR);
+        ini.SetDoubleValue("Theme", "fPanelG", settingsSnapshot.themePanelG);
+        ini.SetDoubleValue("Theme", "fPanelB", settingsSnapshot.themePanelB);
+        ini.SetDoubleValue("Theme", "fPanelA", settingsSnapshot.themePanelA);
+        ini.SetBoolValue("Theme", "bSyncPipboyColor", settingsSnapshot.syncPipboyColor);
+
+        ini.SetBoolValue("Filters", "bHideNonPlayable", settingsSnapshot.hideNonPlayable);
+        ini.SetBoolValue("Filters", "bHideDeleted", settingsSnapshot.hideDeleted);
+        ini.SetBoolValue("Filters", "bHideNoName", settingsSnapshot.hideNoName);
+        ini.SetBoolValue("Filters", "bListShowPlayable", settingsSnapshot.listShowPlayable);
+        ini.SetBoolValue("Filters", "bListShowNonPlayable", settingsSnapshot.listShowNonPlayable);
+        ini.SetBoolValue("Filters", "bListShowNamed", settingsSnapshot.listShowNamed);
+        ini.SetBoolValue("Filters", "bListShowUnnamed", settingsSnapshot.listShowUnnamed);
+        ini.SetBoolValue("Filters", "bListShowDeleted", settingsSnapshot.listShowDeleted);
+        ini.SetBoolValue("Filters", "bPluginGlobalSearchMode", settingsSnapshot.pluginGlobalSearchMode);
+        ini.SetBoolValue("Filters", "bPluginShowUnknownCategories", settingsSnapshot.pluginShowUnknownCategories);
+        ini.SetLongValue("UI", "iRecentRecordsLimit", (std::clamp)(settingsSnapshot.recentRecordsLimit, 5, 100));
+        ini.SetBoolValue("UI", "bAutoFocusSearchBars", settingsSnapshot.autoFocusSearchBars);
+        ini.SetBoolValue("UI", "bShowPlayerStatsInStatus", settingsSnapshot.showPlayerStatsInStatus);
+        ini.SetBoolValue("UI", "bShowMenuResolutionInStatus", settingsSnapshot.showMenuResolutionInStatus);
+        ini.SetBoolValue("UI", "bPluginAdvancedDetailsView", settingsSnapshot.pluginAdvancedDetailsView);
+
+        ini.SetBoolValue("Controller", "bEnableGamepadNav", settingsSnapshot.enableGamepadNav);
+
+        ini.SetBoolValue("Logging", "bVerboseLogging", settingsSnapshot.verboseLogging);
+        ini.SetBoolValue("Logging", "bShowLogsTab", settingsSnapshot.showLogsTab);
+
+        const auto favorites = SerializeFavorites(settingsSnapshot.favorites);
+        ini.SetValue("Favorites", "sFormIDs", favorites.c_str());
+
+        return ini.SaveFile(path.string().c_str()) >= 0;
+    }
+
     bool Config::Load()
     {
         configPath = ResolveConfigPath();
@@ -90,6 +165,7 @@ namespace ESPExplorerAE
         settings.fontSize = static_cast<float>(ini.GetDoubleValue("UI", "fFontSize", 20.0));
         settings.windowAlpha = static_cast<float>(ini.GetDoubleValue("UI", "fWindowAlpha", 0.95));
         settings.rememberWindowPos = ini.GetBoolValue("UI", "bRememberWindowPos", true);
+        settings.startupTab = ini.GetValue("UI", "sStartupTab", "__last__");
         settings.windowX = static_cast<float>(ini.GetDoubleValue("UI", "fWindowX", 100.0));
         settings.windowY = static_cast<float>(ini.GetDoubleValue("UI", "fWindowY", 100.0));
         settings.windowW = static_cast<float>(ini.GetDoubleValue("UI", "fWindowW", 1440.0));
@@ -141,68 +217,47 @@ namespace ESPExplorerAE
             configPath = ResolveConfigPath();
         }
 
-        std::filesystem::create_directories(configPath.parent_path());
+        pendingSettings = settings;
+        pendingConfigPath = configPath;
+        pendingSaveRequested = false;
 
-        CSimpleIniA ini;
-        ini.SetUnicode();
+        return SaveSnapshot(settings, configPath);
+    }
 
-        ini.SetValue("General", "sLanguage", settings.language.c_str());
-        ini.SetLongValue("General", "iToggleKey", static_cast<long>(settings.toggleKey));
-        ini.SetBoolValue("General", "bShowOnStartup", settings.showOnStartup);
-        ini.SetBoolValue("General", "bNoPauseOnFocusLoss", settings.noPauseOnFocusLoss);
-        ini.SetBoolValue("General", "bPauseGameWhenMenuOpen", settings.pauseGameWhenMenuOpen);
-        ini.SetBoolValue("General", "bHidePlayerHUDWhenMenuOpen", settings.hidePlayerHUDWhenMenuOpen);
-        ini.SetBoolValue("General", "bVerboseLogging", settings.verboseLogging);
+    void Config::RequestSave()
+    {
+        if (configPath.empty()) {
+            configPath = ResolveConfigPath();
+        }
 
-        ini.SetDoubleValue("UI", "fFontSize", settings.fontSize);
-        ini.SetDoubleValue("UI", "fWindowAlpha", settings.windowAlpha);
-        ini.SetBoolValue("UI", "bRememberWindowPos", settings.rememberWindowPos);
-        ini.SetDoubleValue("UI", "fWindowX", settings.windowX);
-        ini.SetDoubleValue("UI", "fWindowY", settings.windowY);
-        ini.SetDoubleValue("UI", "fWindowW", settings.windowW);
-        ini.SetDoubleValue("UI", "fWindowH", settings.windowH);
-        ini.SetBoolValue("UI", "bShowFPSInStatus", settings.showFPSInStatus);
-        ini.SetValue("UI", "sLastActiveTab", settings.lastActiveTab.c_str());
+        pendingSettings = settings;
+        pendingConfigPath = configPath;
+        pendingSaveDeadline = std::chrono::steady_clock::now() + kSaveDebounce;
+        pendingSaveRequested = true;
+    }
 
-        ini.SetDoubleValue("Theme", "fAccentR", settings.themeAccentR);
-        ini.SetDoubleValue("Theme", "fAccentG", settings.themeAccentG);
-        ini.SetDoubleValue("Theme", "fAccentB", settings.themeAccentB);
-        ini.SetDoubleValue("Theme", "fAccentA", settings.themeAccentA);
-        ini.SetDoubleValue("Theme", "fWindowR", settings.themeWindowR);
-        ini.SetDoubleValue("Theme", "fWindowG", settings.themeWindowG);
-        ini.SetDoubleValue("Theme", "fWindowB", settings.themeWindowB);
-        ini.SetDoubleValue("Theme", "fWindowA", settings.themeWindowA);
-        ini.SetDoubleValue("Theme", "fPanelR", settings.themePanelR);
-        ini.SetDoubleValue("Theme", "fPanelG", settings.themePanelG);
-        ini.SetDoubleValue("Theme", "fPanelB", settings.themePanelB);
-        ini.SetDoubleValue("Theme", "fPanelA", settings.themePanelA);
-        ini.SetBoolValue("Theme", "bSyncPipboyColor", settings.syncPipboyColor);
+    bool Config::FlushPendingSaveIfDue()
+    {
+        if (!pendingSaveRequested || std::chrono::steady_clock::now() < pendingSaveDeadline) {
+            return false;
+        }
 
-        ini.SetBoolValue("Filters", "bHideNonPlayable", settings.hideNonPlayable);
-        ini.SetBoolValue("Filters", "bHideDeleted", settings.hideDeleted);
-        ini.SetBoolValue("Filters", "bHideNoName", settings.hideNoName);
-        ini.SetBoolValue("Filters", "bListShowPlayable", settings.listShowPlayable);
-        ini.SetBoolValue("Filters", "bListShowNonPlayable", settings.listShowNonPlayable);
-        ini.SetBoolValue("Filters", "bListShowNamed", settings.listShowNamed);
-        ini.SetBoolValue("Filters", "bListShowUnnamed", settings.listShowUnnamed);
-        ini.SetBoolValue("Filters", "bListShowDeleted", settings.listShowDeleted);
-        ini.SetBoolValue("Filters", "bPluginGlobalSearchMode", settings.pluginGlobalSearchMode);
-        ini.SetBoolValue("Filters", "bPluginShowUnknownCategories", settings.pluginShowUnknownCategories);
-        ini.SetLongValue("UI", "iRecentRecordsLimit", (std::clamp)(settings.recentRecordsLimit, 5, 100));
-        ini.SetBoolValue("UI", "bAutoFocusSearchBars", settings.autoFocusSearchBars);
-        ini.SetBoolValue("UI", "bShowPlayerStatsInStatus", settings.showPlayerStatsInStatus);
-        ini.SetBoolValue("UI", "bShowMenuResolutionInStatus", settings.showMenuResolutionInStatus);
-        ini.SetBoolValue("UI", "bPluginAdvancedDetailsView", settings.pluginAdvancedDetailsView);
+        return FlushPendingSave();
+    }
 
-        ini.SetBoolValue("Controller", "bEnableGamepadNav", settings.enableGamepadNav);
+    bool Config::FlushPendingSave()
+    {
+        if (!pendingSaveRequested) {
+            return false;
+        }
 
-        ini.SetBoolValue("Logging", "bVerboseLogging", settings.verboseLogging);
-        ini.SetBoolValue("Logging", "bShowLogsTab", settings.showLogsTab);
+        pendingSaveRequested = false;
+        return SaveSnapshot(pendingSettings, pendingConfigPath);
+    }
 
-        const auto favorites = SerializeFavorites(settings.favorites);
-        ini.SetValue("Favorites", "sFormIDs", favorites.c_str());
-
-        return ini.SaveFile(configPath.string().c_str()) >= 0;
+    void Config::ResetToDefaults()
+    {
+        settings = Settings{};
     }
 
     const Settings& Config::Get()

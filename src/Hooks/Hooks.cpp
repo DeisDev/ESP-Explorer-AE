@@ -37,7 +37,7 @@ namespace ESPExplorerAE
                 return false;
             }
 
-            static const std::array<RE::BSFixedString, 10> blockingMenuNames{
+            static const std::array<RE::BSFixedString, 12> blockingMenuNames{
                 RE::BSFixedString("BarterMenu"),
                 RE::BSFixedString("ContainerMenu"),
                 RE::BSFixedString("DialogueMenu"),
@@ -46,8 +46,10 @@ namespace ESPExplorerAE
                 RE::BSFixedString("LooksMenu"),
                 RE::BSFixedString("PauseMenu"),
                 RE::BSFixedString("PipboyMenu"),
+                RE::BSFixedString("PipboyWorkshopMenu"),
                 RE::BSFixedString("SleepWaitMenu"),
-                RE::BSFixedString("TerminalMenu")
+                RE::BSFixedString("TerminalMenu"),
+                RE::BSFixedString("WorkshopMenu")
             };
 
             for (const auto& menuName : blockingMenuNames) {
@@ -56,8 +58,7 @@ namespace ESPExplorerAE
                 }
             }
 
-            return ui->GetMenuOpen(RE::BSFixedString("PipboyWorkshopMenu")) ||
-                   ui->GetMenuOpen(RE::BSFixedString("WorkshopMenu"));
+            return false;
         }
 
         bool ShouldCaptureMenuInput()

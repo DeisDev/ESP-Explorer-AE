@@ -30,6 +30,24 @@ namespace ESPExplorerAE
 {
     namespace
     {
+        char FoldCase(unsigned char ch)
+        {
+            return static_cast<char>(std::tolower(ch));
+        }
+
+        bool ContainsCaseInsensitive(std::string_view text, std::string_view query)
+        {
+            if (query.empty()) {
+                return true;
+            }
+
+            const auto match = std::search(text.begin(), text.end(), query.begin(), query.end(), [](char left, char right) {
+                return FoldCase(static_cast<unsigned char>(left)) == FoldCase(static_cast<unsigned char>(right));
+            });
+
+            return match != text.end();
+        }
+
         std::string FormatPluginFormIDPrefix(const RE::TESFile& file)
         {
             char buffer[16]{};
@@ -70,12 +88,9 @@ namespace ESPExplorerAE
                     return RE::BSContainer::ForEachResult::kContinue;
                 }
 
-                std::string lower(editorId);
-                std::ranges::transform(lower, lower.begin(), [](unsigned char ch) {
-                    return static_cast<char>(std::tolower(ch));
-                });
-
-                if (lower.contains("nonplayable") || lower.contains("non_playable") || lower.contains("non-playable")) {
+                if (ContainsCaseInsensitive(editorId, "nonplayable") ||
+                    ContainsCaseInsensitive(editorId, "non_playable") ||
+                    ContainsCaseInsensitive(editorId, "non-playable")) {
                     found = true;
                     return RE::BSContainer::ForEachResult::kStop;
                 }
@@ -139,6 +154,32 @@ namespace ESPExplorerAE
 
         FormCache newCache{};
         std::unordered_map<std::uint32_t, std::uint32_t> newPlacedReferenceCounts{};
+
+        const auto& weaponForms = dataHandler->GetFormArray<RE::TESObjectWEAP>();
+        const auto& armorForms = dataHandler->GetFormArray<RE::TESObjectARMO>();
+        const auto& ammoForms = dataHandler->GetFormArray<RE::TESAmmo>();
+        const auto& miscForms = dataHandler->GetFormArray<RE::TESObjectMISC>();
+        const auto& npcForms = dataHandler->GetFormArray<RE::TESNPC>();
+        const auto& activatorForms = dataHandler->GetFormArray<RE::TESObjectACTI>();
+        const auto& containerForms = dataHandler->GetFormArray<RE::TESObjectCONT>();
+        const auto& staticForms = dataHandler->GetFormArray<RE::TESObjectSTAT>();
+        const auto& furnitureForms = dataHandler->GetFormArray<RE::TESFurniture>();
+        const auto& spellForms = dataHandler->GetFormArray<RE::SpellItem>();
+        const auto& perkForms = dataHandler->GetFormArray<RE::BGSPerk>();
+        const auto& cellForms = dataHandler->GetFormArray<RE::TESObjectCELL>();
+
+        newCache.weapons.reserve(weaponForms.size());
+        newCache.armors.reserve(armorForms.size());
+        newCache.ammo.reserve(ammoForms.size());
+        newCache.misc.reserve(miscForms.size());
+        newCache.npcs.reserve(npcForms.size());
+        newCache.activators.reserve(activatorForms.size());
+        newCache.containers.reserve(containerForms.size());
+        newCache.statics.reserve(staticForms.size());
+        newCache.furniture.reserve(furnitureForms.size());
+        newCache.spells.reserve(spellForms.size());
+        newCache.perks.reserve(perkForms.size());
+        newCache.cells.reserve(cellForms.size());
 
         {
             const auto& [allFormsMap, allFormsLock] = RE::TESForm::GetAllForms();
@@ -216,7 +257,7 @@ namespace ESPExplorerAE
 
         newPlugins.insert(newPlugins.end(), lightPlugins.begin(), lightPlugins.end());
 
-        for (auto* form : dataHandler->GetFormArray<RE::TESObjectWEAP>()) {
+        for (auto* form : weaponForms) {
             if (!form) {
                 continue;
             }
@@ -229,12 +270,12 @@ namespace ESPExplorerAE
             entry.isDeleted = form->IsDeleted();
             entry.isPlayable = IsPlayable(form);
 
-            if (PassesFilters(form, entry.name, entry.isPlayable)) {
-                newCache.weapons.push_back(entry);
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.weapons.push_back(std::move(entry));
             }
         }
 
-        for (auto* form : dataHandler->GetFormArray<RE::TESObjectARMO>()) {
+        for (auto* form : armorForms) {
             if (!form) {
                 continue;
             }
@@ -247,12 +288,12 @@ namespace ESPExplorerAE
             entry.isDeleted = form->IsDeleted();
             entry.isPlayable = IsPlayable(form);
 
-            if (PassesFilters(form, entry.name, entry.isPlayable)) {
-                newCache.armors.push_back(entry);
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.armors.push_back(std::move(entry));
             }
         }
 
-        for (auto* form : dataHandler->GetFormArray<RE::TESAmmo>()) {
+        for (auto* form : ammoForms) {
             if (!form) {
                 continue;
             }
@@ -265,12 +306,12 @@ namespace ESPExplorerAE
             entry.isDeleted = form->IsDeleted();
             entry.isPlayable = IsPlayable(form);
 
-            if (PassesFilters(form, entry.name, entry.isPlayable)) {
-                newCache.ammo.push_back(entry);
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.ammo.push_back(std::move(entry));
             }
         }
 
-        for (auto* form : dataHandler->GetFormArray<RE::TESObjectMISC>()) {
+        for (auto* form : miscForms) {
             if (!form) {
                 continue;
             }
@@ -283,12 +324,12 @@ namespace ESPExplorerAE
             entry.isDeleted = form->IsDeleted();
             entry.isPlayable = IsPlayable(form);
 
-            if (PassesFilters(form, entry.name, entry.isPlayable)) {
-                newCache.misc.push_back(entry);
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.misc.push_back(std::move(entry));
             }
         }
 
-        for (auto* form : dataHandler->GetFormArray<RE::TESNPC>()) {
+        for (auto* form : npcForms) {
             if (!form) {
                 continue;
             }
@@ -302,12 +343,12 @@ namespace ESPExplorerAE
 
             entry.category = GetNPCRaceCategory(form);
 
-            if (PassesFilters(form, entry.name, entry.isPlayable)) {
-                newCache.npcs.push_back(entry);
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.npcs.push_back(std::move(entry));
             }
         }
 
-        for (auto* form : dataHandler->GetFormArray<RE::TESObjectACTI>()) {
+        for (auto* form : activatorForms) {
             if (!form) {
                 continue;
             }
@@ -320,12 +361,12 @@ namespace ESPExplorerAE
             entry.isDeleted = form->IsDeleted();
             entry.isPlayable = IsPlayable(form);
 
-            if (PassesFilters(form, entry.name, entry.isPlayable)) {
-                newCache.activators.push_back(entry);
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.activators.push_back(std::move(entry));
             }
         }
 
-        for (auto* form : dataHandler->GetFormArray<RE::TESObjectCONT>()) {
+        for (auto* form : containerForms) {
             if (!form) {
                 continue;
             }
@@ -338,12 +379,12 @@ namespace ESPExplorerAE
             entry.isDeleted = form->IsDeleted();
             entry.isPlayable = IsPlayable(form);
 
-            if (PassesFilters(form, entry.name, entry.isPlayable)) {
-                newCache.containers.push_back(entry);
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.containers.push_back(std::move(entry));
             }
         }
 
-        for (auto* form : dataHandler->GetFormArray<RE::TESObjectSTAT>()) {
+        for (auto* form : staticForms) {
             if (!form) {
                 continue;
             }
@@ -356,12 +397,12 @@ namespace ESPExplorerAE
             entry.isDeleted = form->IsDeleted();
             entry.isPlayable = IsPlayable(form);
 
-            if (PassesFilters(form, entry.name, entry.isPlayable)) {
-                newCache.statics.push_back(entry);
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.statics.push_back(std::move(entry));
             }
         }
 
-        for (auto* form : dataHandler->GetFormArray<RE::TESFurniture>()) {
+        for (auto* form : furnitureForms) {
             if (!form) {
                 continue;
             }
@@ -374,12 +415,12 @@ namespace ESPExplorerAE
             entry.isDeleted = form->IsDeleted();
             entry.isPlayable = IsPlayable(form);
 
-            if (PassesFilters(form, entry.name, entry.isPlayable)) {
-                newCache.furniture.push_back(entry);
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.furniture.push_back(std::move(entry));
             }
         }
 
-        for (auto* form : dataHandler->GetFormArray<RE::SpellItem>()) {
+        for (auto* form : spellForms) {
             if (!form) {
                 continue;
             }
@@ -392,12 +433,12 @@ namespace ESPExplorerAE
             entry.isDeleted = form->IsDeleted();
             entry.isPlayable = IsPlayable(form);
 
-            if (PassesFilters(form, entry.name, entry.isPlayable)) {
-                newCache.spells.push_back(entry);
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.spells.push_back(std::move(entry));
             }
         }
 
-        for (auto* form : dataHandler->GetFormArray<RE::BGSPerk>()) {
+        for (auto* form : perkForms) {
             if (!form) {
                 continue;
             }
@@ -410,22 +451,26 @@ namespace ESPExplorerAE
             entry.isDeleted = form->IsDeleted();
             entry.isPlayable = IsPlayable(form);
 
-            if (PassesFilters(form, entry.name, entry.isPlayable)) {
-                newCache.perks.push_back(entry);
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.perks.push_back(std::move(entry));
             }
         }
 
-        for (const auto& entry : newCache.allRecords) {
-            auto* form = RE::TESForm::GetFormByID(entry.formID);
-            if (!form || form->GetFormType() != RE::ENUM_FORM_ID::kCELL) {
+        const auto& settings = Config::Get();
+        for (auto* form : cellForms) {
+            if (!form) {
                 continue;
             }
 
-            FormEntry cellEntry = entry;
+            FormEntry cellEntry{};
+            cellEntry.formID = form->GetFormID();
             cellEntry.category = "CELL";
+            cellEntry.name = GetFormName(form);
+            cellEntry.sourcePlugin = GetSourcePluginName(form);
+            cellEntry.isDeleted = form->IsDeleted();
             cellEntry.isPlayable = true;
 
-            if (!cellEntry.name.empty() || !Config::Get().hideNoName) {
+            if (!cellEntry.name.empty() || !settings.hideNoName) {
                 newCache.cells.push_back(std::move(cellEntry));
             }
         }
@@ -504,15 +549,11 @@ namespace ESPExplorerAE
         return it->second;
     }
 
-    bool DataManager::PassesFilters(RE::TESForm* form, std::string_view name, bool isPlayable)
+    bool DataManager::PassesFilters(bool isDeleted, std::string_view name, bool isPlayable)
     {
-        if (!form) {
-            return false;
-        }
-
         const auto& settings = Config::Get();
 
-        if (settings.hideDeleted && form->IsDeleted()) {
+        if (settings.hideDeleted && isDeleted) {
             return false;
         }
 

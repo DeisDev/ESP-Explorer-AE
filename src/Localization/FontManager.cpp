@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <fstream>
 
 namespace ESPExplorerAE
 {
@@ -31,11 +30,6 @@ namespace ESPExplorerAE
             }
 
             if (!std::filesystem::exists(fontPath)) {
-                return nullptr;
-            }
-
-            std::ifstream stream(fontPath, std::ios::binary);
-            if (!stream.good()) {
                 return nullptr;
             }
 
@@ -130,23 +124,30 @@ namespace ESPExplorerAE
             return false;
         }
 
+        currentLanguageCode = std::string(languageCode);
+
         io.Fonts->Clear();
         for (int i = 0; i < kPresetCount; ++i) {
             fonts[i] = nullptr;
         }
 
-        currentLanguageCode = std::string(languageCode);
         const auto fontsDir = ResolveFontsDirectory();
+        fonts[currentSizeIndex] = BuildOneSize(io.Fonts, kPresetSizes[currentSizeIndex], currentLanguageCode, fontsDir);
+        return fonts[currentSizeIndex] != nullptr;
+    }
 
-        bool anyBuilt = false;
-        for (int i = 0; i < kPresetCount; ++i) {
-            fonts[i] = BuildOneSize(io.Fonts, kPresetSizes[i], languageCode, fontsDir);
-            if (fonts[i]) {
-                anyBuilt = true;
-            }
+    bool FontManager::EnsureCurrentFontBuilt()
+    {
+        if (fonts[currentSizeIndex]) {
+            return false;
         }
 
-        return anyBuilt;
+        pendingLanguageCode = currentLanguageCode.empty() ? pendingLanguageCode : currentLanguageCode;
+        if (pendingLanguageCode.empty()) {
+            pendingLanguageCode = "en";
+        }
+        pendingRebuild = true;
+        return true;
     }
 
     ImFont* FontManager::GetFont(int sizeIndex)
@@ -171,6 +172,7 @@ namespace ESPExplorerAE
     {
         if (index >= 0 && index < kPresetCount) {
             currentSizeIndex = index;
+            EnsureCurrentFontBuilt();
         }
     }
 

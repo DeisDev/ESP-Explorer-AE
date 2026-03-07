@@ -83,7 +83,7 @@ namespace ESPExplorerAE
         static std::uint32_t GetPlacedReferenceCount(std::uint32_t formID);
 
     private:
-        static bool PassesFilters(RE::TESForm* form, std::string_view name, bool isPlayable);
+        static bool PassesFilters(bool isDeleted, std::string_view name, bool isPlayable);
         static std::string GetFormName(RE::TESForm* form);
         static std::string GetSourcePluginName(RE::TESForm* form);
         static bool IsPlayable(RE::TESForm* form);

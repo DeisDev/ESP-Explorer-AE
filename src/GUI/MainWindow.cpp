@@ -46,6 +46,24 @@ namespace ESPExplorerAE
 {
     namespace
     {
+        char FoldCase(unsigned char ch)
+        {
+            return static_cast<char>(std::tolower(ch));
+        }
+
+        constexpr auto kStartupTabLastActive = "__last__";
+        constexpr std::array<std::string_view, 9> kMainTabOrder{
+            "Plugin Browser",
+            "Player",
+            "Item Browser",
+            "NPC Browser",
+            "Cell Browser",
+            "Object Browser",
+            "Spells & Perks",
+            "Settings",
+            "Logs"
+        };
+
         std::string pluginSearch{};
         std::string itemSearch{};
         std::string selectedPluginFilter{};
@@ -155,6 +173,58 @@ namespace ESPExplorerAE
             return (std::max)(width, minimumWidth);
         }
 
+        struct MainTabLabelsCache
+        {
+            std::uint64_t dataVersion{ (std::numeric_limits<std::uint64_t>::max)() };
+            std::string languageCode;
+            std::string pluginLabel;
+            std::string playerLabel;
+            std::string itemLabel;
+            std::string npcLabel;
+            std::string cellLabel;
+            std::string objectLabel;
+            std::string spellPerkLabel;
+            std::string settingsLabel;
+            std::string logsLabel;
+        };
+
+        const MainTabLabelsCache& GetMainTabLabels(const FormCategoryCounts& counts, std::uint64_t dataVersion)
+        {
+            static MainTabLabelsCache cache;
+            const auto currentLanguage = Language::GetCurrentLanguageCode();
+
+            if (cache.dataVersion == dataVersion && cache.languageCode == currentLanguage) {
+                return cache;
+            }
+
+            cache.dataVersion = dataVersion;
+            cache.languageCode = currentLanguage;
+
+            char labelBuffer[80]{};
+
+            cache.pluginLabel = L("PluginBrowser", "sBrowserTab", "Plugin Browser");
+            cache.playerLabel = L("Player", "sTabName", "Player");
+            std::snprintf(labelBuffer, sizeof(labelBuffer), "%s (%zu)###MainTabItem", L("Items", "sBrowserTab", "Item Browser"), counts.weapons + counts.armors + counts.ammo + counts.misc);
+            cache.itemLabel = labelBuffer;
+            std::snprintf(labelBuffer, sizeof(labelBuffer), "%s (%zu)###MainTabNPC", L("NPCs", "sBrowserTab", "NPC Browser"), counts.npcs);
+            cache.npcLabel = labelBuffer;
+            std::snprintf(labelBuffer, sizeof(labelBuffer), "%s (%zu)###MainTabCell", L("Cells", "sBrowserTab", "Cell Browser"), counts.cells);
+            cache.cellLabel = labelBuffer;
+            std::snprintf(labelBuffer, sizeof(labelBuffer), "%s (%zu)###MainTabObject", L("Objects", "sBrowserTab", "Object Browser"), counts.activators + counts.containers + counts.statics + counts.furniture);
+            cache.objectLabel = labelBuffer;
+            std::snprintf(labelBuffer, sizeof(labelBuffer), "%s (%zu)###MainTabSpells", L("Spells", "sBrowserTab", "Spells & Perks"), counts.spells + counts.perks);
+            cache.spellPerkLabel = labelBuffer;
+            cache.settingsLabel = L("Settings", "sTabName", "Settings");
+            cache.logsLabel = L("Logs", "sTabName", "Logs");
+
+            return cache;
+        }
+
+        std::size_t GetVisibleTabCount(bool showLogsTab)
+        {
+            return showLogsTab ? kMainTabOrder.size() : (kMainTabOrder.size() - 1);
+        }
+
         std::vector<FormEntry> ApplyLocalRecordFilters(const std::vector<FormEntry>& entries);
 
         void PersistListFilterSettings()
@@ -163,7 +233,7 @@ namespace ESPExplorerAE
             settings.listShowNonPlayable = showNonPlayableRecords;
             settings.listShowUnnamed = showUnnamedRecords;
             settings.listShowDeleted = showDeletedRecords;
-            Config::Save();
+            Config::RequestSave();
         }
 
         void PersistFilterCheckboxSettings()
@@ -174,12 +244,28 @@ namespace ESPExplorerAE
             settings.listShowDeleted = showDeletedRecords;
             settings.pluginGlobalSearchMode = pluginGlobalSearchMode;
             settings.pluginShowUnknownCategories = showUnknownCategories;
-            Config::Save();
+            Config::RequestSave();
         }
 
         std::vector<FormEntry> ApplyLocalRecordFiltersForTabs(const std::vector<FormEntry>& entries)
         {
             return ApplyLocalRecordFilters(entries);
+        }
+
+        std::string ResolveStartupTab(const Settings& settings)
+        {
+            if (settings.startupTab == kStartupTabLastActive) {
+                if (!settings.lastActiveTab.empty()) {
+                    return settings.lastActiveTab;
+                }
+                return "Plugin Browser";
+            }
+
+            if (!settings.startupTab.empty()) {
+                return settings.startupTab;
+            }
+
+            return "Plugin Browser";
         }
 
         void EnsureFavoritesLoaded()
@@ -191,7 +277,7 @@ namespace ESPExplorerAE
             const auto& settings = Config::Get();
             favoriteForms.clear();
             favoriteForms.insert(settings.favorites.begin(), settings.favorites.end());
-            activeMainTab = settings.lastActiveTab;
+            activeMainTab = ResolveStartupTab(settings);
             if (!settings.showLogsTab && activeMainTab == "Logs") {
                 activeMainTab = "Plugin Browser";
             }
@@ -209,7 +295,7 @@ namespace ESPExplorerAE
         {
             auto& settings = Config::GetMutable();
             settings.favorites.assign(favoriteForms.begin(), favoriteForms.end());
-            Config::Save();
+            Config::RequestSave();
         }
 
         const char* TryGetEditorID(std::uint32_t formID);
@@ -220,17 +306,11 @@ namespace ESPExplorerAE
                 return true;
             }
 
-            std::string textLower(text.begin(), text.end());
-            std::string queryLower(query.begin(), query.end());
-
-            std::ranges::transform(textLower, textLower.begin(), [](unsigned char ch) {
-                return static_cast<char>(std::tolower(ch));
-            });
-            std::ranges::transform(queryLower, queryLower.begin(), [](unsigned char ch) {
-                return static_cast<char>(std::tolower(ch));
+            const auto match = std::search(text.begin(), text.end(), query.begin(), query.end(), [](char left, char right) {
+                return FoldCase(static_cast<unsigned char>(left)) == FoldCase(static_cast<unsigned char>(right));
             });
 
-            return textLower.find(queryLower) != std::string::npos;
+            return match != text.end();
         }
 
         bool ContainsByMode(std::string_view text, std::string_view query, bool caseSensitive)
@@ -841,17 +921,7 @@ namespace ESPExplorerAE
 
             const auto totalForms = counts.weapons + counts.armors + counts.ammo + counts.misc + counts.npcs +
                                     counts.activators + counts.containers + counts.statics + counts.furniture + counts.spells + counts.perks + counts.cells;
-
-            char itemTabLabel[64]{};
-            char npcTabLabel[64]{};
-            char cellTabLabel[64]{};
-            char objectTabLabel[64]{};
-            char spellPerkTabLabel[64]{};
-            std::snprintf(itemTabLabel, sizeof(itemTabLabel), "%s (%zu)###MainTabItem", L("Items", "sBrowserTab", "Item Browser"), counts.weapons + counts.armors + counts.ammo + counts.misc);
-            std::snprintf(npcTabLabel, sizeof(npcTabLabel), "%s (%zu)###MainTabNPC", L("NPCs", "sBrowserTab", "NPC Browser"), counts.npcs);
-            std::snprintf(cellTabLabel, sizeof(cellTabLabel), "%s (%zu)###MainTabCell", L("Cells", "sBrowserTab", "Cell Browser"), counts.cells);
-            std::snprintf(objectTabLabel, sizeof(objectTabLabel), "%s (%zu)###MainTabObject", L("Objects", "sBrowserTab", "Object Browser"), counts.activators + counts.containers + counts.statics + counts.furniture);
-            std::snprintf(spellPerkTabLabel, sizeof(spellPerkTabLabel), "%s (%zu)###MainTabSpells", L("Spells", "sBrowserTab", "Spells & Perks"), counts.spells + counts.perks);
+            const auto& tabLabels = GetMainTabLabels(counts, dataVersion);
 
             if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z) && FormActions::CanUndoLastAction()) {
                 FormActions::UndoLastAction();
@@ -863,37 +933,26 @@ namespace ESPExplorerAE
             if (ImGui::BeginChild("MainContentRegion", ImVec2(0.0f, -footerHeight), ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
                 if (ImGui::BeginTabBar("MainTabs")) {
                     static std::string requestedTab{};
-                    std::vector<std::string_view> tabOrder{
-                        "Plugin Browser",
-                        "Player",
-                        "Item Browser",
-                        "NPC Browser",
-                        "Cell Browser",
-                        "Object Browser",
-                        "Spells & Perks",
-                        "Settings"
-                    };
-                    if (settings.showLogsTab) {
-                        tabOrder.push_back("Logs");
-                    } else if (requestedTab == "Logs") {
+                    const auto visibleTabCount = GetVisibleTabCount(settings.showLogsTab);
+                    if (!settings.showLogsTab && requestedTab == "Logs") {
                         requestedTab.clear();
                     }
 
                     if (Config::Get().enableGamepadNav && (GamepadInput::WasTabNextPressed() || GamepadInput::WasTabPrevPressed())) {
                         std::size_t currentIndex = 0;
-                        for (std::size_t i = 0; i < tabOrder.size(); ++i) {
-                            if (activeMainTab == tabOrder[i]) {
+                        for (std::size_t i = 0; i < visibleTabCount; ++i) {
+                            if (activeMainTab == kMainTabOrder[i]) {
                                 currentIndex = i;
                                 break;
                             }
                         }
 
                         if (GamepadInput::WasTabNextPressed()) {
-                            currentIndex = (currentIndex + 1) % tabOrder.size();
+                            currentIndex = (currentIndex + 1) % visibleTabCount;
                         } else {
-                            currentIndex = (currentIndex + tabOrder.size() - 1) % tabOrder.size();
+                            currentIndex = (currentIndex + visibleTabCount - 1) % visibleTabCount;
                         }
-                        requestedTab = tabOrder[currentIndex];
+                        requestedTab = std::string(kMainTabOrder[currentIndex]);
                     }
 
                     auto tabFlags = [&](const char* tabName) -> ImGuiTabItemFlags {
@@ -906,7 +965,7 @@ namespace ESPExplorerAE
                         }
                     };
 
-                    if (ImGui::BeginTabItem(L("PluginBrowser", "sBrowserTab", "Plugin Browser"), nullptr,
+                    if (ImGui::BeginTabItem(tabLabels.pluginLabel.c_str(), nullptr,
                         tabFlags("Plugin Browser"))) {
                         activeMainTab = "Plugin Browser";
                         focusTabIfRequested("Plugin Browser");
@@ -935,7 +994,7 @@ namespace ESPExplorerAE
                         ImGui::EndTabItem();
                     }
 
-                    if (ImGui::BeginTabItem(L("Player", "sTabName", "Player"), nullptr,
+                    if (ImGui::BeginTabItem(tabLabels.playerLabel.c_str(), nullptr,
                         tabFlags("Player"))) {
                         activeMainTab = "Player";
                         focusTabIfRequested("Player");
@@ -943,7 +1002,7 @@ namespace ESPExplorerAE
                         ImGui::EndTabItem();
                     }
 
-                    if (ImGui::BeginTabItem(itemTabLabel, nullptr,
+                    if (ImGui::BeginTabItem(tabLabels.itemLabel.c_str(), nullptr,
                         tabFlags("Item Browser"))) {
                         activeMainTab = "Item Browser";
                         focusTabIfRequested("Item Browser");
@@ -951,7 +1010,7 @@ namespace ESPExplorerAE
                         ImGui::EndTabItem();
                     }
 
-                    if (ImGui::BeginTabItem(npcTabLabel, nullptr,
+                    if (ImGui::BeginTabItem(tabLabels.npcLabel.c_str(), nullptr,
                         tabFlags("NPC Browser"))) {
                         activeMainTab = "NPC Browser";
                         focusTabIfRequested("NPC Browser");
@@ -959,7 +1018,7 @@ namespace ESPExplorerAE
                         ImGui::EndTabItem();
                     }
 
-                    if (ImGui::BeginTabItem(cellTabLabel, nullptr,
+                    if (ImGui::BeginTabItem(tabLabels.cellLabel.c_str(), nullptr,
                         tabFlags("Cell Browser"))) {
                         activeMainTab = "Cell Browser";
                         focusTabIfRequested("Cell Browser");
@@ -967,7 +1026,7 @@ namespace ESPExplorerAE
                         ImGui::EndTabItem();
                     }
 
-                    if (ImGui::BeginTabItem(objectTabLabel, nullptr,
+                    if (ImGui::BeginTabItem(tabLabels.objectLabel.c_str(), nullptr,
                         tabFlags("Object Browser"))) {
                         activeMainTab = "Object Browser";
                         focusTabIfRequested("Object Browser");
@@ -975,7 +1034,7 @@ namespace ESPExplorerAE
                         ImGui::EndTabItem();
                     }
 
-                    if (ImGui::BeginTabItem(spellPerkTabLabel, nullptr,
+                    if (ImGui::BeginTabItem(tabLabels.spellPerkLabel.c_str(), nullptr,
                         tabFlags("Spells & Perks"))) {
                         activeMainTab = "Spells & Perks";
                         focusTabIfRequested("Spells & Perks");
@@ -983,9 +1042,7 @@ namespace ESPExplorerAE
                         ImGui::EndTabItem();
                     }
 
-                    const auto settingsTabName = Language::Get("Settings", "sTabName");
-                    const auto* settingsLabel = settingsTabName.empty() ? "Settings" : settingsTabName.data();
-                    if (ImGui::BeginTabItem(settingsLabel, nullptr,
+                    if (ImGui::BeginTabItem(tabLabels.settingsLabel.c_str(), nullptr,
                         tabFlags("Settings"))) {
                         activeMainTab = "Settings";
                         focusTabIfRequested("Settings");
@@ -994,7 +1051,7 @@ namespace ESPExplorerAE
                     }
 
                     if (settings.showLogsTab) {
-                        if (ImGui::BeginTabItem(L("Logs", "sTabName", "Logs"), nullptr,
+                        if (ImGui::BeginTabItem(tabLabels.logsLabel.c_str(), nullptr,
                             tabFlags("Logs"))) {
                             activeMainTab = "Logs";
                             focusTabIfRequested("Logs");
@@ -1108,7 +1165,7 @@ namespace ESPExplorerAE
             }
 
             if (settingsDirty) {
-                Config::Save();
+                Config::RequestSave();
             }
         }
         ImGui::End();

@@ -32,6 +32,7 @@ namespace ESPExplorerAE
         bool enableGamepadNav{ true };
         bool showFPSInStatus{ true };
         bool rememberWindowPos{ true };
+        std::string startupTab{ "__last__" };
         float fontSize{ 20.0f };
         float windowAlpha{ 0.95f };
         float windowX{ 100.0f };
@@ -60,6 +61,10 @@ namespace ESPExplorerAE
     public:
         static bool Load();
         static bool Save();
+        static void RequestSave();
+        static bool FlushPendingSaveIfDue();
+        static bool FlushPendingSave();
+        static void ResetToDefaults();
         static const Settings& Get();
         static Settings& GetMutable();
 

@@ -24,6 +24,7 @@ namespace ESPExplorerAE
         std::unordered_map<std::string, SortState> sortStates{};
         std::unordered_map<std::string, std::unordered_set<std::uint32_t>> selectedRows{};
         std::unordered_map<std::string, int> lastClickedIndex{};
+        std::unordered_map<std::uint32_t, std::string> editorIdCache{};
         struct TableRenderCache
         {
             const std::vector<FormEntry>* source{ nullptr };
@@ -48,6 +49,18 @@ namespace ESPExplorerAE
 
         bool MatchesSearch(const FormEntry& entry, std::string_view query, bool caseSensitive);
 
+        std::string_view GetEditorID(std::uint32_t formID)
+        {
+            auto [it, inserted] = editorIdCache.try_emplace(formID);
+            if (inserted) {
+                if (const char* editorID = ContextMenu::TryGetEditorID(formID)) {
+                    it->second = editorID;
+                }
+            }
+
+            return it->second;
+        }
+
         const std::vector<FormEntry>& GetProcessedEntries(
             std::string_view tableId,
             const std::vector<FormEntry>& sourceEntries,
@@ -71,18 +84,19 @@ namespace ESPExplorerAE
                 return cache.entries;
             }
 
-            cache.entries = sourceEntries;
+            cache.entries.clear();
+            cache.entries.reserve(sourceEntries.size());
 
-            if (!pluginFilter.empty()) {
-                cache.entries.erase(std::remove_if(cache.entries.begin(), cache.entries.end(), [&](const FormEntry& entry) {
-                    return entry.sourcePlugin != pluginFilter;
-                }), cache.entries.end());
-            }
+            for (const auto& entry : sourceEntries) {
+                if (!pluginFilter.empty() && entry.sourcePlugin != pluginFilter) {
+                    continue;
+                }
 
-            if (!searchText.empty()) {
-                cache.entries.erase(std::remove_if(cache.entries.begin(), cache.entries.end(), [&](const FormEntry& entry) {
-                    return !MatchesSearch(entry, searchText, caseSensitive);
-                }), cache.entries.end());
+                if (!searchText.empty() && !MatchesSearch(entry, searchText, caseSensitive)) {
+                    continue;
+                }
+
+                cache.entries.push_back(entry);
             }
 
             std::ranges::sort(cache.entries, [&](const FormEntry& left, const FormEntry& right) {
@@ -139,8 +153,8 @@ namespace ESPExplorerAE
                 return true;
             }
 
-            const char* editorID = ContextMenu::TryGetEditorID(entry.formID);
-            return editorID && SharedUtils::ContainsByMode(editorID, query, caseSensitive);
+            const auto editorID = GetEditorID(entry.formID);
+            return !editorID.empty() && SharedUtils::ContainsByMode(editorID, query, caseSensitive);
         }
     }
 
@@ -163,6 +177,8 @@ namespace ESPExplorerAE
         auto& lastClicked = lastClickedIndex[tableId];
 
         const auto& entries = GetProcessedEntries(tableId, sourceEntries, searchText, pluginFilter, false, sortState);
+
+        ImGui::PushID(tableId.c_str());
 
         auto invokePrimaryForSelection = [&]() {
             if (!primaryAction && !bulkPrimaryAction) {
@@ -255,8 +271,7 @@ namespace ESPExplorerAE
             if (!hasSelection) {
                 ImGui::BeginDisabled(true);
             }
-            const std::string topToggleFavoritesLabel = std::string(L("General", "sToggleFavoritesSelected", "Toggle Favorites (Selected)")) + "##Top" + tableId;
-            if (drawWrappedButton(topToggleFavoritesLabel.c_str(), firstActionInRow)) {
+            if (drawWrappedButton(L("General", "sToggleFavoritesSelected", "Toggle Favorites (Selected)"), firstActionInRow)) {
                 for (const auto& entry : entries) {
                     if (!selected.contains(entry.formID)) {
                         continue;
@@ -280,6 +295,7 @@ namespace ESPExplorerAE
         const auto availableHeight = ImGui::GetContentRegionAvail().y - 8.0f;
         const auto tableHeight = availableHeight > 220.0f ? availableHeight : 220.0f;
         if (!ImGui::BeginTable(config.tableId, 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY, ImVec2(0.0f, tableHeight))) {
+            ImGui::PopID();
             return;
         }
 
@@ -301,9 +317,9 @@ namespace ESPExplorerAE
         while (clipper.Step()) {
             for (int rowIndex = clipper.DisplayStart; rowIndex < clipper.DisplayEnd; ++rowIndex) {
                 const auto& entry = entries[static_cast<std::size_t>(rowIndex)];
+                ImGui::PushID(static_cast<int>(entry.formID));
                 ImGui::TableNextRow();
 
-                const std::string rowPopupId = "RowContext##" + std::to_string(entry.formID) + std::string(config.tableId);
                 const bool rowIsSelected = selected.contains(entry.formID);
                 const bool isFavoriteRow = config.allowFavorites && favorites && favorites->contains(entry.formID);
                 const auto selectRowOnRightClick = [&]() {
@@ -319,8 +335,7 @@ namespace ESPExplorerAE
 
                 ImGui::TableSetColumnIndex(0);
                 std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", entry.formID);
-                const std::string rowSelectableLabel = std::string(formIDBuffer) + "##row" + std::to_string(entry.formID) + std::string(config.tableId);
-                const bool rowClicked = ImGui::Selectable(rowSelectableLabel.c_str(), rowIsSelected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap | ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0.0f, ImGui::GetTextLineHeight()));
+                const bool rowClicked = ImGui::Selectable(formIDBuffer, rowIsSelected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap | ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0.0f, ImGui::GetTextLineHeight()));
                 if (rowClicked) {
                     if (ImGui::GetIO().KeyShift && lastClicked >= 0 && lastClicked < static_cast<int>(entries.size())) {
                         const int rangeStart = (std::min)(lastClicked, rowIndex);
@@ -360,22 +375,21 @@ namespace ESPExplorerAE
                         lastClicked = rowIndex;
                         trackRecentRecord(entry);
                     }
-                    ImGui::OpenPopup(rowPopupId.c_str());
+                    ImGui::OpenPopup("RowContext");
                 }
 
                 selectRowOnRightClick();
-                ImGui::OpenPopupOnItemClick(rowPopupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
+                ImGui::OpenPopupOnItemClick("RowContext", ImGuiPopupFlags_MouseButtonRight);
 
                 ImGui::TableSetColumnIndex(1);
                 const auto* displayName = entry.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : entry.name.c_str();
                 if (isFavoriteRow) {
-                    std::string favoriteName = std::string("★ ") + displayName;
-                    ImGui::TextUnformatted(favoriteName.c_str());
+                    ImGui::Text("★ %s", displayName);
                 } else {
                     ImGui::TextUnformatted(displayName);
                 }
                 selectRowOnRightClick();
-                ImGui::OpenPopupOnItemClick(rowPopupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
+                ImGui::OpenPopupOnItemClick("RowContext", ImGuiPopupFlags_MouseButtonRight);
 
                 if (ImGui::IsItemHovered()) {
                     ImGui::BeginTooltip();
@@ -393,9 +407,9 @@ namespace ESPExplorerAE
                 ImGui::TableSetColumnIndex(2);
                 ImGui::TextUnformatted(entry.sourcePlugin.c_str());
                 selectRowOnRightClick();
-                ImGui::OpenPopupOnItemClick(rowPopupId.c_str(), ImGuiPopupFlags_MouseButtonRight);
+                ImGui::OpenPopupOnItemClick("RowContext", ImGuiPopupFlags_MouseButtonRight);
 
-                if (ImGui::BeginPopup(rowPopupId.c_str())) {
+                if (ImGui::BeginPopup("RowContext")) {
                     const bool popupRowIsSelected = selected.contains(entry.formID);
                     const bool multipleSelected = selected.size() > 1 && popupRowIsSelected;
 
@@ -509,6 +523,8 @@ namespace ESPExplorerAE
 
                     ImGui::EndPopup();
                 }
+
+                ImGui::PopID();
             }
         }
 
@@ -596,8 +612,7 @@ namespace ESPExplorerAE
 
             if (config.allowFavorites && favorites) {
                 if (multipleSelected) {
-                    const std::string bottomToggleFavoritesLabel = std::string(L("General", "sToggleFavoritesSelected", "Toggle Favorites (Selected)")) + "##Bottom" + tableId;
-                    if (drawWrappedButton(bottomToggleFavoritesLabel.c_str(), firstSelectedActionInRow)) {
+                        if (drawWrappedButton(L("General", "sToggleFavoritesSelected", "Toggle Favorites (Selected)"), firstSelectedActionInRow)) {
                         for (const auto& e : entries) {
                             if (!selected.contains(e.formID)) continue;
                             if (favorites->contains(e.formID)) {
@@ -626,5 +641,7 @@ namespace ESPExplorerAE
                 }
             }
         }
+
+        ImGui::PopID();
     }
 }

@@ -14,6 +14,33 @@ namespace ESPExplorerAE::PluginBrowserHelpers
 {
     namespace
     {
+        std::unordered_map<std::uint32_t, std::string> editorIdCache{};
+
+        char FoldCase(unsigned char ch)
+        {
+            return static_cast<char>(std::tolower(ch));
+        }
+
+        std::string_view GetEditorID(std::uint32_t formID)
+        {
+            auto [it, inserted] = editorIdCache.try_emplace(formID);
+            if (inserted) {
+                if (const char* editorID = ContextMenu::TryGetEditorID(formID)) {
+                    it->second = editorID;
+                }
+            }
+
+            return it->second;
+        }
+
+        bool EqualsCaseInsensitive(std::string_view left, std::string_view right)
+        {
+            return left.size() == right.size() &&
+                   std::equal(left.begin(), left.end(), right.begin(), [](char lhs, char rhs) {
+                       return FoldCase(static_cast<unsigned char>(lhs)) == FoldCase(static_cast<unsigned char>(rhs));
+                   });
+        }
+
         bool IsDataCategory(std::string_view category)
         {
             return category == "KYWD" || category == "FLST" || category == "GLOB" || category == "COBJ";
@@ -80,8 +107,8 @@ namespace ESPExplorerAE::PluginBrowserHelpers
             return true;
         }
 
-        const char* editorID = ContextMenu::TryGetEditorID(entry.formID);
-        return editorID && SharedUtils::ContainsByMode(editorID, query, caseSensitive);
+        const auto editorID = GetEditorID(entry.formID);
+        return !editorID.empty() && SharedUtils::ContainsByMode(editorID, query, caseSensitive);
     }
 
     bool IsUnknownCategory(std::string_view category)
@@ -90,12 +117,7 @@ namespace ESPExplorerAE::PluginBrowserHelpers
             return true;
         }
 
-        std::string lowered(category.begin(), category.end());
-        std::ranges::transform(lowered, lowered.begin(), [](unsigned char ch) {
-            return static_cast<char>(std::tolower(ch));
-        });
-
-        return lowered == "unknown" || lowered == "<unknown>";
+        return EqualsCaseInsensitive(category, "unknown") || EqualsCaseInsensitive(category, "<unknown>");
     }
 
     std::string BuildPluginDisplayName(std::string_view pluginName, const std::vector<PluginInfo>& plugins)

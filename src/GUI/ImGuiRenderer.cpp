@@ -14,6 +14,59 @@ namespace ESPExplorerAE
 {
     namespace
     {
+        struct ThemeState
+        {
+            float windowAlpha{ 0.0f };
+            float accentR{ 0.0f };
+            float accentG{ 0.0f };
+            float accentB{ 0.0f };
+            float accentA{ 0.0f };
+            float windowR{ 0.0f };
+            float windowG{ 0.0f };
+            float windowB{ 0.0f };
+            float windowA{ 0.0f };
+            float panelR{ 0.0f };
+            float panelG{ 0.0f };
+            float panelB{ 0.0f };
+            float panelA{ 0.0f };
+        };
+
+        ThemeState BuildThemeState(const Settings& settings)
+        {
+            return ThemeState{
+                .windowAlpha = settings.windowAlpha,
+                .accentR = settings.themeAccentR,
+                .accentG = settings.themeAccentG,
+                .accentB = settings.themeAccentB,
+                .accentA = settings.themeAccentA,
+                .windowR = settings.themeWindowR,
+                .windowG = settings.themeWindowG,
+                .windowB = settings.themeWindowB,
+                .windowA = settings.themeWindowA,
+                .panelR = settings.themePanelR,
+                .panelG = settings.themePanelG,
+                .panelB = settings.themePanelB,
+                .panelA = settings.themePanelA
+            };
+        }
+
+        bool SameTheme(const ThemeState& left, const ThemeState& right)
+        {
+            return left.windowAlpha == right.windowAlpha &&
+                   left.accentR == right.accentR &&
+                   left.accentG == right.accentG &&
+                   left.accentB == right.accentB &&
+                   left.accentA == right.accentA &&
+                   left.windowR == right.windowR &&
+                   left.windowG == right.windowG &&
+                   left.windowB == right.windowB &&
+                   left.windowA == right.windowA &&
+                   left.panelR == right.panelR &&
+                   left.panelG == right.panelG &&
+                   left.panelB == right.panelB &&
+                   left.panelA == right.panelA;
+        }
+
         ImVec4 MulColor(const ImVec4& color, float scale, float alphaScale = 1.0f)
         {
             return ImVec4(
@@ -139,6 +192,12 @@ namespace ESPExplorerAE
             return;
         }
 
+        static bool themeInitialized = false;
+        static ThemeState lastTheme{};
+
+        Config::FlushPendingSaveIfDue();
+        FontManager::EnsureCurrentFontBuilt();
+
         if (FontManager::HasPendingRebuild()) {
             ImGui_ImplDX11_InvalidateDeviceObjects();
             FontManager::ProcessPendingRebuild();
@@ -146,7 +205,12 @@ namespace ESPExplorerAE
         }
 
         const auto& settings = Config::Get();
-        ApplyTheme(settings);
+        const auto currentTheme = BuildThemeState(settings);
+        if (!themeInitialized || !SameTheme(lastTheme, currentTheme)) {
+            ApplyTheme(settings);
+            lastTheme = currentTheme;
+            themeInitialized = true;
+        }
 
         ImGuiIO& io = ImGui::GetIO();
         if (settings.enableGamepadNav) {
@@ -185,6 +249,8 @@ namespace ESPExplorerAE
         if (!initialized) {
             return;
         }
+
+        Config::FlushPendingSave();
 
         ImGui_ImplDX11_Shutdown();
         ImGui_ImplWin32_Shutdown();
