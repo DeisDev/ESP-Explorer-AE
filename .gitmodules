@@ -1,0 +1,11 @@
+[submodule "lib/commonlibf4"]
+	path = lib/commonlibf4
+	url = https://github.com/libxse/commonlibf4.git
+
+[submodule "lib/imgui"]
+	path = lib/imgui
+	url = https://github.com/ocornut/imgui.git
+
+[submodule "lib/simpleini"]
+	path = lib/simpleini
+	url = https://github.com/brofield/simpleini.git
