@@ -80,10 +80,6 @@ Please put real care into changes before opening a PR: read the surrounding code
 
 For the full contributor guide, see [contributing.md](contributing.md).
 
-Repository URL:
-
-<https://github.com/DeisDev/ESP-Explorer-AE-Staging>
-
 ## Build From Source
 
 Run the production build from the workspace root:
