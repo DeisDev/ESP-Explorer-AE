@@ -1,0 +1,731 @@
+#include "Data/DataManager.h"
+
+#include "Config/Config.h"
+#include "Logging/Logger.h"
+
+#include <concepts>
+#include <cctype>
+#include <cstdio>
+#include <unordered_map>
+
+#include <RE/T/TESAmmo.h>
+#include <RE/T/TESDataHandler.h>
+#include <RE/T/TESFullName.h>
+#include <RE/T/TESFurniture.h>
+#include <RE/T/TESObjectACTI.h>
+#include <RE/T/TESObjectARMO.h>
+#include <RE/T/TESObjectCONT.h>
+#include <RE/T/TESObjectREFR.h>
+#include <RE/T/TESObjectMISC.h>
+#include <RE/T/TESObjectSTAT.h>
+#include <RE/T/TESObjectWEAP.h>
+#include <RE/T/TESNPC.h>
+#include <RE/T/TESRace.h>
+
+#include <RE/B/BGSPerk.h>
+#include <RE/B/BGSKeywordForm.h>
+#include <RE/S/SpellItem.h>
+#include <RE/T/TESObjectCELL.h>
+
+namespace ESPExplorerAE
+{
+    namespace
+    {
+        char FoldCase(unsigned char ch)
+        {
+            return static_cast<char>(std::tolower(ch));
+        }
+
+        bool ContainsCaseInsensitive(std::string_view text, std::string_view query)
+        {
+            if (query.empty()) {
+                return true;
+            }
+
+            const auto match = std::search(text.begin(), text.end(), query.begin(), query.end(), [](char left, char right) {
+                return FoldCase(static_cast<unsigned char>(left)) == FoldCase(static_cast<unsigned char>(right));
+            });
+
+            return match != text.end();
+        }
+
+        std::string FormatPluginFormIDPrefix(const RE::TESFile& file)
+        {
+            char buffer[16]{};
+            if (file.IsLight()) {
+                std::snprintf(buffer, sizeof(buffer), "FE %03X", file.GetSmallFileCompileIndex());
+            } else {
+                std::snprintf(buffer, sizeof(buffer), "%02X", file.GetCompileIndex());
+            }
+
+            return buffer;
+        }
+
+        std::string ResolveOwningPluginName(
+            std::uint32_t formID,
+            const std::unordered_map<std::uint8_t, std::string>& fullPluginsByIndex,
+            const std::unordered_map<std::uint16_t, std::string>& lightPluginsByIndex)
+        {
+            const auto fullIndex = static_cast<std::uint8_t>(formID >> 24);
+            if (fullIndex != 0xFE) {
+                const auto it = fullPluginsByIndex.find(fullIndex);
+                return it != fullPluginsByIndex.end() ? it->second : std::string{};
+            }
+
+            const auto lightIndex = static_cast<std::uint16_t>((formID & 0x00FFF000) >> 12);
+            const auto it = lightPluginsByIndex.find(lightIndex);
+            return it != lightPluginsByIndex.end() ? it->second : std::string{};
+        }
+
+        void PopulateMasterDiagnostics(RE::TESDataHandler* dataHandler, RE::TESFile* file, PluginInfo& info)
+        {
+            if (!dataHandler || !file || file->masterCount == 0) {
+                return;
+            }
+
+            info.masters.reserve(file->masterCount);
+            info.missingMasters.reserve(file->masterCount);
+
+            for (auto* masterName : file->masters) {
+                if (!masterName || masterName[0] == '\0') {
+                    continue;
+                }
+
+                info.masters.emplace_back(masterName);
+
+                if (!dataHandler->LookupLoadedModByName(masterName) && !dataHandler->LookupLoadedLightModByName(masterName)) {
+                    info.missingMasters.emplace_back(masterName);
+                }
+            }
+        }
+
+        bool HasNonPlayableKeyword(const RE::TESForm* form)
+        {
+            if (!form) {
+                return false;
+            }
+
+            const auto keywordForm = form->As<RE::BGSKeywordForm>();
+            if (!keywordForm) {
+                return false;
+            }
+
+            if (keywordForm->HasKeywordString("NonPlayable") ||
+                keywordForm->HasKeywordString("Non-Playable") ||
+                keywordForm->HasKeywordString("NonPlayableObject")) {
+                return true;
+            }
+
+            bool found = false;
+            keywordForm->ForEachKeyword([&found](RE::BGSKeyword* keyword) {
+                if (!keyword) {
+                    return RE::BSContainer::ForEachResult::kContinue;
+                }
+
+                const auto editorId = keyword->formEditorID.c_str();
+                if (!editorId) {
+                    return RE::BSContainer::ForEachResult::kContinue;
+                }
+
+                if (ContainsCaseInsensitive(editorId, "nonplayable") ||
+                    ContainsCaseInsensitive(editorId, "non_playable") ||
+                    ContainsCaseInsensitive(editorId, "non-playable")) {
+                    found = true;
+                    return RE::BSContainer::ForEachResult::kStop;
+                }
+
+                return RE::BSContainer::ForEachResult::kContinue;
+            });
+
+            return found;
+        }
+
+        template <class T>
+        bool GetPlayableIfAvailable(const T* form)
+        {
+            if constexpr (requires(const T* item) {
+                              { item->GetPlayable() } -> std::convertible_to<bool>;
+                          }) {
+                return form->GetPlayable();
+            } else {
+                return true;
+            }
+        }
+
+        std::string GetNPCRaceCategory(const RE::TESNPC* npc)
+        {
+            if (!npc) {
+                return "NPC";
+            }
+
+            const auto* race = npc->GetFormRace();
+            if (!race) {
+                return "NPC";
+            }
+
+            const auto* raceName = race->GetFullName();
+            if (raceName && raceName[0] != '\0') {
+                return raceName;
+            }
+
+            const auto* raceEditorID = race->GetFormEditorID();
+            if (raceEditorID && raceEditorID[0] != '\0') {
+                return raceEditorID;
+            }
+
+            return "NPC";
+        }
+
+        void AppendCellEntry(std::vector<FormEntry>& cells, RE::TESObjectCELL* form, bool hideUnnamed)
+        {
+            if (!form) {
+                return;
+            }
+
+            FormEntry cellEntry{};
+            cellEntry.formID = form->GetFormID();
+            cellEntry.category = "CELL";
+            cellEntry.name = std::string(RE::TESFullName::GetFullName(*form));
+            if (const auto* file = form->GetFile(0)) {
+                const auto filename = file->GetFilename();
+                if (!filename.empty()) {
+                    cellEntry.sourcePlugin = std::string(filename);
+                }
+            }
+            cellEntry.isDeleted = form->IsDeleted();
+            cellEntry.isPlayable = true;
+
+            if (!cellEntry.name.empty() || !hideUnnamed) {
+                cells.push_back(std::move(cellEntry));
+            }
+        }
+
+    }
+
+    void DataManager::Refresh()
+    {
+        Logger::Verbose("Data refresh started");
+
+        auto* dataHandler = RE::TESDataHandler::GetSingleton();
+        if (!dataHandler) {
+            Logger::Warn("Data refresh aborted: TESDataHandler unavailable");
+            return;
+        }
+
+        std::vector<PluginInfo> newPlugins;
+        newPlugins.reserve(dataHandler->compiledFileCollection.files.size() + dataHandler->compiledFileCollection.smallFiles.size());
+        std::unordered_map<std::uint8_t, std::string> fullPluginsByIndex{};
+        std::unordered_map<std::uint16_t, std::string> lightPluginsByIndex{};
+
+        FormCache newCache{};
+        std::unordered_map<std::uint32_t, std::uint32_t> newPlacedReferenceCounts{};
+    const auto& settings = Config::Get();
+
+        const auto& weaponForms = dataHandler->GetFormArray<RE::TESObjectWEAP>();
+        const auto& armorForms = dataHandler->GetFormArray<RE::TESObjectARMO>();
+        const auto& ammoForms = dataHandler->GetFormArray<RE::TESAmmo>();
+        const auto& miscForms = dataHandler->GetFormArray<RE::TESObjectMISC>();
+        const auto& npcForms = dataHandler->GetFormArray<RE::TESNPC>();
+        const auto& activatorForms = dataHandler->GetFormArray<RE::TESObjectACTI>();
+        const auto& containerForms = dataHandler->GetFormArray<RE::TESObjectCONT>();
+        const auto& staticForms = dataHandler->GetFormArray<RE::TESObjectSTAT>();
+        const auto& furnitureForms = dataHandler->GetFormArray<RE::TESFurniture>();
+        const auto& spellForms = dataHandler->GetFormArray<RE::SpellItem>();
+        const auto& perkForms = dataHandler->GetFormArray<RE::BGSPerk>();
+        const auto& cellForms = dataHandler->GetFormArray<RE::TESObjectCELL>();
+        const bool useCellFormArray = !cellForms.empty();
+
+        newCache.weapons.reserve(weaponForms.size());
+        newCache.armors.reserve(armorForms.size());
+        newCache.ammo.reserve(ammoForms.size());
+        newCache.misc.reserve(miscForms.size());
+        newCache.npcs.reserve(npcForms.size());
+        newCache.activators.reserve(activatorForms.size());
+        newCache.containers.reserve(containerForms.size());
+        newCache.statics.reserve(staticForms.size());
+        newCache.furniture.reserve(furnitureForms.size());
+        newCache.spells.reserve(spellForms.size());
+        newCache.perks.reserve(perkForms.size());
+        newCache.cells.reserve(cellForms.size());
+
+        {
+            const auto& [allFormsMap, allFormsLock] = RE::TESForm::GetAllForms();
+            RE::BSAutoReadLock lock{ allFormsLock };
+
+            if (allFormsMap) {
+                newCache.allRecords.reserve(allFormsMap->size());
+
+                for (const auto& [formID, form] : *allFormsMap) {
+                    if (!form || formID == 0) {
+                        continue;
+                    }
+
+                    if (const auto* refr = form->As<RE::TESObjectREFR>()) {
+                        if (const auto* baseObject = refr->GetObjectReference()) {
+                            ++newPlacedReferenceCounts[baseObject->GetFormID()];
+                        }
+                    }
+
+                    FormEntry entry{};
+                    entry.formID = formID;
+                    entry.name = GetFormName(form);
+                    entry.sourcePlugin = GetSourcePluginName(form);
+                    entry.isDeleted = form->IsDeleted();
+                    entry.isPlayable = IsPlayable(form);
+
+                    const auto* formTypeString = form->GetFormTypeString();
+                    entry.category = formTypeString ? formTypeString : "Other";
+
+                    newCache.allRecords.push_back(std::move(entry));
+
+                    if (!useCellFormArray) {
+                        if (auto* cell = form->As<RE::TESObjectCELL>()) {
+                            AppendCellEntry(newCache.cells, cell, settings.hideNoName);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (auto* file : dataHandler->compiledFileCollection.files) {
+            if (!file) {
+                continue;
+            }
+
+            PluginInfo info{};
+            info.filename = std::string(file->GetFilename());
+            info.loadOrder = file->GetCompileIndex();
+            info.lightOrder = 0;
+            info.isLight = file->IsLight();
+            info.type = info.isLight ? "ESL" : (file->flags.all(RE::TESFile::RecordFlag::kMaster) ? "ESM" : "ESP");
+            info.formIDPrefix = FormatPluginFormIDPrefix(*file);
+            PopulateMasterDiagnostics(dataHandler, file, info);
+            fullPluginsByIndex.emplace(info.loadOrder, info.filename);
+            newPlugins.push_back(std::move(info));
+        }
+
+        std::sort(newPlugins.begin(), newPlugins.end(), [](const PluginInfo& left, const PluginInfo& right) {
+            return left.loadOrder < right.loadOrder;
+        });
+
+        std::vector<PluginInfo> lightPlugins;
+        lightPlugins.reserve(dataHandler->compiledFileCollection.smallFiles.size());
+
+        for (auto* file : dataHandler->compiledFileCollection.smallFiles) {
+            if (!file) {
+                continue;
+            }
+
+            PluginInfo info{};
+            info.filename = std::string(file->GetFilename());
+            info.loadOrder = 0xFE;
+            info.lightOrder = file->GetSmallFileCompileIndex();
+            info.isLight = true;
+            info.type = "ESL";
+            info.formIDPrefix = FormatPluginFormIDPrefix(*file);
+            PopulateMasterDiagnostics(dataHandler, file, info);
+            lightPluginsByIndex.emplace(info.lightOrder, info.filename);
+            lightPlugins.push_back(std::move(info));
+        }
+
+        std::sort(lightPlugins.begin(), lightPlugins.end(), [](const PluginInfo& left, const PluginInfo& right) {
+            return left.lightOrder < right.lightOrder;
+        });
+
+        newPlugins.insert(newPlugins.end(), lightPlugins.begin(), lightPlugins.end());
+
+        std::unordered_map<std::string, PluginInfo*> pluginInfoByName{};
+        pluginInfoByName.reserve(newPlugins.size());
+        for (auto& plugin : newPlugins) {
+            pluginInfoByName.emplace(plugin.filename, &plugin);
+        }
+
+        for (const auto& entry : newCache.allRecords) {
+            if (entry.sourcePlugin.empty()) {
+                continue;
+            }
+
+            const auto sourceIt = pluginInfoByName.find(entry.sourcePlugin);
+            if (sourceIt == pluginInfoByName.end()) {
+                continue;
+            }
+
+            auto& sourcePlugin = *sourceIt->second;
+            ++sourcePlugin.recordCount;
+
+            const auto owningPlugin = ResolveOwningPluginName(entry.formID, fullPluginsByIndex, lightPluginsByIndex);
+            if (owningPlugin.empty()) {
+                continue;
+            }
+
+            if (owningPlugin == entry.sourcePlugin) {
+                ++sourcePlugin.newRecordCount;
+                continue;
+            }
+
+            ++sourcePlugin.overrideCount;
+
+            const auto ownerIt = pluginInfoByName.find(owningPlugin);
+            if (ownerIt != pluginInfoByName.end()) {
+                ++ownerIt->second->overriddenByOthersCount;
+            }
+        }
+
+        for (auto* form : weaponForms) {
+            if (!form) {
+                continue;
+            }
+
+            FormEntry entry{};
+            entry.formID = form->GetFormID();
+            entry.category = "Weapon";
+            entry.name = GetFormName(form);
+            entry.sourcePlugin = GetSourcePluginName(form);
+            entry.isDeleted = form->IsDeleted();
+            entry.isPlayable = IsPlayable(form);
+
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.weapons.push_back(std::move(entry));
+            }
+        }
+
+        for (auto* form : armorForms) {
+            if (!form) {
+                continue;
+            }
+
+            FormEntry entry{};
+            entry.formID = form->GetFormID();
+            entry.category = "Armor";
+            entry.name = GetFormName(form);
+            entry.sourcePlugin = GetSourcePluginName(form);
+            entry.isDeleted = form->IsDeleted();
+            entry.isPlayable = IsPlayable(form);
+
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.armors.push_back(std::move(entry));
+            }
+        }
+
+        for (auto* form : ammoForms) {
+            if (!form) {
+                continue;
+            }
+
+            FormEntry entry{};
+            entry.formID = form->GetFormID();
+            entry.category = "Ammo";
+            entry.name = GetFormName(form);
+            entry.sourcePlugin = GetSourcePluginName(form);
+            entry.isDeleted = form->IsDeleted();
+            entry.isPlayable = IsPlayable(form);
+
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.ammo.push_back(std::move(entry));
+            }
+        }
+
+        for (auto* form : miscForms) {
+            if (!form) {
+                continue;
+            }
+
+            FormEntry entry{};
+            entry.formID = form->GetFormID();
+            entry.category = "Misc";
+            entry.name = GetFormName(form);
+            entry.sourcePlugin = GetSourcePluginName(form);
+            entry.isDeleted = form->IsDeleted();
+            entry.isPlayable = IsPlayable(form);
+
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.misc.push_back(std::move(entry));
+            }
+        }
+
+        for (auto* form : npcForms) {
+            if (!form) {
+                continue;
+            }
+
+            FormEntry entry{};
+            entry.formID = form->GetFormID();
+            entry.name = GetFormName(form);
+            entry.sourcePlugin = GetSourcePluginName(form);
+            entry.isDeleted = form->IsDeleted();
+            entry.isPlayable = IsPlayable(form);
+
+            entry.category = GetNPCRaceCategory(form);
+
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.npcs.push_back(std::move(entry));
+            }
+        }
+
+        for (auto* form : activatorForms) {
+            if (!form) {
+                continue;
+            }
+
+            FormEntry entry{};
+            entry.formID = form->GetFormID();
+            entry.category = "Activator";
+            entry.name = GetFormName(form);
+            entry.sourcePlugin = GetSourcePluginName(form);
+            entry.isDeleted = form->IsDeleted();
+            entry.isPlayable = IsPlayable(form);
+
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.activators.push_back(std::move(entry));
+            }
+        }
+
+        for (auto* form : containerForms) {
+            if (!form) {
+                continue;
+            }
+
+            FormEntry entry{};
+            entry.formID = form->GetFormID();
+            entry.category = "Container";
+            entry.name = GetFormName(form);
+            entry.sourcePlugin = GetSourcePluginName(form);
+            entry.isDeleted = form->IsDeleted();
+            entry.isPlayable = IsPlayable(form);
+
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.containers.push_back(std::move(entry));
+            }
+        }
+
+        for (auto* form : staticForms) {
+            if (!form) {
+                continue;
+            }
+
+            FormEntry entry{};
+            entry.formID = form->GetFormID();
+            entry.category = "Static";
+            entry.name = GetFormName(form);
+            entry.sourcePlugin = GetSourcePluginName(form);
+            entry.isDeleted = form->IsDeleted();
+            entry.isPlayable = IsPlayable(form);
+
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.statics.push_back(std::move(entry));
+            }
+        }
+
+        for (auto* form : furnitureForms) {
+            if (!form) {
+                continue;
+            }
+
+            FormEntry entry{};
+            entry.formID = form->GetFormID();
+            entry.category = "Furniture";
+            entry.name = GetFormName(form);
+            entry.sourcePlugin = GetSourcePluginName(form);
+            entry.isDeleted = form->IsDeleted();
+            entry.isPlayable = IsPlayable(form);
+
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.furniture.push_back(std::move(entry));
+            }
+        }
+
+        for (auto* form : spellForms) {
+            if (!form) {
+                continue;
+            }
+
+            FormEntry entry{};
+            entry.formID = form->GetFormID();
+            entry.category = "Spell";
+            entry.name = GetFormName(form);
+            entry.sourcePlugin = GetSourcePluginName(form);
+            entry.isDeleted = form->IsDeleted();
+            entry.isPlayable = IsPlayable(form);
+
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.spells.push_back(std::move(entry));
+            }
+        }
+
+        for (auto* form : perkForms) {
+            if (!form) {
+                continue;
+            }
+
+            FormEntry entry{};
+            entry.formID = form->GetFormID();
+            entry.category = "Perk";
+            entry.name = GetFormName(form);
+            entry.sourcePlugin = GetSourcePluginName(form);
+            entry.isDeleted = form->IsDeleted();
+            entry.isPlayable = IsPlayable(form);
+
+            if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
+                newCache.perks.push_back(std::move(entry));
+            }
+        }
+
+        if (useCellFormArray) {
+            for (auto* form : cellForms) {
+                AppendCellEntry(newCache.cells, form, settings.hideNoName);
+            }
+        }
+
+        FormCategoryCounts newCounts{};
+        newCounts.weapons = newCache.weapons.size();
+        newCounts.armors = newCache.armors.size();
+        newCounts.ammo = newCache.ammo.size();
+        newCounts.misc = newCache.misc.size();
+        newCounts.npcs = newCache.npcs.size();
+        newCounts.activators = newCache.activators.size();
+        newCounts.containers = newCache.containers.size();
+        newCounts.statics = newCache.statics.size();
+        newCounts.furniture = newCache.furniture.size();
+        newCounts.spells = newCache.spells.size();
+        newCounts.perks = newCache.perks.size();
+        newCounts.cells = newCache.cells.size();
+
+        {
+            std::unique_lock lock(dataMutex);
+            plugins = std::move(newPlugins);
+            formCache = std::move(newCache);
+            placedReferenceCounts = std::move(newPlacedReferenceCounts);
+            counts = newCounts;
+            ++dataVersion;
+        }
+
+        Logger::Verbose(
+            "Data refresh finished: forms=" + std::to_string(counts.weapons + counts.armors + counts.ammo + counts.misc + counts.npcs + counts.activators + counts.containers + counts.statics + counts.furniture + counts.spells + counts.perks));
+    }
+
+    DataManager::DataView DataManager::GetDataView()
+    {
+        DataView view{
+            .lock = std::shared_lock<std::shared_mutex>(dataMutex),
+            .plugins = &plugins,
+            .counts = &counts,
+            .formCache = &formCache,
+            .dataVersion = &dataVersion
+        };
+        return view;
+    }
+
+    std::uint64_t DataManager::GetDataVersion()
+    {
+        std::shared_lock lock(dataMutex);
+        return dataVersion;
+    }
+
+    std::vector<PluginInfo> DataManager::GetPlugins()
+    {
+        std::shared_lock lock(dataMutex);
+        return plugins;
+    }
+
+    FormCategoryCounts DataManager::GetCounts()
+    {
+        std::shared_lock lock(dataMutex);
+        return counts;
+    }
+
+    FormCache DataManager::GetFormCache()
+    {
+        std::shared_lock lock(dataMutex);
+        return formCache;
+    }
+
+    std::uint32_t DataManager::GetPlacedReferenceCount(std::uint32_t formID)
+    {
+        std::shared_lock lock(dataMutex);
+        const auto it = placedReferenceCounts.find(formID);
+        if (it == placedReferenceCounts.end()) {
+            return 0;
+        }
+
+        return it->second;
+    }
+
+    bool DataManager::PassesFilters(bool isDeleted, std::string_view name, bool isPlayable)
+    {
+        const auto& settings = Config::Get();
+
+        if (settings.hideDeleted && isDeleted) {
+            return false;
+        }
+
+        if (settings.hideNoName && name.empty()) {
+            return false;
+        }
+
+        if (settings.hideNonPlayable && !isPlayable) {
+            return false;
+        }
+
+        return true;
+    }
+
+    std::string DataManager::GetFormName(RE::TESForm* form)
+    {
+        if (!form) {
+            return {};
+        }
+
+        const auto name = RE::TESFullName::GetFullName(*form);
+        if (name.empty()) {
+            return {};
+        }
+
+        return std::string(name);
+    }
+
+    std::string DataManager::GetSourcePluginName(RE::TESForm* form)
+    {
+        if (!form) {
+            return {};
+        }
+
+        const auto* file = form->GetFile(0);
+        if (!file) {
+            return {};
+        }
+
+        const auto filename = file->GetFilename();
+        if (filename.empty()) {
+            return {};
+        }
+
+        return std::string(filename);
+    }
+
+    bool DataManager::IsPlayable(RE::TESForm* form)
+    {
+        if (!form) {
+            return false;
+        }
+
+        const bool formPlayable = form->GetPlayable(nullptr);
+        if (!formPlayable) {
+            return false;
+        }
+
+        if (HasNonPlayableKeyword(form)) {
+            return false;
+        }
+
+        switch (form->GetFormType()) {
+        case RE::ENUM_FORM_ID::kWEAP:
+            return GetPlayableIfAvailable(static_cast<const RE::TESObjectWEAP*>(form));
+        case RE::ENUM_FORM_ID::kARMO:
+            return GetPlayableIfAvailable(static_cast<const RE::TESObjectARMO*>(form));
+        case RE::ENUM_FORM_ID::kAMMO:
+            return GetPlayableIfAvailable(static_cast<const RE::TESAmmo*>(form));
+        default:
+            return true;
+        }
+    }
+}
