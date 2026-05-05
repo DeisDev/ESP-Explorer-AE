@@ -126,4 +126,4 @@ That creates the staging layout under `dist/package/Data/...` and, when 7-Zip or
 
 ## License
 
-ESP Explorer AE is licensed under the GNU General Public License v3.0. See [LICENSE](LICENSE).
+ESP Explorer AE source code is licensed under the GNU General Public License v3.0 only. Non-code assets, including images, screenshots, promotional artwork, mod page artwork, logos, icons, and other media assets, are all rights reserved unless a file states otherwise. See [LICENSE](LICENSE).
