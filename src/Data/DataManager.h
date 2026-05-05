@@ -88,6 +88,7 @@ namespace ESPExplorerAE
         };
 
         static void Refresh();
+        static bool IsDataReady();
         static DataView GetDataView();
         static std::uint64_t GetDataVersion();
         static std::vector<PluginInfo> GetPlugins();
@@ -106,6 +107,7 @@ namespace ESPExplorerAE
         static inline std::unordered_map<std::uint32_t, std::uint32_t> placedReferenceCounts{};
         static inline FormCategoryCounts counts{};
         static inline std::uint64_t dataVersion{ 0 };
+        static inline bool dataReady{ false };
         static inline std::shared_mutex dataMutex{};
     };
 }
