@@ -710,7 +710,7 @@ namespace ESPExplorerAE
 
         if (const auto* npcForm = form->As<RE::TESNPC>()) {
             DrawIntLine(L(context, "General", "sLevel"), npcForm->GetLevel(), detailCopyPopupCounter, context);
-            DrawFormReferenceLine(L(context, "General", "sRace"), npcForm->GetFormRace(), context, detailCopyPopupCounter);
+            DrawFormReferenceLine(L(context, "NPCs", "sResolvedRace"), npcForm->GetFormRace(), context, detailCopyPopupCounter);
             DrawUIntLine(FD(context, "sAttachmentParentCount"), npcForm->attachParents.size, detailCopyPopupCounter, context);
         }
 
