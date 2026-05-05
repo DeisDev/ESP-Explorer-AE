@@ -10,6 +10,13 @@ namespace ESPExplorerAE
         std::string name;
         std::string category;
         std::string sourcePlugin;
+        std::string race;
+        std::string factions;
+        bool hasNPCData{ false };
+        bool npcEssential{ false };
+        bool npcUnique{ false };
+        bool npcProtected{ false };
+        bool npcFemale{ false };
         bool isPlayable{ true };
         bool isDeleted{ false };
     };
@@ -81,6 +88,7 @@ namespace ESPExplorerAE
         };
 
         static void Refresh();
+        static bool IsDataReady();
         static DataView GetDataView();
         static std::uint64_t GetDataVersion();
         static std::vector<PluginInfo> GetPlugins();
@@ -99,6 +107,7 @@ namespace ESPExplorerAE
         static inline std::unordered_map<std::uint32_t, std::uint32_t> placedReferenceCounts{};
         static inline FormCategoryCounts counts{};
         static inline std::uint64_t dataVersion{ 0 };
+        static inline bool dataReady{ false };
         static inline std::shared_mutex dataMutex{};
     };
 }

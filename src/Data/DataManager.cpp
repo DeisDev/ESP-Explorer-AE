@@ -12,6 +12,7 @@
 #include <RE/T/TESDataHandler.h>
 #include <RE/T/TESFullName.h>
 #include <RE/T/TESFurniture.h>
+#include <RE/T/TESFaction.h>
 #include <RE/T/TESObjectACTI.h>
 #include <RE/T/TESObjectARMO.h>
 #include <RE/T/TESObjectCONT.h>
@@ -152,15 +153,15 @@ namespace ESPExplorerAE
             }
         }
 
-        std::string GetNPCRaceCategory(const RE::TESNPC* npc)
+        std::string GetNPCRaceName(const RE::TESNPC* npc)
         {
             if (!npc) {
-                return "NPC";
+                return {};
             }
 
             const auto* race = npc->GetFormRace();
             if (!race) {
-                return "NPC";
+                return {};
             }
 
             const auto* raceName = race->GetFullName();
@@ -173,7 +174,54 @@ namespace ESPExplorerAE
                 return raceEditorID;
             }
 
-            return "NPC";
+            return {};
+        }
+
+        std::string GetFactionDisplayName(const RE::TESFaction* faction)
+        {
+            if (!faction) {
+                return {};
+            }
+
+            const auto* factionName = faction->GetFullName();
+            if (factionName && factionName[0] != '\0') {
+                return factionName;
+            }
+
+            const auto* factionEditorID = faction->GetFormEditorID();
+            if (factionEditorID && factionEditorID[0] != '\0') {
+                return factionEditorID;
+            }
+
+            return {};
+        }
+
+        std::string GetNPCFactionList(const RE::TESNPC* npc)
+        {
+            if (!npc) {
+                return {};
+            }
+
+            std::string result;
+            std::unordered_set<std::string> addedFactionLabels;
+
+            for (const auto& factionRank : npc->factions) {
+                if (!factionRank.faction || factionRank.rank < 0) {
+                    continue;
+                }
+
+                const std::string factionLabel = GetFactionDisplayName(factionRank.faction);
+                if (factionLabel.empty() || !addedFactionLabels.insert(factionLabel).second) {
+                    continue;
+                }
+
+                if (!result.empty()) {
+                    result += ", ";
+                }
+                result += factionLabel;
+            }
+
+            return result;
         }
 
         void AppendCellEntry(std::vector<FormEntry>& cells, RE::TESObjectCELL* form, bool hideUnnamed)
@@ -200,6 +248,12 @@ namespace ESPExplorerAE
             }
         }
 
+    }
+
+    bool DataManager::IsDataReady()
+    {
+        std::shared_lock lock(dataMutex);
+        return dataReady;
     }
 
     void DataManager::Refresh()
@@ -454,8 +508,14 @@ namespace ESPExplorerAE
             entry.sourcePlugin = GetSourcePluginName(form);
             entry.isDeleted = form->IsDeleted();
             entry.isPlayable = IsPlayable(form);
-
-            entry.category = GetNPCRaceCategory(form);
+            entry.category = "NPC";
+            entry.race = GetNPCRaceName(form);
+            entry.factions = GetNPCFactionList(form);
+            entry.hasNPCData = true;
+            entry.npcEssential = form->IsEssential();
+            entry.npcUnique = form->IsUnique();
+            entry.npcProtected = form->IsProtected();
+            entry.npcFemale = form->IsFemale();
 
             if (PassesFilters(entry.isDeleted, entry.name, entry.isPlayable)) {
                 newCache.npcs.push_back(std::move(entry));
@@ -597,6 +657,7 @@ namespace ESPExplorerAE
             placedReferenceCounts = std::move(newPlacedReferenceCounts);
             counts = newCounts;
             ++dataVersion;
+            dataReady = true;
         }
 
         Logger::Verbose(

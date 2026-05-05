@@ -88,10 +88,10 @@ namespace ESPExplorerAE
             seenRaces.reserve(filteredNPCs.size());
 
             for (const auto& entry : filteredNPCs) {
-                if (seenRaces.insert(entry.category).second) {
-                    data.races.push_back(entry.category);
+                if (seenRaces.insert(entry.race).second) {
+                    data.races.push_back(entry.race);
                 }
-                data.raceCounts[entry.category]++;
+                data.raceCounts[entry.race]++;
             }
 
             std::ranges::sort(data.races, [](const std::string& left, const std::string& right) {
@@ -275,16 +275,19 @@ namespace ESPExplorerAE
         static NPCDerivedData derivedData{};
         static const std::vector<FormEntry>* lastSource{ nullptr };
         static std::size_t lastSourceSize{ 0 };
-        if (lastSource != &filteredNPCs || lastSourceSize != filteredNPCs.size()) {
+        static std::uint64_t lastDataVersion{ 0 };
+        const auto dataVersion = DataManager::GetDataVersion();
+        if (lastSource != &filteredNPCs || lastSourceSize != filteredNPCs.size() || lastDataVersion != dataVersion) {
             derivedData = BuildDerivedData(filteredNPCs);
             lastSource = &filteredNPCs;
             lastSourceSize = filteredNPCs.size();
+            lastDataVersion = dataVersion;
         }
 
         struct FilterModeEntry { NPCFilterMode mode; const char* label; };
         const FilterModeEntry filterModes[] = {
             { NPCFilterMode::kAll,        localize("General", "sAll", "") },
-            { NPCFilterMode::kByRace,     localize("General", "sRace", "") },
+            { NPCFilterMode::kByRace,     localize("NPCs", "sResolvedRace", "") },
             { NPCFilterMode::kByFaction,  localize("NPCs", "sFaction", "") },
             { NPCFilterMode::kEssential,  localize("NPCs", "sEssential", "") },
             { NPCFilterMode::kUnique,     localize("NPCs", "sUnique", "") },
@@ -369,7 +372,7 @@ namespace ESPExplorerAE
             } else {
                 displayEntries.reserve(filteredNPCs.size() / 4);
                 for (const auto& entry : filteredNPCs) {
-                    if (entry.category == filterState.selectedRace) {
+                    if (entry.race == filterState.selectedRace) {
                         displayEntries.push_back(entry);
                     }
                 }

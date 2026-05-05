@@ -249,6 +249,7 @@ namespace ESPExplorerAE::MainWindowPopups
                 ImGui::TextDisabled("%s", ResolveString(localize, "General", "sHelpOverlayFilters", "Filters"));
                 drawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayFiltersBody", "Plugin filters narrow the left tree, while record filters hide or include playable, unnamed, deleted, and unknown records."));
                 drawWrappedBullet(ResolveString(localize, "General", "sHelpOverlaySearchBody", "Global Search scans every loaded record. Turn it off when you want to stay inside the active plugin filter."));
+                drawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayRuntimeRecordsBody", "ESP Explorer AE reads records after Fallout 4 has loaded and resolved them at runtime. Some values may differ from raw plugin data in xEdit."));
 
                 ImGui::Spacing();
                 ImGui::TextDisabled("%s", ResolveString(localize, "General", "sHelpOverlayFavorites", "Favorites And Recent"));

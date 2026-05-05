@@ -324,6 +324,32 @@ namespace ESPExplorerAE
             ImGui::EndPopup();
         }
 
+        void DrawWaitingForDataHandlerPopup()
+        {
+            const char* title = L("General", "sWindowTitle", "ESP Explorer AE");
+            const char* message = L("General", "sWaitingForDataHandler", "Waiting for data handler to initialize");
+
+            const float popupScale = (std::clamp)(Config::Get().fontSize / 20.0f, 0.75f, 1.5f);
+            const float messageWidth = ImGui::CalcTextSize(message).x;
+            const float popupWidth = (std::max)(360.0f * popupScale, messageWidth + ImGui::GetStyle().WindowPadding.x * 2.0f);
+            const ImGuiViewport* viewport = ImGui::GetMainViewport();
+            const ImVec2 center = viewport ?
+                                      ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f, viewport->WorkPos.y + viewport->WorkSize.y * 0.5f) :
+                                      ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f);
+
+            ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(popupWidth, 0.0f), ImGuiCond_Always);
+
+            const std::string windowId = std::string(title) + "##WaitingForDataHandlerPopup";
+            if (ImGui::Begin(
+                    windowId.c_str(),
+                    nullptr,
+                    ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings)) {
+                ImGui::TextWrapped("%s", message);
+            }
+            ImGui::End();
+        }
+
         bool PassesLocalRecordFilters(const FormEntry& entry);
 
         struct MainTabLabelsCache
@@ -1215,6 +1241,11 @@ namespace ESPExplorerAE
 
     void MainWindow::Draw()
     {
+        if (!DataManager::IsDataReady()) {
+            DrawWaitingForDataHandlerPopup();
+            return;
+        }
+
         EnsureFavoritesLoaded();
         const auto favoritesBefore = favoriteForms;
 

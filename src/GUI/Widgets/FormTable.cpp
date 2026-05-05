@@ -32,6 +32,7 @@ namespace ESPExplorerAE
             std::string search{};
             std::string pluginFilter{};
             bool caseSensitive{ false };
+            std::uint64_t dataVersion{ 0 };
             int sortColumn{ 1 };
             bool sortAscending{ true };
             std::vector<FormEntry> entries{};
@@ -70,6 +71,7 @@ namespace ESPExplorerAE
             const SortState& sortState)
         {
             auto& cache = tableRenderCaches[std::string(tableId)];
+            const auto dataVersion = DataManager::GetDataVersion();
 
             const bool needsRebuild =
                 cache.source != &sourceEntries ||
@@ -77,6 +79,7 @@ namespace ESPExplorerAE
                 cache.search != searchText ||
                 cache.pluginFilter != pluginFilter ||
                 cache.caseSensitive != caseSensitive ||
+                cache.dataVersion != dataVersion ||
                 cache.sortColumn != sortState.column ||
                 cache.sortAscending != sortState.ascending;
 
@@ -131,6 +134,7 @@ namespace ESPExplorerAE
             cache.search = searchText;
             cache.pluginFilter = pluginFilter;
             cache.caseSensitive = caseSensitive;
+            cache.dataVersion = dataVersion;
             cache.sortColumn = sortState.column;
             cache.sortAscending = sortState.ascending;
 
@@ -149,6 +153,8 @@ namespace ESPExplorerAE
             if (SharedUtils::ContainsByMode(entry.name, query, caseSensitive) ||
                 SharedUtils::ContainsByMode(entry.sourcePlugin, query, caseSensitive) ||
                 SharedUtils::ContainsByMode(entry.category, query, caseSensitive) ||
+                SharedUtils::ContainsByMode(entry.race, query, caseSensitive) ||
+                SharedUtils::ContainsByMode(entry.factions, query, caseSensitive) ||
                 SharedUtils::ContainsByMode(formIDBuffer, query, caseSensitive)) {
                 return true;
             }
@@ -423,7 +429,20 @@ namespace ESPExplorerAE
                 if (ImGui::IsItemHovered()) {
                     ImGui::BeginTooltip();
                     ImGui::Text("%s: %s", L("General", "sName", "Name"), displayName);
-                    ImGui::Text("%s: %s", L("General", "sCategory", "Category"), entry.category.c_str());
+                    if (entry.hasNPCData) {
+                        const auto* unknown = L("General", "sUnknown", "Unknown");
+                        const auto* none = L("General", "sNone", "None");
+                        const auto* yes = L("General", "sYes", "Yes");
+                        const auto* no = L("General", "sNo", "No");
+                        ImGui::Text("%s: %s", L("NPCs", "sFaction", "Faction"), entry.factions.empty() ? none : entry.factions.c_str());
+                        ImGui::Text("%s: %s", L("NPCs", "sResolvedRace", "Resolved Race"), entry.race.empty() ? unknown : entry.race.c_str());
+                        ImGui::Text("%s: %s", L("NPCs", "sEssential", "Essential"), entry.npcEssential ? yes : no);
+                        ImGui::Text("%s: %s", L("NPCs", "sUnique", "Unique"), entry.npcUnique ? yes : no);
+                        ImGui::Text("%s: %s", L("NPCs", "sProtected", "Protected"), entry.npcProtected ? yes : no);
+                        ImGui::Text("%s: %s", L("NPCs", "sGender", "Gender"), entry.npcFemale ? L("NPCs", "sFemale", "Female") : L("NPCs", "sMale", "Male"));
+                    } else {
+                        ImGui::Text("%s: %s", L("General", "sCategory", "Category"), entry.category.c_str());
+                    }
                     ImGui::Text("%s: %s", L("General", "sPlugin", "Plugin"), entry.sourcePlugin.c_str());
                     ImGui::Text("%s: %s", L("General", "sDeleted", "Deleted"), entry.isDeleted ? L("General", "sYes", "Yes") : L("General", "sNo", "No"));
                     ImGui::Text("%s: %s", L("General", "sPlayable", "Playable"), entry.isPlayable ? L("General", "sYes", "Yes") : L("General", "sNo", "No"));
