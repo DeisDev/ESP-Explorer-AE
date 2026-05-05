@@ -250,6 +250,12 @@ namespace ESPExplorerAE
 
     }
 
+    bool DataManager::IsDataReady()
+    {
+        std::shared_lock lock(dataMutex);
+        return dataReady;
+    }
+
     void DataManager::Refresh()
     {
         Logger::Verbose("Data refresh started");
@@ -651,6 +657,7 @@ namespace ESPExplorerAE
             placedReferenceCounts = std::move(newPlacedReferenceCounts);
             counts = newCounts;
             ++dataVersion;
+            dataReady = true;
         }
 
         Logger::Verbose(
