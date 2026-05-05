@@ -10,6 +10,13 @@ namespace ESPExplorerAE
         std::string name;
         std::string category;
         std::string sourcePlugin;
+        std::string race;
+        std::string factions;
+        bool hasNPCData{ false };
+        bool npcEssential{ false };
+        bool npcUnique{ false };
+        bool npcProtected{ false };
+        bool npcFemale{ false };
         bool isPlayable{ true };
         bool isDeleted{ false };
     };
