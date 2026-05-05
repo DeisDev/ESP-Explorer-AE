@@ -158,7 +158,7 @@ namespace ESPExplorerAE
                 return "NPC";
             }
 
-            const auto* race = npc->GetFormRace();
+            const auto* race = npc->originalRace ? npc->originalRace : npc->GetFormRace();
             if (!race) {
                 return "NPC";
             }
