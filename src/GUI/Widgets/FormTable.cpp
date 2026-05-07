@@ -50,6 +50,18 @@ namespace ESPExplorerAE
 
         bool MatchesSearch(const FormEntry& entry, std::string_view query, bool caseSensitive);
 
+        std::string BuildLineList(const std::vector<std::string>& values)
+        {
+            std::string text{};
+            for (std::size_t i = 0; i < values.size(); ++i) {
+                if (i > 0) {
+                    text.push_back('\n');
+                }
+                text += values[i];
+            }
+            return text;
+        }
+
         std::string_view GetEditorID(std::uint32_t formID)
         {
             auto [it, inserted] = editorIdCache.try_emplace(formID);
@@ -242,12 +254,51 @@ namespace ESPExplorerAE
 
         bool firstActionInRow = true;
 
+        if (drawWrappedButton(L("General", "sSelectVisible", "Select Visible"), firstActionInRow)) {
+            selected.clear();
+            for (const auto& entry : entries) {
+                selected.insert(entry.formID);
+            }
+            lastClicked = entries.empty() ? -1 : 0;
+        }
+
         if (drawWrappedButton(L("General", "sClearSelection", "Clear Selection"), firstActionInRow)) {
             selected.clear();
+            lastClicked = -1;
+        }
+
+        const bool hasSelection = !selected.empty();
+
+        if (!hasSelection) {
+            ImGui::BeginDisabled(true);
+        }
+        if (drawWrappedButton(L("General", "sCopyFormIDsAsLines", "Copy FormIDs as Lines"), firstActionInRow)) {
+            const auto selectedEntries = collectSelectedEntries();
+            std::vector<std::string> values{};
+            values.reserve(selectedEntries.size());
+            for (const auto& selectedEntry : selectedEntries) {
+                char idBuffer[16]{};
+                std::snprintf(idBuffer, sizeof(idBuffer), "%08X", selectedEntry.formID);
+                values.emplace_back(idBuffer);
+            }
+            const std::string clipboard = BuildLineList(values);
+            ImGui::SetClipboardText(clipboard.c_str());
+        }
+        if (drawWrappedButton(L("General", "sCopyNamesAsLines", "Copy Names as Lines"), firstActionInRow)) {
+            const auto selectedEntries = collectSelectedEntries();
+            std::vector<std::string> values{};
+            values.reserve(selectedEntries.size());
+            for (const auto& selectedEntry : selectedEntries) {
+                values.push_back(selectedEntry.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : selectedEntry.name);
+            }
+            const std::string clipboard = BuildLineList(values);
+            ImGui::SetClipboardText(clipboard.c_str());
+        }
+        if (!hasSelection) {
+            ImGui::EndDisabled();
         }
 
         const std::string bulkButtonLabel = std::string(config.primaryActionLabel ? config.primaryActionLabel : "Action") + " " + L("General", "sSelected", "Selected");
-        const bool hasSelection = !selected.empty();
         const bool bulkPrimaryDisabled = !gameplayActionsAllowed || !hasSelection || (config.disableBulkPrimaryAction && selected.size() > 1);
         if (bulkPrimaryDisabled) {
             ImGui::BeginDisabled(true);
