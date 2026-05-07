@@ -258,6 +258,26 @@ namespace ESPExplorerAE::PluginBrowserPanels
 
             const std::string recentRecordsHeader = std::string(context.localize("PluginBrowser", "sRecentRecords", "Recent Records")) + "##PluginRecentRecords";
             if (ImGui::TreeNodeEx(recentRecordsHeader.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+                const bool hasRecentRecords = !context.recentPluginRecordFormIDs.empty();
+                const ImVec4 buttonColor = ImGui::GetStyleColorVec4(ImGuiCol_Button);
+                const ImVec4 hoveredColor = ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered);
+                const ImVec4 activeColor = ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive);
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 2.0f));
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(buttonColor.x, buttonColor.y, buttonColor.z, buttonColor.w * 0.55f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(hoveredColor.x, hoveredColor.y, hoveredColor.z, hoveredColor.w * 0.75f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(activeColor.x, activeColor.y, activeColor.z, activeColor.w * 0.85f));
+                if (!hasRecentRecords) {
+                    ImGui::BeginDisabled(true);
+                }
+                if (ImGui::SmallButton(context.localize("PluginBrowser", "sClearRecentRecords", "Clear Recent Records"))) {
+                    context.recentPluginRecordFormIDs.clear();
+                }
+                if (!hasRecentRecords) {
+                    ImGui::EndDisabled();
+                }
+                ImGui::PopStyleColor(3);
+                ImGui::PopStyleVar();
+
                 const std::size_t recentRecordsLimit = static_cast<std::size_t>((std::clamp)(Config::Get().recentRecordsLimit, 5, 100));
                 while (context.recentPluginRecordFormIDs.size() > recentRecordsLimit) {
                     context.recentPluginRecordFormIDs.pop_back();
