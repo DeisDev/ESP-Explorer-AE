@@ -11,6 +11,7 @@ Use this file as the working guide for LLM-driven changes.
 - Source code is under `src/`.
 - Runtime language assets are loaded from `Data/Interface/ESPExplorerAE/lang` when present, otherwise from `dist/lang` during development.
 - Runtime font assets are loaded from `Data/Interface/ESPExplorerAE/fonts` when present, otherwise from `dist/fonts` during development.
+- Runtime theme assets are loaded from `Data/Interface/ESPExplorerAE/themes` when present, otherwise from `dist/themes` during development.
 - The current root does not contain `.clang-format` or `.editorconfig`. Follow surrounding file style instead of assuming planned formatting files exist.
 
 ## Build And Packaging
@@ -18,7 +19,7 @@ Use this file as the working guide for LLM-driven changes.
 - Build from the workspace root with `xmake`.
 - Build output is expected under `build/windows/x64/release/` or `build/windows/x64/releasedbg/`.
 - Packaging is handled by `Scripts/package_dist.ps1`.
-- Packaging copies `dist/lang/*.ini`, `dist/fonts/*.ttf`, and the newest built DLL into `dist/package/Data/...` and optionally creates a versioned archive such as `dist/package/ESP Explorer AE 1-3-1.7z`.
+- Packaging copies `dist/lang/*.ini`, `dist/fonts/*.ttf`, `dist/themes/*.ini`, and the newest built DLL into `dist/package/Data/...` and optionally creates a versioned archive such as `dist/package/ESP Explorer AE 1-3-1.7z`.
 - There is no dedicated automated test suite in the current repo. Validation is primarily compile verification plus targeted inspection.
 
 ## Runtime Flow

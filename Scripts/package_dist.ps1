@@ -7,6 +7,7 @@ $packageRoot = Join-Path $distRoot 'package\Data'
 $pluginsDir = Join-Path $packageRoot 'F4SE\Plugins'
 $langDir = Join-Path $packageRoot 'Interface\ESPExplorerAE\lang'
 $fontsDir = Join-Path $packageRoot 'Interface\ESPExplorerAE\fonts'
+$themesDir = Join-Path $packageRoot 'Interface\ESPExplorerAE\themes'
 
 if (Test-Path $packageRoot) {
     Remove-Item $packageRoot -Recurse -Force
@@ -15,9 +16,11 @@ if (Test-Path $packageRoot) {
 New-Item -ItemType Directory -Path $pluginsDir -Force | Out-Null
 New-Item -ItemType Directory -Path $langDir -Force | Out-Null
 New-Item -ItemType Directory -Path $fontsDir -Force | Out-Null
+New-Item -ItemType Directory -Path $themesDir -Force | Out-Null
 
 Copy-Item (Join-Path $distRoot 'lang\*.ini') $langDir -Force
 Copy-Item (Join-Path $distRoot 'fonts\*.ttf') $fontsDir -Force
+Copy-Item (Join-Path $distRoot 'themes\*.ini') $themesDir -Force
 
 $dllCandidates = @(
     (Join-Path $projectRoot 'build\windows\x64\release\ESPExplorerAE.dll')
