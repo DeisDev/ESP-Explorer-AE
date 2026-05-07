@@ -2,6 +2,7 @@
 
 #include "Config/Config.h"
 #include "GUI/MainWindow.h"
+#include "GUI/ThemeManager.h"
 #include "GUI/Widgets/MainWindowPopups.h"
 #include "GUI/Widgets/ModalUtils.h"
 #include "GUI/Widgets/SharedUtils.h"
@@ -248,6 +249,7 @@ namespace ESPExplorerAE
             settings.themePanelB = defaults.themePanelB;
             settings.themePanelA = defaults.themePanelA;
             settings.syncPipboyColor = defaults.syncPipboyColor;
+            settings.themePresetId = defaults.themePresetId;
         }
 
         const std::string& GetGameVersionText()
@@ -314,84 +316,42 @@ namespace ESPExplorerAE
             return labels;
         }
 
-        struct ColorPreset
+        std::string GetThemeLabel(const ThemePreset& theme)
         {
-            const char* key;
-            float accentR, accentG, accentB, accentA;
-            float windowR, windowG, windowB, windowA;
-            float panelR, panelG, panelB, panelA;
-        };
-
-        constexpr ColorPreset kColorPresets[] = {
-            { "sPresetDefaultGreen", 0.27f, 0.94f, 0.38f, 1.0f, 0.03f, 0.08f, 0.05f, 0.96f, 0.06f, 0.14f, 0.09f, 0.94f },
-            { "sPresetPipBoyAmber", 1.00f, 0.80f, 0.24f, 1.0f, 0.08f, 0.06f, 0.02f, 0.96f, 0.14f, 0.10f, 0.04f, 0.94f },
-            { "sPresetPipBoyBlue", 0.38f, 0.72f, 1.00f, 1.0f, 0.02f, 0.04f, 0.10f, 0.96f, 0.05f, 0.08f, 0.16f, 0.94f },
-            { "sPresetPipBoyWhite", 0.92f, 0.94f, 0.96f, 1.0f, 0.06f, 0.06f, 0.07f, 0.96f, 0.10f, 0.10f, 0.12f, 0.94f },
-            { "sPresetNukaRed", 1.00f, 0.30f, 0.28f, 1.0f, 0.10f, 0.03f, 0.03f, 0.96f, 0.16f, 0.05f, 0.05f, 0.94f },
-            { "sPresetInstitute", 0.42f, 0.88f, 0.98f, 1.0f, 0.02f, 0.05f, 0.08f, 0.96f, 0.04f, 0.09f, 0.14f, 0.94f },
-            { "sPresetBrotherhood", 0.85f, 0.65f, 0.30f, 1.0f, 0.07f, 0.05f, 0.02f, 0.96f, 0.12f, 0.09f, 0.04f, 0.94f },
-            { "sPresetRailroad", 0.75f, 0.45f, 0.80f, 1.0f, 0.06f, 0.03f, 0.07f, 0.96f, 0.10f, 0.05f, 0.12f, 0.94f },
-            { "sPresetMinutemen", 0.50f, 0.75f, 0.95f, 1.0f, 0.03f, 0.05f, 0.08f, 0.96f, 0.06f, 0.09f, 0.14f, 0.94f },
-            { "sPresetVaultTec", 0.25f, 0.55f, 0.95f, 1.0f, 0.02f, 0.03f, 0.09f, 0.96f, 0.04f, 0.06f, 0.15f, 0.94f },
-            { "sPresetStealth", 0.55f, 0.55f, 0.58f, 1.0f, 0.04f, 0.04f, 0.05f, 0.96f, 0.07f, 0.07f, 0.08f, 0.94f },
-            { "sPresetNeonPink", 1.00f, 0.40f, 0.70f, 1.0f, 0.08f, 0.03f, 0.05f, 0.96f, 0.14f, 0.05f, 0.09f, 0.94f },
-        };
-        constexpr int kColorPresetCount = static_cast<int>(std::size(kColorPresets));
-
-        bool NearlyEqual(float left, float right)
-        {
-            return std::fabs(left - right) <= 0.01f;
-        }
-
-        const ColorPreset* FindMatchingColorPreset(const Settings& settings)
-        {
-            for (const auto& preset : kColorPresets) {
-                if (NearlyEqual(settings.themeAccentR, preset.accentR) &&
-                    NearlyEqual(settings.themeAccentG, preset.accentG) &&
-                    NearlyEqual(settings.themeAccentB, preset.accentB) &&
-                    NearlyEqual(settings.themeAccentA, preset.accentA) &&
-                    NearlyEqual(settings.themeWindowR, preset.windowR) &&
-                    NearlyEqual(settings.themeWindowG, preset.windowG) &&
-                    NearlyEqual(settings.themeWindowB, preset.windowB) &&
-                    NearlyEqual(settings.themeWindowA, preset.windowA) &&
-                    NearlyEqual(settings.themePanelR, preset.panelR) &&
-                    NearlyEqual(settings.themePanelG, preset.panelG) &&
-                    NearlyEqual(settings.themePanelB, preset.panelB) &&
-                    NearlyEqual(settings.themePanelA, preset.panelA)) {
-                    return &preset;
-                }
+            const auto fallback = theme.name.empty() ? theme.id : theme.name;
+            if (!theme.nameKey.empty()) {
+                return std::string(L("Settings", theme.nameKey, fallback.c_str()));
             }
 
-            return nullptr;
+            return fallback;
         }
 
-        const char* GetColorPresetLabel(const Settings& settings)
+        std::string GetColorPresetLabel(const Settings& settings)
         {
             if (settings.syncPipboyColor) {
-                return L("Settings", "sThemePresetPipboySync", "Pip-Boy Synced");
+                return std::string(L("Settings", "sThemePresetPipboySync", "Pip-Boy Synced"));
             }
 
-            if (const auto* preset = FindMatchingColorPreset(settings)) {
-                return L("Settings", preset->key, "");
+            if (!settings.themePresetId.empty()) {
+                const auto* selectedTheme = ThemeManager::FindThemeById(settings.themePresetId);
+                const auto* matchingTheme = ThemeManager::FindMatchingTheme(settings);
+                if (selectedTheme && selectedTheme == matchingTheme) {
+                    return GetThemeLabel(*selectedTheme);
+                }
+
+                return std::string(L("Settings", "sThemePresetCustom", "Custom"));
             }
 
-            return L("Settings", "sThemePresetCustom", "Custom");
+            if (const auto* matchingTheme = ThemeManager::FindMatchingTheme(settings)) {
+                return GetThemeLabel(*matchingTheme);
+            }
+
+            return std::string(L("Settings", "sThemePresetCustom", "Custom"));
         }
 
-        void ApplyColorPreset(Settings& settings, const ColorPreset& preset)
+        void ClearThemePreset(Settings& settings)
         {
-            settings.themeAccentR = preset.accentR;
-            settings.themeAccentG = preset.accentG;
-            settings.themeAccentB = preset.accentB;
-            settings.themeAccentA = preset.accentA;
-            settings.themeWindowR = preset.windowR;
-            settings.themeWindowG = preset.windowG;
-            settings.themeWindowB = preset.windowB;
-            settings.themeWindowA = preset.windowA;
-            settings.themePanelR = preset.panelR;
-            settings.themePanelG = preset.panelG;
-            settings.themePanelB = preset.panelB;
-            settings.themePanelA = preset.panelA;
+            settings.themePresetId.clear();
         }
 
         bool TryReadPipboyColor(float& outR, float& outG, float& outB)
@@ -437,6 +397,7 @@ namespace ESPExplorerAE
             settings.themePanelG = std::clamp(normG * 0.11f, 0.0f, 1.0f);
             settings.themePanelB = std::clamp(normB * 0.11f, 0.0f, 1.0f);
             settings.themePanelA = 0.94f;
+            ClearThemePreset(settings);
         }
 
         void ApplyPipboyColorToTheme(Settings& settings)
@@ -680,19 +641,26 @@ namespace ESPExplorerAE
 
         if (BeginSection("SettingsThemeSection", L("Settings", "sThemeSection", "Theme"))) {
             sectionSpacing();
+            const auto& themes = ThemeManager::GetAvailableThemes();
+            const auto currentThemeLabel = GetColorPresetLabel(settings);
             fieldLabel(L("Settings", "sColorPreset", "Color Preset"));
             ImGui::SetNextItemWidth(fullWidth());
-            if (ImGui::BeginCombo("##ColorPreset", GetColorPresetLabel(settings))) {
-                for (int i = 0; i < kColorPresetCount; ++i) {
-                    const auto& preset = kColorPresets[i];
-                    ImVec4 previewColor(preset.accentR, preset.accentG, preset.accentB, preset.accentA);
-                    ImGui::PushID(i);
+            if (ImGui::BeginCombo("##ColorPreset", currentThemeLabel.c_str())) {
+                for (std::size_t i = 0; i < themes.size(); ++i) {
+                    const auto& theme = themes[i];
+                    const auto themeLabel = GetThemeLabel(theme);
+                    const bool selected = settings.themePresetId == theme.id && ThemeManager::FindMatchingTheme(settings) == &theme;
+                    ImVec4 previewColor(theme.accentR, theme.accentG, theme.accentB, theme.accentA);
+                    ImGui::PushID(static_cast<int>(i));
                     ImGui::ColorButton("##PresetColor", previewColor, ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoBorder, ImVec2(14, 14));
                     ImGui::SameLine();
-                    if (ImGui::Selectable(L("Settings", preset.key, ""), false)) {
-                        ApplyColorPreset(settings, preset);
+                    if (ImGui::Selectable(themeLabel.c_str(), selected)) {
+                        ThemeManager::ApplyTheme(settings, theme);
                         settings.syncPipboyColor = false;
                         changed = true;
+                    }
+                    if (selected) {
+                        ImGui::SetItemDefaultFocus();
                     }
                     ImGui::PopID();
                 }
@@ -701,6 +669,9 @@ namespace ESPExplorerAE
 
             blockSpacing();
             if (ImGui::Checkbox(L("Settings", "sSyncPipboyColor", "Sync With Pip-Boy Color"), &settings.syncPipboyColor)) {
+                if (settings.syncPipboyColor) {
+                    ClearThemePreset(settings);
+                }
                 if (settings.syncPipboyColor) {
                     const auto refreshedPipboyColor = PollPipboyColorCache(true);
                     if (refreshedPipboyColor.valid) {
@@ -730,6 +701,7 @@ namespace ESPExplorerAE
                     settings.themeAccentG = accentColor[1];
                     settings.themeAccentB = accentColor[2];
                     settings.themeAccentA = accentColor[3];
+                    ClearThemePreset(settings);
                     changed = true;
                 }
 
@@ -741,6 +713,7 @@ namespace ESPExplorerAE
                     settings.themeWindowG = windowColor[1];
                     settings.themeWindowB = windowColor[2];
                     settings.themeWindowA = windowColor[3];
+                    ClearThemePreset(settings);
                     changed = true;
                 }
 
@@ -752,6 +725,7 @@ namespace ESPExplorerAE
                     settings.themePanelG = panelColor[1];
                     settings.themePanelB = panelColor[2];
                     settings.themePanelA = panelColor[3];
+                    ClearThemePreset(settings);
                     changed = true;
                 }
             } else {
@@ -765,9 +739,20 @@ namespace ESPExplorerAE
 
             sectionSpacing();
             if (ImGui::Button(L("Settings", "sResetTheme", "Reset Theme"), ImVec2(buttonRowWidth(), 0.0f))) {
-                ApplyColorPreset(settings, kColorPresets[0]);
+                ThemeManager::ApplyTheme(settings, ThemeManager::GetDefaultTheme());
                 settings.syncPipboyColor = false;
                 changed = true;
+            }
+            blockSpacing();
+            if (ImGui::Button(L("Settings", "sRefreshThemes", "Refresh Themes"), ImVec2(buttonRowWidth(), 0.0f))) {
+                const auto selectedPresetId = settings.themePresetId;
+                ThemeManager::ReloadAvailableThemes();
+                if (!selectedPresetId.empty()) {
+                    if (const auto* selectedTheme = ThemeManager::FindThemeById(selectedPresetId)) {
+                        ThemeManager::ApplyTheme(settings, *selectedTheme);
+                        changed = true;
+                    }
+                }
             }
             sectionSpacing();
             ImGui::TreePop();
