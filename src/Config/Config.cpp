@@ -122,6 +122,7 @@ namespace ESPExplorerAE
         ini.SetDoubleValue("Theme", "fPanelB", settingsSnapshot.themePanelB);
         ini.SetDoubleValue("Theme", "fPanelA", settingsSnapshot.themePanelA);
         ini.SetBoolValue("Theme", "bSyncPipboyColor", settingsSnapshot.syncPipboyColor);
+        ini.SetValue("Theme", "sPresetId", settingsSnapshot.themePresetId.c_str());
 
         ini.SetBoolValue("Filters", "bHideNonPlayable", settingsSnapshot.hideNonPlayable);
         ini.SetBoolValue("Filters", "bHideDeleted", settingsSnapshot.hideDeleted);
@@ -207,6 +208,7 @@ namespace ESPExplorerAE
         settings.themePanelB = static_cast<float>(ini.GetDoubleValue("Theme", "fPanelB", settings.themePanelB));
         settings.themePanelA = static_cast<float>(ini.GetDoubleValue("Theme", "fPanelA", settings.themePanelA));
         settings.syncPipboyColor = ini.GetBoolValue("Theme", "bSyncPipboyColor", false);
+        settings.themePresetId = ini.GetValue("Theme", "sPresetId", "");
 
         settings.hideNonPlayable = ini.GetBoolValue("Filters", "bHideNonPlayable", true);
         settings.hideDeleted = ini.GetBoolValue("Filters", "bHideDeleted", true);

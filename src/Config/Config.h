@@ -59,6 +59,7 @@ namespace ESPExplorerAE
         float themePanelB{ 0.09f };
         float themePanelA{ 0.94f };
         bool syncPipboyColor{ false };
+        std::string themePresetId{ "default-green" };
         std::string lastActiveTab{ "Plugin Browser" };
         std::vector<std::uint32_t> favorites{};
     };

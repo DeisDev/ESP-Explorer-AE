@@ -99,7 +99,7 @@ xmake f -m release -a x64
 xmake
 ```
 
-To package the current release or release-debug DLL with the shipped fonts and language files, run:
+To package the current release or release-debug DLL with the shipped fonts, languages, and themes, run:
 
 ```powershell
 ./Scripts/package_dist.ps1
