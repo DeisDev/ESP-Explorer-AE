@@ -9,6 +9,9 @@ set_warnings("allextra")
 add_rules("mode.debug", "mode.release", "mode.releasedbg")
 add_rules("plugin.vsxmake.autoupdate")
 
+add_requires("imgui v1.92.7", { configs = { dx11 = true, win32 = true } })
+add_requires("simpleini v4.25")
+
 target("ESPExplorerAE")
     add_rules("commonlibf4.plugin", {
         name = "ESPExplorerAE",
@@ -21,17 +24,10 @@ target("ESPExplorerAE")
     add_includedirs("src")
     set_pcxxheader("src/pch.h")
 
-    add_files(
-        "lib/imgui/imgui.cpp",
-        "lib/imgui/imgui_demo.cpp",
-        "lib/imgui/imgui_draw.cpp",
-        "lib/imgui/imgui_tables.cpp",
-        "lib/imgui/imgui_widgets.cpp",
-        "lib/imgui/backends/imgui_impl_dx11.cpp",
-        "lib/imgui/backends/imgui_impl_win32.cpp"
-    )
-    add_includedirs("lib/imgui", "lib/imgui/backends")
+    add_packages("imgui", "simpleini")
 
-    add_includedirs("lib/simpleini")
+    add_syslinks("comdlg32")
 
-    add_syslinks("d3d11", "dxgi", "d3dcompiler", "comdlg32")
+    add_installfiles("dist/fonts/*.ttf", { prefixdir = "Interface/ESPExplorerAE/fonts" })
+    add_installfiles("dist/lang/*.ini", { prefixdir = "Interface/ESPExplorerAE/lang" })
+    add_installfiles("dist/themes/*.ini", { prefixdir = "Interface/ESPExplorerAE/themes" })

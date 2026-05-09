@@ -1,5 +1,13 @@
 # ESP Explorer AE
 
+<p align="center">
+  <a href="https://github.com/DeisDev/ESP-Explorer-AE/forks"><img src="https://img.shields.io/github/forks/DeisDev/ESP-Explorer-AE?style=social" alt="GitHub forks"></a>
+  <a href="https://github.com/DeisDev/ESP-Explorer-AE/stargazers"><img src="https://img.shields.io/github/stars/DeisDev/ESP-Explorer-AE?style=social" alt="GitHub stars"></a>
+  <a href="https://github.com/DeisDev/ESP-Explorer-AE/watchers"><img src="https://img.shields.io/github/watchers/DeisDev/ESP-Explorer-AE?style=social" alt="GitHub watchers"></a>
+  <a href="https://github.com/DeisDev/ESP-Explorer-AE/issues"><img src="https://img.shields.io/github/issues/DeisDev/ESP-Explorer-AE?style=social" alt="GitHub issues"></a>
+  <a href="https://github.com/DeisDev/ESP-Explorer-AE/pulls"><img src="https://img.shields.io/github/issues-pr/DeisDev/ESP-Explorer-AE?style=social" alt="GitHub pull requests"></a>
+</p>
+
 ESP Explorer AE is an in-game ESP/ESM/ESL plugin and record explorer for Fallout 4 Anniversary Edition.
 
 It lets you browse the plugins, forms, and records in your load order without leaving the game. Inspect record details, search across categories, spawn items or NPCs, add spells and perks, manage your inventory, or teleport to cells while you play.
@@ -21,7 +29,7 @@ The focus is speed, useful detail, and practical tools instead of bloated menus.
 - Action History with best-effort undo for supported actions.
 - Optional automatic component substitution so crafting components are given as usable scrap items.
 - Built-in log viewer with copy and export support.
-- Multiple color presets, custom theme colors, font sizing, and optional Pip-Boy color sync.
+- Data-driven themes, custom theme colors, font sizing, and optional Pip-Boy color sync.
 - Basic controller support with optional gamepad navigation.
 - Data-driven multi-language support.
 
@@ -37,6 +45,8 @@ sGlyphRanges = default, cyrillic
 ```
 
 `sName` controls how the language appears in the settings menu. `sFontFiles` is a comma-separated fallback order resolved from `Data/Interface/ESPExplorerAE/fonts` first, then `dist/fonts`. `sGlyphRanges` optionally adds full ImGui preset ranges such as `default`, `cyrillic`, `japanese`, `chinese`, `chinese-full`, `korean`, `thai`, or `vietnamese`.
+
+Themes are also data-driven. Shipped themes live in `Data/Interface/ESPExplorerAE/themes` at runtime and `dist/themes` during development. You can add or edit `.ini` theme files there without recompiling the plugin.
 
 ## Installation
 
@@ -99,26 +109,32 @@ xmake f -m release -a x64
 xmake
 ```
 
-To package the current release or release-debug DLL with the shipped fonts, languages, and themes, run:
+To package the current release DLL with the shipped fonts, languages, and themes, run:
 
 ```powershell
-./Scripts/package_dist.ps1
+xmake package
 ```
 
-That creates the staging layout under `dist/package/Data/...` and, when 7-Zip or tar is available, also creates a versioned archive such as `dist/package/ESP Explorer AE 1-4-2.7z`.
+That creates a zip archive under `build/packages/`, with the DLL and assets arranged under `Data/...` for mod-manager installation.
+
+## Contributors
+
+<a href="https://github.com/DeisDev/ESP-Explorer-AE/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=DeisDev/ESP-Explorer-AE" alt="ESP Explorer AE contributors" />
+</a>
 
 ## Credits
 
 - F4SE team.
 - CommonLibF4 / libxse contributors.
-- ocornut for ImGui.
-- brofield for SimpleIni.
-- DeisDev for ESP Explorer AE.
+- ImGui Contributors.
+- SimpleIni Contributors.
+- ESP Explorer AE contributors. 
 
 ## More Mods
 
-- [Oblivion Remastered mod](https://www.nexusmods.com/oblivionremastered/mods/788)
-- [Fallout 4 mod](https://www.nexusmods.com/fallout4/mods/82077)
+- [Immersive Main Menus - Oblivion Remastered](https://www.nexusmods.com/oblivionremastered/mods/788)
+- [Immersive Main Menus - Fallout 4](https://www.nexusmods.com/fallout4/mods/82077)
 
 ## Support
 
@@ -126,4 +142,4 @@ That creates the staging layout under `dist/package/Data/...` and, when 7-Zip or
 
 ## License
 
-ESP Explorer AE is licensed under the GNU General Public License v3.0. See [LICENSE](LICENSE).
+ESP Explorer AE source code is licensed under the GNU General Public License v3.0 only. Non-code assets, including images, screenshots, promotional artwork, mod page artwork, logos, icons, and other media assets, are all rights reserved unless a file states otherwise. See [LICENSE](LICENSE).
