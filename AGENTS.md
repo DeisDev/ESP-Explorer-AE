@@ -18,8 +18,8 @@ Use this file as the working guide for LLM-driven changes.
 
 - Build from the workspace root with `xmake`.
 - Build output is expected under `build/windows/x64/release/` or `build/windows/x64/releasedbg/`.
-- Packaging is handled by `Scripts/package_dist.ps1`.
-- Packaging copies `dist/lang/*.ini`, `dist/fonts/*.ttf`, `dist/themes/*.ini`, and the newest built DLL into `dist/package/Data/...` and optionally creates a versioned archive such as `dist/package/ESP Explorer AE 1-3-1.7z`.
+- Packaging is handled by `xmake package`.
+- Packaging includes the built DLL plus `dist/lang/*.ini`, `dist/fonts/*.ttf`, and `dist/themes/*.ini` under `Data/...` in `build/packages/ESPExplorerAE-<version>.zip`.
 - There is no dedicated automated test suite in the current repo. Validation is primarily compile verification plus targeted inspection.
 
 ## Runtime Flow
@@ -125,7 +125,7 @@ For any UI-facing change, verify all of the following before considering the wor
 2. If the change affects visible UI, search the language files before editing code.
 3. If the change affects language switching or text rendering, inspect both `Language` and `FontManager`.
 4. Build with `xmake` after changes.
-5. If packaging behavior is relevant, verify `Scripts/package_dist.ps1` still matches the asset layout.
+5. If packaging behavior is relevant, verify `xmake package` still produces the expected `Data/...` asset layout.
 
 ## High-Risk Areas
 
