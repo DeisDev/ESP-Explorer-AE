@@ -111,6 +111,11 @@ namespace ESPExplorerAE::PluginBrowserHelpers
         return SharedUtils::EqualsCaseInsensitive(category, "unknown") || SharedUtils::EqualsCaseInsensitive(category, "<unknown>");
     }
 
+    std::string CopyLabel(const char* label, std::size_t count)
+    {
+        return std::string(label) + " (" + std::to_string(count) + ")";
+    }
+
     std::string BuildPluginDisplayName(std::string_view pluginName, const std::vector<PluginInfo>& plugins)
     {
         if (const auto* plugin = FindPluginInfo(pluginName, plugins); plugin && !plugin->formIDPrefix.empty()) {
@@ -328,33 +333,23 @@ namespace ESPExplorerAE::PluginBrowserHelpers
 
             const auto selectedEntries = CollectSelectedEntries(cache, dataVersion, context);
             if (!selectedEntries.empty()) {
-                if (ImGui::MenuItem((std::string(context.localize("General", "sCopyFormID", "Copy FormID")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                if (ImGui::MenuItem(CopyLabel(context.localize("General", "sCopyFormID", "Copy FormID"), selectedEntries.size()).c_str())) {
                     std::vector<std::string> values{};
                     values.reserve(selectedEntries.size());
                     for (const auto& selectedEntry : selectedEntries) {
                         values.push_back(FormatUtils::FormID(selectedEntry.formID));
                     }
-                    const auto text = FormatUtils::ParenthesizedList(values);
+                    const auto text = FormatUtils::MultiCopyList(values, Config::Get().multiCopyFormat);
                     ImGui::SetClipboardText(text.c_str());
                 }
 
-                if (ImGui::MenuItem((std::string(context.localize("General", "sCopyRecordSource", "Copy Record Source")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
-                    std::vector<std::string> values{};
-                    values.reserve(selectedEntries.size());
-                    for (const auto& selectedEntry : selectedEntries) {
-                        values.push_back(selectedEntry.sourcePlugin);
-                    }
-                    const auto text = FormatUtils::ParenthesizedList(values);
-                    ImGui::SetClipboardText(text.c_str());
-                }
-
-                if (ImGui::MenuItem((std::string(context.localize("General", "sCopyName", "Copy Name")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                if (ImGui::MenuItem(CopyLabel(context.localize("General", "sCopyName", "Copy Name"), selectedEntries.size()).c_str())) {
                     std::vector<std::string> values{};
                     values.reserve(selectedEntries.size());
                     for (const auto& selectedEntry : selectedEntries) {
                         values.push_back(selectedEntry.name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : selectedEntry.name);
                     }
-                    const auto text = FormatUtils::ParenthesizedList(values);
+                    const auto text = FormatUtils::MultiCopyList(values, Config::Get().multiCopyFormat);
                     ImGui::SetClipboardText(text.c_str());
                 }
 
