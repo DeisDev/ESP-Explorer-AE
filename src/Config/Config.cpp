@@ -74,6 +74,22 @@ namespace ESPExplorerAE
         {
             return value == "Player" ? "Inventory" : value;
         }
+
+        MultiCopyFormat SanitizeMultiCopyFormat(long value)
+        {
+            switch (value) {
+            case static_cast<long>(MultiCopyFormat::Lines):
+                return MultiCopyFormat::Lines;
+            case static_cast<long>(MultiCopyFormat::CommaSeparated):
+                return MultiCopyFormat::CommaSeparated;
+            case static_cast<long>(MultiCopyFormat::Parenthesized):
+                return MultiCopyFormat::Parenthesized;
+            case static_cast<long>(MultiCopyFormat::QuotedCommaSeparated):
+                return MultiCopyFormat::QuotedCommaSeparated;
+            default:
+                return MultiCopyFormat::Lines;
+            }
+        }
     }
 
     static std::filesystem::path ResolveConfigPath()
@@ -141,6 +157,7 @@ namespace ESPExplorerAE
         ini.SetBoolValue("UI", "bShowPlayerStatsInStatus", settingsSnapshot.showPlayerStatsInStatus);
         ini.SetBoolValue("UI", "bShowMenuResolutionInStatus", settingsSnapshot.showMenuResolutionInStatus);
         ini.SetBoolValue("UI", "bPluginAdvancedDetailsView", settingsSnapshot.pluginAdvancedDetailsView);
+        ini.SetLongValue("UI", "iMultiCopyFormat", static_cast<long>(settingsSnapshot.multiCopyFormat));
 
         ini.SetBoolValue("Debug", "bAllowGameplayActionsInMainMenu", settingsSnapshot.allowGameplayActionsInMainMenu);
         ini.SetBoolValue("General", "bComponentSubstitution", settingsSnapshot.componentSubstitution);
@@ -227,6 +244,7 @@ namespace ESPExplorerAE
         settings.showPlayerStatsInStatus = ini.GetBoolValue("UI", "bShowPlayerStatsInStatus", false);
         settings.showMenuResolutionInStatus = ini.GetBoolValue("UI", "bShowMenuResolutionInStatus", false);
         settings.pluginAdvancedDetailsView = ini.GetBoolValue("UI", "bPluginAdvancedDetailsView", false);
+        settings.multiCopyFormat = SanitizeMultiCopyFormat(ini.GetLongValue("UI", "iMultiCopyFormat", static_cast<long>(MultiCopyFormat::Lines)));
 
         settings.allowGameplayActionsInMainMenu = ini.GetBoolValue("Debug", "bAllowGameplayActionsInMainMenu", false);
         settings.componentSubstitution = ini.GetBoolValue("General", "bComponentSubstitution", true);

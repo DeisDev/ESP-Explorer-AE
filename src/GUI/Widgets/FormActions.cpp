@@ -1,6 +1,7 @@
 #include "GUI/Widgets/FormActions.h"
 
 #include "Config/Config.h"
+#include "GUI/Widgets/FormatUtils.h"
 #include "Localization/Language.h"
 #include "Logging/Logger.h"
 
@@ -61,9 +62,7 @@ namespace ESPExplorerAE
         {
             auto* form = RE::TESForm::GetFormByID(formID);
             if (!form) {
-                char formIDBuffer[16]{};
-                std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", formID);
-                return std::string(formIDBuffer);
+                return FormatUtils::FormID(formID);
             }
 
             const auto fullName = RE::TESFullName::GetFullName(*form);
@@ -76,9 +75,7 @@ namespace ESPExplorerAE
                 return std::string(editorID);
             }
 
-            char formIDBuffer[16]{};
-            std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", formID);
-            return std::string(formIDBuffer);
+            return FormatUtils::FormID(formID);
         }
 
         std::string BuildGiveDescription(std::uint32_t formID, std::uint32_t count)
@@ -293,10 +290,9 @@ namespace ESPExplorerAE
 
     void FormActions::CopyFormID(std::uint32_t formID)
     {
-        char formIDBuffer[16]{};
-        std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", formID);
-        ImGui::SetClipboardText(formIDBuffer);
-        Logger::Verbose(std::string("Copied FormID: ") + formIDBuffer);
+        const std::string formIDText = FormatUtils::FormID(formID);
+        ImGui::SetClipboardText(formIDText.c_str());
+        Logger::Verbose(std::string("Copied FormID: ") + formIDText);
     }
 
     void FormActions::GiveToPlayer(std::uint32_t formID, std::uint32_t count)
