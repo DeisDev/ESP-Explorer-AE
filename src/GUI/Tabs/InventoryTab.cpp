@@ -2,8 +2,10 @@
 
 #include "Config/Config.h"
 #include "GUI/Widgets/ContextMenu.h"
+#include "GUI/Widgets/FormatUtils.h"
 #include "GUI/Widgets/FormActions.h"
 #include "GUI/Widgets/FormDetailsView.h"
+#include "GUI/Widgets/ImGuiWidgetUtils.h"
 #include "GUI/Widgets/MainWindowPopups.h"
 #include "GUI/Widgets/SearchBar.h"
 #include "GUI/Widgets/SharedUtils.h"
@@ -178,9 +180,7 @@ namespace ESPExplorerAE
                 return editorID;
             }
 
-            char buffer[16]{};
-            std::snprintf(buffer, sizeof(buffer), "%08X", form->GetFormID());
-            return buffer;
+            return FormatUtils::FormID(form->GetFormID());
         }
 
         std::string ResolveName(RE::BGSInventoryItem& item, RE::ExtraDataList* extra, RE::TESBoundObject* object)
@@ -282,9 +282,7 @@ namespace ESPExplorerAE
                 return editorID;
             }
 
-            char buffer[16]{};
-            std::snprintf(buffer, sizeof(buffer), "%08X", keyword->GetFormID());
-            return buffer;
+            return FormatUtils::FormID(keyword->GetFormID());
         }
 
         const RE::BGSAttachParentArray* GetAttachParents(RE::TESBoundObject* object)
@@ -476,12 +474,11 @@ namespace ESPExplorerAE
                     continue;
                 }
                 if (!inventorySearch.empty()) {
-                    char formIDBuffer[16]{};
-                    std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", entry.formID);
+                    const std::string formIDText = FormatUtils::FormID(entry.formID);
                     if (!SharedUtils::ContainsCaseInsensitive(entry.name, inventorySearch) &&
                         !SharedUtils::ContainsCaseInsensitive(entry.sourcePlugin, inventorySearch) &&
                         !SharedUtils::ContainsCaseInsensitive(entry.category, inventorySearch) &&
-                        !SharedUtils::ContainsCaseInsensitive(formIDBuffer, inventorySearch)) {
+                        !SharedUtils::ContainsCaseInsensitive(formIDText, inventorySearch)) {
                         const char* editorID = ContextMenu::TryGetEditorID(entry.formID);
                         if (!editorID || !SharedUtils::ContainsCaseInsensitive(editorID, inventorySearch)) {
                             continue;
@@ -779,20 +776,11 @@ namespace ESPExplorerAE
             }
 
             auto wrappedSameLine = [](const char* nextLabel) {
-                const auto& style = ImGui::GetStyle();
-                const float nextWidth = ImGui::CalcTextSize(nextLabel).x + style.FramePadding.x * 2.0f;
-                const float needed = style.ItemSpacing.x + nextWidth;
-                if (ImGui::GetContentRegionAvail().x >= needed) {
-                    ImGui::SameLine();
-                }
+                ImGuiWidgetUtils::DrawWrappedSameLine(nextLabel);
             };
 
             const bool gameplayActionsAllowed = FormActions::AreGameplayActionsAllowed();
-            const auto showDisabledTooltip = [&]() {
-                if (!gameplayActionsAllowed && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                    ImGui::SetTooltip("%s", L(context, "General", "sGameplayActionsDisabledInMainMenu", "Gameplay actions are disabled while the main menu is open."));
-                }
-            };
+            const char* disabledTooltip = L(context, "General", "sGameplayActionsDisabledInMainMenu", "Gameplay actions are disabled while the main menu is open.");
 
             if (!gameplayActionsAllowed) {
                 ImGui::BeginDisabled(true);
@@ -803,7 +791,7 @@ namespace ESPExplorerAE
             if (ImGui::Button(L(context, "Inventory", "sRefillHealth", "Refill Health"))) {
                 FormActions::ExecuteConsoleCommand("player.resethealth");
             }
-            showDisabledTooltip();
+            ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
 
             const char* godModeLabel = context.playerGodModeEnabled ? L(context, "Inventory", "sGodModeOff", "Godmode: ON") : L(context, "Inventory", "sGodModeOn", "Godmode: OFF");
             wrappedSameLine(godModeLabel);
@@ -811,7 +799,7 @@ namespace ESPExplorerAE
                 FormActions::SetPlayerGodModeEnabled(!context.playerGodModeEnabled);
                 context.playerGodModeEnabled = FormActions::IsPlayerGodModeEnabled();
             }
-            showDisabledTooltip();
+            ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
 
             const char* noClipLabel = context.playerNoClipEnabled ? L(context, "Inventory", "sNoClipOff", "Noclip: ON") : L(context, "Inventory", "sNoClipOn", "Noclip: OFF");
             wrappedSameLine(noClipLabel);
@@ -819,7 +807,7 @@ namespace ESPExplorerAE
                 FormActions::ExecuteConsoleCommand("tcl");
                 context.playerNoClipEnabled = !context.playerNoClipEnabled;
             }
-            showDisabledTooltip();
+            ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
 
             const float inputWidth = (std::max)(120.0f, ImGui::GetContentRegionAvail().x * 0.2f);
 
@@ -833,7 +821,7 @@ namespace ESPExplorerAE
                 std::snprintf(command, sizeof(command), "player.setlevel %d", context.playerLevelAmount);
                 FormActions::ExecuteConsoleCommand(command);
             }
-            showDisabledTooltip();
+            ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
 
             ImGui::SetNextItemWidth(inputWidth);
             ImGui::InputInt(L(context, "Inventory", "sAddPerkPoints", "Perk Points"), &context.playerPerkPointsAmount, 1, 5);
@@ -845,7 +833,7 @@ namespace ESPExplorerAE
                 std::snprintf(command, sizeof(command), "cgf \"Game.AddPerkPoints\" %d", context.playerPerkPointsAmount);
                 FormActions::ExecuteConsoleCommand(command);
             }
-            showDisabledTooltip();
+            ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
 
             SharedUtils::DrawSectionLabel(L(context, "Inventory", "sAmmunitionSection", "Ammunition"));
 
@@ -857,7 +845,7 @@ namespace ESPExplorerAE
             if (ImGui::Button(addCurrentAmmoLabel)) {
                 FormActions::AddAmmoForCurrentWeapon(static_cast<std::uint32_t>(context.playerCurrentWeaponAmmoAmount));
             }
-            showDisabledTooltip();
+            ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
 
             ImGui::SetNextItemWidth(inputWidth);
             ImGui::InputInt(L(context, "Inventory", "sAllAmmoCount", "All Ammo Count"), &context.playerAllAmmoAmount, 10, 100);
@@ -869,7 +857,7 @@ namespace ESPExplorerAE
                     FormActions::GiveToPlayer(ammo.formID, static_cast<std::uint32_t>(context.playerAllAmmoAmount));
                 }
             }
-            showDisabledTooltip();
+            ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
 
             SharedUtils::DrawSectionLabel(L(context, "Inventory", "sQuickItemsSection", "Quick Items"));
 
@@ -880,7 +868,7 @@ namespace ESPExplorerAE
                 entry.category = "Aid";
                 context.openItemGrantPopup(entry);
             }
-            showDisabledTooltip();
+            ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
 
             const char* lockpickLabel = L(context, "Inventory", "sAddLockpick", "Add Lockpicks");
             wrappedSameLine(lockpickLabel);
@@ -891,7 +879,7 @@ namespace ESPExplorerAE
                 entry.category = "Misc";
                 context.openItemGrantPopup(entry);
             }
-            showDisabledTooltip();
+            ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
 
             const char* capsLabel = L(context, "Inventory", "sAddCaps", "Add Caps");
             wrappedSameLine(capsLabel);
@@ -902,7 +890,7 @@ namespace ESPExplorerAE
                 entry.category = "Misc";
                 context.openItemGrantPopup(entry);
             }
-            showDisabledTooltip();
+            ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
 
             SharedUtils::DrawSectionLabel(L(context, "Inventory", "sTimeOfDaySection", "Time of Day"));
 
@@ -933,7 +921,7 @@ namespace ESPExplorerAE
                 std::snprintf(command, sizeof(command), "set gamehour to %.2f", context.playerTimeOfDay);
                 FormActions::ExecuteConsoleCommand(command);
             }
-            showDisabledTooltip();
+            ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
 
             if (!gameplayActionsAllowed) {
                 ImGui::EndDisabled();
@@ -1089,7 +1077,8 @@ namespace ESPExplorerAE
             const std::string displayName = entry.name.empty() ? std::string(L(context, "General", "sUnnamed", "<Unnamed>")) : entry.name;
 
             ImGui::TextUnformatted(displayName.c_str());
-            ImGui::TextDisabled("%08X  |  %s", entry.formID, entry.sourcePlugin.c_str());
+            const std::string formIDText = FormatUtils::FormID(entry.formID);
+            ImGui::TextDisabled("%s  |  %s", formIDText.c_str(), entry.sourcePlugin.c_str());
             ImGui::Separator();
 
             if (!gameplayActionsAllowed) {
@@ -1195,7 +1184,7 @@ namespace ESPExplorerAE
         const auto selectedEntries = CopySelectedEntries(visibleEntries);
         if (selectedEntries.size() > 1) {
             bool firstButton = true;
-            if (SharedUtils::DrawWrappedButton(L(context, "Inventory", "sRemoveSelected", "Remove Selected"), firstButton)) {
+            if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "Inventory", "sRemoveSelected", "Remove Selected"), firstButton)) {
                 MainWindowPopups::RequestActionConfirmation(
                     L(context, "Inventory", "sRemoveSelected", "Remove Selected"),
                     L(context, "General", "sConfirmAction", "Confirm Action"),
@@ -1205,7 +1194,7 @@ namespace ESPExplorerAE
                         }
                     });
             }
-            if (SharedUtils::DrawWrappedButton(L(context, "Inventory", "sDropSelected", "Drop Selected"), firstButton)) {
+            if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "Inventory", "sDropSelected", "Drop Selected"), firstButton)) {
                 MainWindowPopups::RequestActionConfirmation(
                     L(context, "Inventory", "sDropSelected", "Drop Selected"),
                     L(context, "General", "sConfirmAction", "Confirm Action"),
@@ -1215,14 +1204,14 @@ namespace ESPExplorerAE
                         }
                     });
             }
-            if (SharedUtils::DrawWrappedButton(L(context, "Inventory", "sEquipSelected", "Equip Selected"), firstButton)) {
+            if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "Inventory", "sEquipSelected", "Equip Selected"), firstButton)) {
                 for (const auto& entry : selectedEntries) {
                     if (IsEquippable(entry)) {
                         EquipInventoryEntry(entry, true);
                     }
                 }
             }
-            if (SharedUtils::DrawWrappedButton(L(context, "Inventory", "sUnequipSelected", "Unequip Selected"), firstButton)) {
+            if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "Inventory", "sUnequipSelected", "Unequip Selected"), firstButton)) {
                 for (const auto& entry : selectedEntries) {
                     if (IsEquippable(entry)) {
                         EquipInventoryEntry(entry, false);

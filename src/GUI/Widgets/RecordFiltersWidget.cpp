@@ -1,6 +1,7 @@
 #include "GUI/Widgets/RecordFiltersWidget.h"
 
 #include "Filters/AdvancedRecordFilters.h"
+#include "GUI/Widgets/ImGuiWidgetUtils.h"
 #include "GUI/Widgets/SharedUtils.h"
 
 #include <imgui.h>
@@ -96,14 +97,6 @@ namespace ESPExplorerAE
             }
 
             return "";
-        }
-
-        void DrawWrappedSameLine(const char* label)
-        {
-            const float width = ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetStyle().ItemSpacing.x;
-            if (ImGui::GetContentRegionAvail().x >= width) {
-                ImGui::SameLine();
-            }
         }
 
         bool AddRuleIfMissing(std::vector<AdvancedFilterRule>& rules, const AdvancedFilterRule& rule)
@@ -361,12 +354,12 @@ namespace ESPExplorerAE
             }
 
             bool firstButton = true;
-            if (SharedUtils::DrawWrappedButton((std::string(localize("General", "sAdvancedFilterRestoreDefaults", "Restore Defaults")) + "##RestoreDefaults" + std::string(idSuffix)).c_str(), firstButton)) {
+            if (ImGuiWidgetUtils::DrawWrappedButton((std::string(localize("General", "sAdvancedFilterRestoreDefaults", "Restore Defaults")) + "##RestoreDefaults" + std::string(idSuffix)).c_str(), firstButton)) {
                 for (const auto& defaultRule : AdvancedRecordFilters::GetDefaultRules()) {
                     changed = AddRuleIfMissing(state.advancedRules, defaultRule) || changed;
                 }
             }
-            if (SharedUtils::DrawWrappedButton((std::string(localize("General", "sClearAll", "Clear All")) + "##ClearAdvanced" + std::string(idSuffix)).c_str(), firstButton)) {
+            if (ImGuiWidgetUtils::DrawWrappedButton((std::string(localize("General", "sClearAll", "Clear All")) + "##ClearAdvanced" + std::string(idSuffix)).c_str(), firstButton)) {
                 state.advancedRules.clear();
                 changed = true;
             }
@@ -513,13 +506,13 @@ namespace ESPExplorerAE
             changed = true;
         }
 
-        DrawWrappedSameLine(localize("General", "sIncludeUnnamed", "Include Unnamed"));
+        ImGuiWidgetUtils::DrawWrappedSameLine(localize("General", "sIncludeUnnamed", "Include Unnamed"));
         const std::string unnamedLabel = std::string(localize("General", "sIncludeUnnamed", "Include Unnamed")) + "##Unnamed" + std::string(idSuffix);
         if (ImGui::Checkbox(unnamedLabel.c_str(), &state.showUnnamed)) {
             changed = true;
         }
 
-        DrawWrappedSameLine(localize("General", "sIncludeDeleted", "Include Deleted"));
+        ImGuiWidgetUtils::DrawWrappedSameLine(localize("General", "sIncludeDeleted", "Include Deleted"));
         const std::string deletedLabel = std::string(localize("General", "sIncludeDeleted", "Include Deleted")) + "##Deleted" + std::string(idSuffix);
         if (ImGui::Checkbox(deletedLabel.c_str(), &state.showDeleted)) {
             changed = true;
@@ -551,7 +544,7 @@ namespace ESPExplorerAE
             "%s##AdvancedFilters%s",
             advancedButtonVisible,
             std::string(idSuffix).c_str());
-        DrawWrappedSameLine(advancedButtonVisible);
+        ImGuiWidgetUtils::DrawWrappedSameLine(advancedButtonVisible);
         if (ImGui::GetCursorPosX() > 0.0f) {
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetStyle().ItemSpacing.x * 1.5f);
         }
