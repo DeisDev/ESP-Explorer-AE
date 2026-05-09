@@ -4,6 +4,14 @@
 
 namespace ESPExplorerAE
 {
+    enum class MultiCopyFormat
+    {
+        Lines = 0,
+        CommaSeparated = 1,
+        Parenthesized = 2,
+        QuotedCommaSeparated = 3
+    };
+
     struct Settings
     {
         std::string language{ "en" };
@@ -29,6 +37,7 @@ namespace ESPExplorerAE
         bool autoFocusSearchBars{ true };
         bool showPlayerStatsInStatus{ false };
         bool showMenuResolutionInStatus{ false };
+        MultiCopyFormat multiCopyFormat{ MultiCopyFormat::Lines };
         bool allowGameplayActionsInMainMenu{ false };
         bool componentSubstitution{ true };
         bool pluginAdvancedDetailsView{ false };

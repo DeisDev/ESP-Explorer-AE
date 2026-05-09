@@ -1,5 +1,6 @@
 #include "GUI/Widgets/FormTable.h"
 
+#include "Config/Config.h"
 #include "GUI/Widgets/ContextMenu.h"
 #include "GUI/Widgets/FormatUtils.h"
 #include "GUI/Widgets/FormActions.h"
@@ -51,16 +52,9 @@ namespace ESPExplorerAE
 
         bool MatchesSearch(const FormEntry& entry, std::string_view query, bool caseSensitive);
 
-        std::string BuildLineList(const std::vector<std::string>& values)
+        std::string CopyLabel(const char* label, std::size_t count)
         {
-            std::string text{};
-            for (std::size_t i = 0; i < values.size(); ++i) {
-                if (i > 0) {
-                    text.push_back('\n');
-                }
-                text += values[i];
-            }
-            return text;
+            return std::string(label) + " (" + std::to_string(count) + ")";
         }
 
         std::string_view GetEditorID(std::uint32_t formID)
@@ -268,24 +262,27 @@ namespace ESPExplorerAE
         if (!hasSelection) {
             ImGui::BeginDisabled(true);
         }
-        if (drawWrappedButton(L("General", "sCopyFormIDsAsLines", "Copy FormIDs as Lines"), firstActionInRow)) {
+        const auto copyFormat = Config::Get().multiCopyFormat;
+        const std::string copyFormIDsLabel = CopyLabel(L("General", "sCopyFormID", "Copy FormID"), selected.size());
+        const std::string copyNamesLabel = CopyLabel(L("General", "sCopyName", "Copy Name"), selected.size());
+        if (drawWrappedButton(copyFormIDsLabel.c_str(), firstActionInRow)) {
             const auto selectedEntries = collectSelectedEntries();
             std::vector<std::string> values{};
             values.reserve(selectedEntries.size());
             for (const auto& selectedEntry : selectedEntries) {
                 values.push_back(FormatUtils::FormID(selectedEntry.formID));
             }
-            const std::string clipboard = BuildLineList(values);
+            const std::string clipboard = FormatUtils::MultiCopyList(values, copyFormat);
             ImGui::SetClipboardText(clipboard.c_str());
         }
-        if (drawWrappedButton(L("General", "sCopyNamesAsLines", "Copy Names as Lines"), firstActionInRow)) {
+        if (drawWrappedButton(copyNamesLabel.c_str(), firstActionInRow)) {
             const auto selectedEntries = collectSelectedEntries();
             std::vector<std::string> values{};
             values.reserve(selectedEntries.size());
             for (const auto& selectedEntry : selectedEntries) {
                 values.push_back(selectedEntry.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : selectedEntry.name);
             }
-            const std::string clipboard = BuildLineList(values);
+            const std::string clipboard = FormatUtils::MultiCopyList(values, copyFormat);
             ImGui::SetClipboardText(clipboard.c_str());
         }
         if (!hasSelection) {
@@ -557,33 +554,23 @@ namespace ESPExplorerAE
                         }
 
                         if (!selectedEntries.empty()) {
-                            if (ImGui::MenuItem((std::string(L("General", "sCopyFormID", "Copy FormID")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                            if (ImGui::MenuItem(CopyLabel(L("General", "sCopyFormID", "Copy FormID"), selectedEntries.size()).c_str())) {
                                 std::vector<std::string> values{};
                                 values.reserve(selectedEntries.size());
                                 for (const auto& selectedEntry : selectedEntries) {
                                     values.push_back(FormatUtils::FormID(selectedEntry.formID));
                                 }
-                                const std::string clipboard = FormatUtils::ParenthesizedList(values);
+                                const std::string clipboard = FormatUtils::MultiCopyList(values, Config::Get().multiCopyFormat);
                                 ImGui::SetClipboardText(clipboard.c_str());
                             }
 
-                            if (ImGui::MenuItem((std::string(L("General", "sCopyRecordSource", "Copy Record Source")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
-                                std::vector<std::string> values{};
-                                values.reserve(selectedEntries.size());
-                                for (const auto& selectedEntry : selectedEntries) {
-                                    values.push_back(selectedEntry.sourcePlugin);
-                                }
-                                const std::string clipboard = FormatUtils::ParenthesizedList(values);
-                                ImGui::SetClipboardText(clipboard.c_str());
-                            }
-
-                            if (ImGui::MenuItem((std::string(L("General", "sCopyName", "Copy Name")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                            if (ImGui::MenuItem(CopyLabel(L("General", "sCopyName", "Copy Name"), selectedEntries.size()).c_str())) {
                                 std::vector<std::string> values{};
                                 values.reserve(selectedEntries.size());
                                 for (const auto& selectedEntry : selectedEntries) {
                                     values.push_back(selectedEntry.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : selectedEntry.name);
                                 }
-                                const std::string clipboard = FormatUtils::ParenthesizedList(values);
+                                const std::string clipboard = FormatUtils::MultiCopyList(values, Config::Get().multiCopyFormat);
                                 ImGui::SetClipboardText(clipboard.c_str());
                             }
 

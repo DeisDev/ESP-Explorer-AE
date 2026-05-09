@@ -220,6 +220,20 @@ namespace ESPExplorerAE
             { "Logs", "Logs", "sTabName", "Logs" },
         };
 
+        struct MultiCopyFormatOption
+        {
+            MultiCopyFormat value;
+            const char* key;
+            const char* fallback;
+        };
+
+        constexpr MultiCopyFormatOption kMultiCopyFormatOptions[] = {
+            { MultiCopyFormat::Lines, "sMultiCopyFormatLines", "One Per Line" },
+            { MultiCopyFormat::CommaSeparated, "sMultiCopyFormatComma", "Comma Separated" },
+            { MultiCopyFormat::Parenthesized, "sMultiCopyFormatParenthesized", "Parenthesized" },
+            { MultiCopyFormat::QuotedCommaSeparated, "sMultiCopyFormatQuotedComma", "Quoted Comma Separated" },
+        };
+
         const StartupTabOption* FindStartupTabOption(std::string_view value)
         {
             for (const auto& option : kStartupTabOptions) {
@@ -229,6 +243,17 @@ namespace ESPExplorerAE
             }
 
             return &kStartupTabOptions[0];
+        }
+
+        const MultiCopyFormatOption* FindMultiCopyFormatOption(MultiCopyFormat value)
+        {
+            for (const auto& option : kMultiCopyFormatOptions) {
+                if (option.value == value) {
+                    return &option;
+                }
+            }
+
+            return &kMultiCopyFormatOptions[0];
         }
 
         void ResetVisualSettings(Settings& settings)
@@ -558,6 +583,26 @@ namespace ESPExplorerAE
             ImGui::SetNextItemWidth(fullWidth());
             changed = ImGui::SliderInt("##RecentRecordsLimit", &settings.recentRecordsLimit, 5, 100) || changed;
             settings.recentRecordsLimit = (std::clamp)(settings.recentRecordsLimit, 5, 100);
+            blockSpacing();
+
+            {
+                const auto* multiCopyOption = FindMultiCopyFormatOption(settings.multiCopyFormat);
+                fieldLabel(L("Settings", "sMultiCopyFormat", "Multi-Copy Format"));
+                ImGui::SetNextItemWidth(fullWidth());
+                if (ImGui::BeginCombo("##MultiCopyFormat", L("Settings", multiCopyOption->key, multiCopyOption->fallback))) {
+                    for (const auto& option : kMultiCopyFormatOptions) {
+                        const bool selected = settings.multiCopyFormat == option.value;
+                        if (ImGui::Selectable(L("Settings", option.key, option.fallback), selected)) {
+                            settings.multiCopyFormat = option.value;
+                            changed = true;
+                        }
+                        if (selected) {
+                            ImGui::SetItemDefaultFocus();
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+            }
             sectionSpacing();
 
             {
