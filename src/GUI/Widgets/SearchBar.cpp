@@ -23,6 +23,11 @@ namespace ESPExplorerAE
         if (ImGui::InputTextWithHint(std::string(std::string("##") + label).c_str(), label, buffer, bufferSize)) {
             changed = true;
         }
+        if (ImGui::IsItemActive() && ImGui::IsKeyPressed(ImGuiKey_Escape, false) && buffer[0] != '\0') {
+            buffer[0] = '\0';
+            value.clear();
+            changed = true;
+        }
 
         if (ImGui::IsItemActivated() && GamepadInput::IsUsingGamepad() && !GamepadInput::IsSteamKeyboardOpen()) {
             GamepadInput::ShowSteamKeyboard();

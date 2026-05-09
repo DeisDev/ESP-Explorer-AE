@@ -1,7 +1,9 @@
 #include "GUI/Widgets/ItemGrantPopup.h"
 
 #include "Config/Config.h"
+#include "GUI/Widgets/FormatUtils.h"
 #include "GUI/Widgets/FormActions.h"
+#include "GUI/Widgets/ImGuiWidgetUtils.h"
 #include "GUI/Widgets/ModalUtils.h"
 #include "Localization/Language.h"
 
@@ -118,7 +120,8 @@ namespace ESPExplorerAE
             } else {
                 ImGui::TextUnformatted(item.entry.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : item.entry.name.c_str());
             }
-            ImGui::TextDisabled("%08X  |  %s", item.entry.formID, item.entry.sourcePlugin.c_str());
+            const std::string formIDText = FormatUtils::FormID(item.entry.formID);
+            ImGui::TextDisabled("%s  |  %s", formIDText.c_str(), item.entry.sourcePlugin.c_str());
             ImGui::Spacing();
 
             ImGui::TextUnformatted(L("Items", "sQuantity", "Quantity"));
@@ -238,11 +241,7 @@ namespace ESPExplorerAE
         const char* giveLabel = L("Items", "sGiveToPlayer", "Give To Player");
         const char* cancelLabel = L("General", "sCancel", "Cancel");
         const bool gameplayActionsAllowed = FormActions::AreGameplayActionsAllowed();
-        const auto showDisabledTooltip = [&]() {
-            if (!gameplayActionsAllowed && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                ImGui::SetTooltip("%s", L("General", "sGameplayActionsDisabledInMainMenu", "Gameplay actions are disabled while the main menu is open."));
-            }
-        };
+        const char* disabledTooltip = L("General", "sGameplayActionsDisabledInMainMenu", "Gameplay actions are disabled while the main menu is open.");
         const float giveTextWidth = ImGui::CalcTextSize(giveLabel).x + style.FramePadding.x * 2.0f;
         const float cancelTextWidth = ImGui::CalcTextSize(cancelLabel).x + style.FramePadding.x * 2.0f;
         const float minButtonWidth = 120.0f;
@@ -263,7 +262,7 @@ namespace ESPExplorerAE
             ImGui::BeginDisabled(true);
         }
         const bool applyPressed = ImGui::Button(giveLabel, ImVec2(giveButtonWidth, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Enter);
-        showDisabledTooltip();
+        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
         if (!canApply) {
             ImGui::EndDisabled();
         }

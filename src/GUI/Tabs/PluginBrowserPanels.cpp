@@ -4,8 +4,10 @@
 
 #include "GUI/Tabs/PluginBrowserHelpers.h"
 #include "GUI/Widgets/ContextMenu.h"
+#include "GUI/Widgets/FormatUtils.h"
 #include "GUI/Widgets/FormActions.h"
 #include "GUI/Widgets/FormDetailsView.h"
+#include "GUI/Widgets/ImGuiWidgetUtils.h"
 #include "GUI/Widgets/SharedUtils.h"
 
 #include <imgui.h>
@@ -28,6 +30,11 @@ namespace ESPExplorerAE::PluginBrowserPanels
             });
 
             return it != plugins.end() ? &(*it) : nullptr;
+        }
+
+        std::string CopyLabel(const char* label, std::size_t count)
+        {
+            return std::string(label) + " (" + std::to_string(count) + ")";
         }
 
         void DrawPluginDiagnosticsContent(const PluginInfo& plugin, PluginBrowserTabContext& context)
@@ -87,8 +94,9 @@ namespace ESPExplorerAE::PluginBrowserPanels
             currentVisibleOrder.push_back(record.formID);
 
             const auto* displayName = record.name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : record.name.c_str();
+            const std::string formIDText = FormatUtils::FormID(record.formID);
             char recordLabel[512]{};
-            std::snprintf(recordLabel, sizeof(recordLabel), "%s [%08X]##%s%08X", displayName, record.formID, idPrefix, record.formID);
+            std::snprintf(recordLabel, sizeof(recordLabel), "%s [%s]##%s%s", displayName, formIDText.c_str(), idPrefix, formIDText.c_str());
             const bool isSelected = context.selectedPluginTreeRecordFormIDs.contains(record.formID);
             if (ImGui::Selectable(recordLabel, isSelected)) {
                 const bool shiftHeld = ImGui::GetIO().KeyShift;
@@ -186,40 +194,6 @@ namespace ESPExplorerAE::PluginBrowserPanels
             }
         }
 
-        void DrawWrappedActionButtonRowState(bool& firstBtn, int& buttonsInRow, float& buttonWidth)
-        {
-            if (!firstBtn) {
-                return;
-            }
-            buttonsInRow = 0;
-            buttonWidth = 0.0f;
-        }
-
-        bool WrappedButton(const char* label, bool& firstInRow, int& buttonsInRow, float& buttonWidth)
-        {
-            const auto& style = ImGui::GetStyle();
-            constexpr int kButtonsPerRow = 3;
-
-            if (buttonsInRow == 0) {
-                const float rowAvailable = ImGui::GetContentRegionAvail().x;
-                buttonWidth = (std::max)(96.0f, (rowAvailable - style.ItemSpacing.x * static_cast<float>(kButtonsPerRow - 1)) / static_cast<float>(kButtonsPerRow));
-            }
-
-            if (buttonsInRow > 0) {
-                ImGui::SameLine();
-            }
-
-            const bool pressed = ImGui::Button(label, ImVec2(buttonWidth, 0.0f));
-            ++buttonsInRow;
-            if (buttonsInRow >= kButtonsPerRow) {
-                buttonsInRow = 0;
-                firstInRow = true;
-            } else {
-                firstInRow = false;
-            }
-
-            return pressed;
-        }
     }
 
     void DrawTreePane(const std::vector<PluginInfo>& plugins, const FormCache& cache, std::uint64_t dataVersion, PluginBrowserTabContext& context, float leftWidth)
@@ -258,6 +232,26 @@ namespace ESPExplorerAE::PluginBrowserPanels
 
             const std::string recentRecordsHeader = std::string(context.localize("PluginBrowser", "sRecentRecords", "Recent Records")) + "##PluginRecentRecords";
             if (ImGui::TreeNodeEx(recentRecordsHeader.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
+                const bool hasRecentRecords = !context.recentPluginRecordFormIDs.empty();
+                const ImVec4 buttonColor = ImGui::GetStyleColorVec4(ImGuiCol_Button);
+                const ImVec4 hoveredColor = ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered);
+                const ImVec4 activeColor = ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive);
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 2.0f));
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(buttonColor.x, buttonColor.y, buttonColor.z, buttonColor.w * 0.55f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(hoveredColor.x, hoveredColor.y, hoveredColor.z, hoveredColor.w * 0.75f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(activeColor.x, activeColor.y, activeColor.z, activeColor.w * 0.85f));
+                if (!hasRecentRecords) {
+                    ImGui::BeginDisabled(true);
+                }
+                if (ImGui::SmallButton(context.localize("PluginBrowser", "sClearRecentRecords", "Clear Recent Records"))) {
+                    context.recentPluginRecordFormIDs.clear();
+                }
+                if (!hasRecentRecords) {
+                    ImGui::EndDisabled();
+                }
+                ImGui::PopStyleColor(3);
+                ImGui::PopStyleVar();
+
                 const std::size_t recentRecordsLimit = static_cast<std::size_t>((std::clamp)(Config::Get().recentRecordsLimit, 5, 100));
                 while (context.recentPluginRecordFormIDs.size() > recentRecordsLimit) {
                     context.recentPluginRecordFormIDs.pop_back();
@@ -408,70 +402,56 @@ namespace ESPExplorerAE::PluginBrowserPanels
                     const bool isConstructible = ContextMenu::IsConstructible(selectedRecord->category);
                     const bool isEquippable = ContextMenu::IsEquippable(selectedRecord->category);
                     const bool gameplayActionsAllowed = FormActions::AreGameplayActionsAllowed();
-                    const auto showDisabledTooltip = [&]() {
-                        if (!gameplayActionsAllowed && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                            ImGui::SetTooltip("%s", context.localize("General", "sGameplayActionsDisabledInMainMenu", "Gameplay actions are disabled while the main menu is open."));
-                        }
-                    };
+                    const char* disabledTooltip = context.localize("General", "sGameplayActionsDisabledInMainMenu", "Gameplay actions are disabled while the main menu is open.");
 
                     bool firstBtn = true;
-                    int buttonsInRow = 0;
-                    float buttonWidth = 0.0f;
+                    ImGuiWidgetUtils::FixedGridButtonRow buttonRow{};
+                    const auto drawActionButton = [&](const char* label) {
+                        return ImGuiWidgetUtils::DrawFixedGridButton(label, firstBtn, buttonRow);
+                    };
 
                     if (hasMultipleSelection && !selectedEntries.empty()) {
-                        if (WrappedButton((std::string(context.localize("General", "sCopyName", "Copy Name")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str(), firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton(CopyLabel(context.localize("General", "sCopyName", "Copy Name"), selectedEntries.size()).c_str())) {
                             std::vector<std::string> values{};
                             values.reserve(selectedEntries.size());
                             for (const auto& selectedEntry : selectedEntries) {
                                 values.push_back(selectedEntry.name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : selectedEntry.name);
                             }
-                            const auto text = SharedUtils::BuildParenthesizedList(values);
+                            const auto text = FormatUtils::MultiCopyList(values, Config::Get().multiCopyFormat);
                             ImGui::SetClipboardText(text.c_str());
                         }
 
-                        if (WrappedButton((std::string(context.localize("General", "sCopyFormID", "Copy FormID")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str(), firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton(CopyLabel(context.localize("General", "sCopyFormID", "Copy FormID"), selectedEntries.size()).c_str())) {
                             std::vector<std::string> values{};
                             values.reserve(selectedEntries.size());
                             for (const auto& selectedEntry : selectedEntries) {
-                                char formBuffer[16]{};
-                                std::snprintf(formBuffer, sizeof(formBuffer), "%08X", selectedEntry.formID);
-                                values.emplace_back(formBuffer);
+                                values.push_back(FormatUtils::FormID(selectedEntry.formID));
                             }
-                            const auto text = SharedUtils::BuildParenthesizedList(values);
+                            const auto text = FormatUtils::MultiCopyList(values, Config::Get().multiCopyFormat);
                             ImGui::SetClipboardText(text.c_str());
                         }
 
-                        if (WrappedButton((std::string(context.localize("General", "sCopyRecordSource", "Copy Record Source")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str(), firstBtn, buttonsInRow, buttonWidth)) {
-                            std::vector<std::string> values{};
-                            values.reserve(selectedEntries.size());
-                            for (const auto& selectedEntry : selectedEntries) {
-                                values.push_back(selectedEntry.sourcePlugin);
-                            }
-                            const auto text = SharedUtils::BuildParenthesizedList(values);
-                            ImGui::SetClipboardText(text.c_str());
-                        }
-
-                        if (WrappedButton((std::string(context.localize("General", "sAddFavorite", "Add Favorite")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str(), firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton((std::string(context.localize("General", "sAddFavorite", "Add Favorite")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
                             for (const auto& selectedEntry : selectedEntries) {
                                 context.favoriteForms.insert(selectedEntry.formID);
                             }
                         }
 
-                        if (WrappedButton((std::string(context.localize("General", "sRemoveFavorite", "Remove Favorite")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str(), firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton((std::string(context.localize("General", "sRemoveFavorite", "Remove Favorite")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
                             for (const auto& selectedEntry : selectedEntries) {
                                 context.favoriteForms.erase(selectedEntry.formID);
                             }
                         }
                     } else {
-                        if (WrappedButton(context.localize("General", "sCopyFormID", "Copy FormID"), firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton(context.localize("General", "sCopyFormID", "Copy FormID"))) {
                             FormActions::CopyFormID(selectedRecord->formID);
                         }
 
-                        if (WrappedButton(context.localize("General", "sCopyRecordSource", "Copy Record Source"), firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton(context.localize("General", "sCopyRecordSource", "Copy Record Source"))) {
                             ImGui::SetClipboardText(selectedRecord->sourcePlugin.c_str());
                         }
 
-                        if (WrappedButton(context.localize("General", "sCopyName", "Copy Name"), firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton(context.localize("General", "sCopyName", "Copy Name"))) {
                             ImGui::SetClipboardText(selectedRecord->name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : selectedRecord->name.c_str());
                         }
 
@@ -480,17 +460,17 @@ namespace ESPExplorerAE::PluginBrowserPanels
                                 ImGui::BeginDisabled(true);
                             }
                             if (canGive) {
-                                if (WrappedButton(context.localize("Items", "sGiveItem", "Give Item"), firstBtn, buttonsInRow, buttonWidth)) {
+                                if (drawActionButton(context.localize("Items", "sGiveItem", "Give Item"))) {
                                     context.openItemGrantPopup(*selectedRecord);
                                 }
-                                showDisabledTooltip();
+                                ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
                             }
 
                             if (isEquippable) {
-                                if (WrappedButton(context.localize("General", "sEquipItem", "Equip Item"), firstBtn, buttonsInRow, buttonWidth)) {
+                                if (drawActionButton(context.localize("General", "sEquipItem", "Equip Item"))) {
                                     EquipRecordWithConfiguredAmmo(*selectedRecord, context.equipWeaponAmmoCount);
                                 }
-                                showDisabledTooltip();
+                                ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
                             }
                             if (!gameplayActionsAllowed) {
                                 ImGui::EndDisabled();
@@ -498,7 +478,7 @@ namespace ESPExplorerAE::PluginBrowserPanels
                         }
 
                         const bool isFavorite = context.favoriteForms.contains(selectedRecord->formID);
-                        if (WrappedButton(isFavorite ? context.localize("General", "sRemoveFavorite", "Remove Favorite") : context.localize("General", "sAddFavorite", "Add Favorite"), firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton(isFavorite ? context.localize("General", "sRemoveFavorite", "Remove Favorite") : context.localize("General", "sAddFavorite", "Add Favorite"))) {
                             if (isFavorite) {
                                 context.favoriteForms.erase(selectedRecord->formID);
                             } else {
@@ -512,18 +492,17 @@ namespace ESPExplorerAE::PluginBrowserPanels
                     }
                     if (hasMultipleSelection && !selectedGiveableEntries.empty()) {
                         std::string giveSelectedLabel = std::string(context.localize("Items", "sGiveItem", "Give Item")) + " (" + std::to_string(selectedGiveableEntries.size()) + ")";
-                        if (WrappedButton(giveSelectedLabel.c_str(), firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton(giveSelectedLabel.c_str())) {
                             context.openItemGrantPopupMultiple(selectedGiveableEntries);
                         }
-                        showDisabledTooltip();
+                        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
                     }
 
                     if (canSpawn || canGive) {
-                        DrawWrappedActionButtonRowState(firstBtn, buttonsInRow, buttonWidth);
                         const char* spawnLabel = context.localize("NPCs", "sSpawnAtPlayer", "Spawn At Player");
 
                         static int detailSpawnQuantity = 1;
-                        if (WrappedButton(spawnLabel, firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton(spawnLabel)) {
                             const auto formID = selectedRecord->formID;
                             const auto quantity = static_cast<std::uint32_t>(detailSpawnQuantity);
                             const std::string name = selectedRecord->name;
@@ -534,7 +513,7 @@ namespace ESPExplorerAE::PluginBrowserPanels
                                     FormActions::SpawnAtPlayer(formID, quantity);
                                 });
                         }
-                        showDisabledTooltip();
+                        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
 
                         const auto& style = ImGui::GetStyle();
                         const float quantityWidth = 140.0f;
@@ -548,12 +527,11 @@ namespace ESPExplorerAE::PluginBrowserPanels
                         }
 
                         firstBtn = true;
-                        buttonsInRow = 0;
-                        buttonWidth = 0.0f;
+                        buttonRow = {};
                     }
 
                     if (isQuest) {
-                        if (WrappedButton(context.localize("General", "sStartQuest", "Start Quest"), firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton(context.localize("General", "sStartQuest", "Start Quest"))) {
                             const auto formID = selectedRecord->formID;
                             context.requestActionConfirmation(
                                 context.localize("General", "sConfirmQuestTitle", "Confirm Quest Action"),
@@ -564,8 +542,8 @@ namespace ESPExplorerAE::PluginBrowserPanels
                                     FormActions::ExecuteConsoleCommand(command);
                                 });
                         }
-                        showDisabledTooltip();
-                        if (WrappedButton(context.localize("General", "sCompleteQuest", "Complete Quest"), firstBtn, buttonsInRow, buttonWidth)) {
+                        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
+                        if (drawActionButton(context.localize("General", "sCompleteQuest", "Complete Quest"))) {
                             const auto formID = selectedRecord->formID;
                             context.requestActionConfirmation(
                                 context.localize("General", "sConfirmQuestTitle", "Confirm Quest Action"),
@@ -576,11 +554,11 @@ namespace ESPExplorerAE::PluginBrowserPanels
                                     FormActions::ExecuteConsoleCommand(command);
                                 });
                         }
-                        showDisabledTooltip();
+                        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
                     }
 
                     if (isPerk) {
-                        if (WrappedButton(context.localize("General", "sAddPerk", "Add Perk"), firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton(context.localize("General", "sAddPerk", "Add Perk"))) {
                             const auto formID = selectedRecord->formID;
                             context.requestActionConfirmation(
                                 context.localize("General", "sConfirmAction", "Confirm Action"),
@@ -589,8 +567,8 @@ namespace ESPExplorerAE::PluginBrowserPanels
                                     FormActions::AddPerkToPlayer(formID);
                                 });
                         }
-                        showDisabledTooltip();
-                        if (WrappedButton(context.localize("General", "sRemovePerk", "Remove Perk"), firstBtn, buttonsInRow, buttonWidth)) {
+                        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
+                        if (drawActionButton(context.localize("General", "sRemovePerk", "Remove Perk"))) {
                             const auto formID = selectedRecord->formID;
                             context.requestActionConfirmation(
                                 context.localize("General", "sConfirmAction", "Confirm Action"),
@@ -599,11 +577,11 @@ namespace ESPExplorerAE::PluginBrowserPanels
                                     FormActions::RemovePerkFromPlayer(formID);
                                 });
                         }
-                        showDisabledTooltip();
+                        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
                     }
 
                     if (isSpellLike) {
-                        if (WrappedButton(context.localize("General", "sAddSpellEffect", "Add Spell/Effect"), firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton(context.localize("General", "sAddSpellEffect", "Add Spell/Effect"))) {
                             const auto formID = selectedRecord->formID;
                             context.requestActionConfirmation(
                                 context.localize("General", "sConfirmAction", "Confirm Action"),
@@ -612,8 +590,8 @@ namespace ESPExplorerAE::PluginBrowserPanels
                                     FormActions::AddSpellToPlayer(formID);
                                 });
                         }
-                        showDisabledTooltip();
-                        if (WrappedButton(context.localize("General", "sRemoveSpellEffect", "Remove Spell/Effect"), firstBtn, buttonsInRow, buttonWidth)) {
+                        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
+                        if (drawActionButton(context.localize("General", "sRemoveSpellEffect", "Remove Spell/Effect"))) {
                             const auto formID = selectedRecord->formID;
                             context.requestActionConfirmation(
                                 context.localize("General", "sConfirmAction", "Confirm Action"),
@@ -622,11 +600,11 @@ namespace ESPExplorerAE::PluginBrowserPanels
                                     FormActions::RemoveSpellFromPlayer(formID);
                                 });
                         }
-                        showDisabledTooltip();
+                        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
                     }
 
                     if (isWeather) {
-                        if (WrappedButton(context.localize("General", "sSetWeather", "Set Weather"), firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton(context.localize("General", "sSetWeather", "Set Weather"))) {
                             const auto formID = selectedRecord->formID;
                             context.requestActionConfirmation(
                                 context.localize("General", "sConfirmWeatherTitle", "Confirm Weather Change"),
@@ -637,28 +615,28 @@ namespace ESPExplorerAE::PluginBrowserPanels
                                     FormActions::ExecuteConsoleCommand(command);
                                 });
                         }
-                        showDisabledTooltip();
+                        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
                     }
 
                     if (isSound) {
-                        if (WrappedButton(context.localize("General", "sPlaySound", "Play Sound"), firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton(context.localize("General", "sPlaySound", "Play Sound"))) {
                             if (const char* editorID = ContextMenu::TryGetEditorID(selectedRecord->formID)) {
                                 std::string command = std::string("playsound ") + editorID;
                                 FormActions::ExecuteConsoleCommand(command);
                             }
                         }
-                        showDisabledTooltip();
+                        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
                     }
 
                     if (isGlobal) {
-                        if (WrappedButton(context.localize("General", "sSetGlobal", "Set Global"), firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton(context.localize("General", "sSetGlobal", "Set Global"))) {
                             context.openGlobalValuePopup(selectedRecord->formID);
                         }
-                        showDisabledTooltip();
+                        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
                     }
 
                     if (isOutfit) {
-                        if (WrappedButton(context.localize("General", "sAddOutfitItems", "Add Outfit Items"), firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton(context.localize("General", "sAddOutfitItems", "Add Outfit Items"))) {
                             const auto formID = selectedRecord->formID;
                             context.requestActionConfirmation(
                                 context.localize("General", "sConfirmAction", "Confirm Action"),
@@ -667,11 +645,11 @@ namespace ESPExplorerAE::PluginBrowserPanels
                                     FormActions::AddOutfitItemsToPlayer(formID);
                                 });
                         }
-                        showDisabledTooltip();
+                        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
                     }
 
                     if (isConstructible) {
-                        if (WrappedButton(context.localize("General", "sAddCraftedItem", "Add Crafted Item"), firstBtn, buttonsInRow, buttonWidth)) {
+                        if (drawActionButton(context.localize("General", "sAddCraftedItem", "Add Crafted Item"))) {
                             const auto formID = selectedRecord->formID;
                             context.requestActionConfirmation(
                                 context.localize("General", "sConfirmAction", "Confirm Action"),
@@ -680,7 +658,7 @@ namespace ESPExplorerAE::PluginBrowserPanels
                                     FormActions::AddConstructedItemToPlayer(formID);
                                 });
                         }
-                        showDisabledTooltip();
+                        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
                     }
 
                     if (canTeleport) {
@@ -689,7 +667,7 @@ namespace ESPExplorerAE::PluginBrowserPanels
                         const bool canUseCoc = editorID && editorID[0] != '\0';
 
                         if (canUseCoc) {
-                            if (WrappedButton(context.localize("General", "sTeleportCOC", "Teleport (COC)"), firstBtn, buttonsInRow, buttonWidth)) {
+                            if (drawActionButton(context.localize("General", "sTeleportCOC", "Teleport (COC)"))) {
                                 const auto editorIDCopy = std::string(editorID);
                                 context.requestActionConfirmation(
                                     context.localize("General", "sConfirmTeleportTitle", "Confirm Teleport"),
@@ -699,10 +677,10 @@ namespace ESPExplorerAE::PluginBrowserPanels
                                         FormActions::ExecuteConsoleCommand(command);
                                     });
                             }
-                            showDisabledTooltip();
+                            ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
                         } else {
                             ImGui::BeginDisabled(true);
-                            WrappedButton(context.localize("General", "sTeleportCOC", "Teleport (COC)"), firstBtn, buttonsInRow, buttonWidth);
+                            drawActionButton(context.localize("General", "sTeleportCOC", "Teleport (COC)"));
                             ImGui::EndDisabled();
                         }
                     }

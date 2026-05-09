@@ -27,6 +27,10 @@ namespace ESPExplorerAE
         if (ImGui::InputTextWithHint("##PluginSearchInput", context.localize("PluginBrowser", "sSearch", "Plugin Search"), context.pluginSearchBuffer, context.pluginSearchBufferSize)) {
             context.pluginSearch = context.pluginSearchBuffer;
         }
+        if (ImGui::IsItemActive() && ImGui::IsKeyPressed(ImGuiKey_Escape, false) && context.pluginSearchBuffer[0] != '\0') {
+            context.pluginSearchBuffer[0] = '\0';
+            context.pluginSearch.clear();
+        }
         ImGui::SameLine();
         if (ImGui::Button("X##PluginSearchClear")) {
             context.pluginSearchBuffer[0] = '\0';

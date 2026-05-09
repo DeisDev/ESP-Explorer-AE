@@ -1,6 +1,7 @@
 #include "GUI/Widgets/FormDetailsView.h"
 
 #include "Data/DataManager.h"
+#include "GUI/Widgets/FormatUtils.h"
 
 #include <imgui.h>
 
@@ -64,9 +65,7 @@ namespace ESPExplorerAE
                 return std::string(editorID);
             }
 
-            char buffer[16]{};
-            std::snprintf(buffer, sizeof(buffer), "%08X", form->GetFormID());
-            return std::string(buffer);
+            return FormatUtils::FormID(form->GetFormID());
         }
 
         std::string ResolveFormDisplay(const RE::TESForm* form, const FormDetailsViewContext& context)
@@ -78,21 +77,20 @@ namespace ESPExplorerAE
             const auto name = ResolveFormName(form);
             const auto* editorID = form->GetFormEditorID();
 
-            char idBuffer[16]{};
-            std::snprintf(idBuffer, sizeof(idBuffer), "%08X", form->GetFormID());
+            const std::string idText = FormatUtils::FormID(form->GetFormID());
 
             if (editorID && editorID[0] != '\0') {
                 if (!name.empty() && name != editorID) {
-                    return name + " [" + editorID + "] (" + idBuffer + ")";
+                    return name + " [" + editorID + "] (" + idText + ")";
                 }
-                return std::string(editorID) + " (" + idBuffer + ")";
+                return std::string(editorID) + " (" + idText + ")";
             }
 
             if (!name.empty()) {
-                return name + " (" + idBuffer + ")";
+                return name + " (" + idText + ")";
             }
 
-            return std::string(idBuffer);
+            return idText;
         }
 
         std::string FormatPluginFormIDPrefix(const RE::TESFile& file)
@@ -657,11 +655,10 @@ namespace ESPExplorerAE
         ImGui::TextUnformatted(selectedRecord.name.empty() ? L(context, "General", "sUnnamed") : selectedRecord.name.c_str());
         DrawCopyPopup(selectedRecord.name.empty() ? L(context, "General", "sUnnamed") : selectedRecord.name, detailCopyPopupCounter, context);
         ImGui::SameLine();
-        ImGui::TextDisabled("%08X", selectedRecord.formID);
+        const std::string selectedFormIDText = FormatUtils::FormID(selectedRecord.formID);
+        ImGui::TextDisabled("%s", selectedFormIDText.c_str());
         {
-            char selectedFormIDBuffer[16]{};
-            std::snprintf(selectedFormIDBuffer, sizeof(selectedFormIDBuffer), "%08X", selectedRecord.formID);
-            DrawCopyPopup(selectedFormIDBuffer, detailCopyPopupCounter, context);
+            DrawCopyPopup(selectedFormIDText, detailCopyPopupCounter, context);
         }
 
         ImGui::Separator();

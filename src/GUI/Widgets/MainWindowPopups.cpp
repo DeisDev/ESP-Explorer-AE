@@ -2,6 +2,7 @@
 
 #include "Config/Config.h"
 #include "GUI/Widgets/FormActions.h"
+#include "GUI/Widgets/ImGuiWidgetUtils.h"
 #include "GUI/Widgets/ModalUtils.h"
 #include "Localization/Language.h"
 #include "Logging/Logger.h"
@@ -224,15 +225,6 @@ namespace ESPExplorerAE::MainWindowPopups
             const auto toggleHelp = ResolveString(localize, "Settings", "sToggleKey", "Toggle Key");
             const auto helpTitle = ResolveString(localize, "General", "sHelpOverlayTitle", "Getting Started");
             const auto closeLabel = ResolveString(localize, "General", "sCloseHelpOverlay", "Start Exploring");
-            const auto drawWrappedBullet = [](std::string_view text) {
-                ImGui::Bullet();
-                ImGui::SameLine();
-                const float wrapPos = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x;
-                ImGui::PushTextWrapPos(wrapPos);
-                ImGui::TextUnformatted(text.data(), text.data() + text.size());
-                ImGui::PopTextWrapPos();
-            };
-
             ImGui::TextUnformatted(helpTitle);
             ImGui::Separator();
 
@@ -241,36 +233,36 @@ namespace ESPExplorerAE::MainWindowPopups
             if (ImGui::BeginChild("##HelpOverlayContent", ImVec2(0.0f, contentHeight), false, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
                 ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x);
                 ImGui::TextDisabled("%s", ResolveString(localize, "General", "sHelpOverlayHotkeys", "Hotkeys"));
-                drawWrappedBullet(std::string(toggleHelp) + ": " + toggleKeyName);
-                drawWrappedBullet(std::string("Ctrl+Z: ") + ResolveString(localize, "General", "sUndoLastAction", "Undo Last Action"));
-                drawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayHotkeysBody", "Use the configured toggle key to open or close the menu at any time."));
+                ImGuiWidgetUtils::DrawWrappedBullet(std::string(toggleHelp) + ": " + toggleKeyName);
+                ImGuiWidgetUtils::DrawWrappedBullet(std::string("Ctrl+Z: ") + ResolveString(localize, "General", "sUndoLastAction", "Undo Last Action"));
+                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayHotkeysBody", "Use the configured toggle key to open or close the menu at any time."));
 
                 ImGui::Spacing();
                 ImGui::TextDisabled("%s", ResolveString(localize, "General", "sHelpOverlayFilters", "Filters"));
-                drawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayFiltersBody", "Plugin filters narrow the left tree, while record filters hide or include playable, unnamed, deleted, and unknown records."));
-                drawWrappedBullet(ResolveString(localize, "General", "sHelpOverlaySearchBody", "Global Search scans every loaded record. Turn it off when you want to stay inside the active plugin filter."));
-                drawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayRuntimeRecordsBody", "ESP Explorer AE reads records after Fallout 4 has loaded and resolved them at runtime. Some values may differ from raw plugin data in xEdit."));
+                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayFiltersBody", "Plugin filters narrow the left tree, while record filters hide or include playable, unnamed, deleted, and unknown records."));
+                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlaySearchBody", "Global Search scans every loaded record. Turn it off when you want to stay inside the active plugin filter."));
+                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayRuntimeRecordsBody", "ESP Explorer AE reads records after Fallout 4 has loaded and resolved them at runtime. Some values may differ from raw plugin data in xEdit."));
 
                 ImGui::Spacing();
                 ImGui::TextDisabled("%s", ResolveString(localize, "General", "sHelpOverlayFavorites", "Favorites And Recent"));
-                drawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayFavoritesBody", "Add favorites from record actions or context menus to pin important forms across sessions."));
-                drawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayRecentBody", "Recent Records tracks what you inspect most often, making it easy to jump back without searching again."));
+                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayFavoritesBody", "Add favorites from record actions or context menus to pin important forms across sessions."));
+                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayRecentBody", "Recent Records tracks what you inspect most often, making it easy to jump back without searching again."));
 
                 ImGui::Spacing();
                 ImGui::TextDisabled("%s", ResolveString(localize, "General", "sHelpOverlayAdvancedFilters", "Advanced Filters"));
-                drawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayAdvancedFiltersBody", "Advanced Record Filters let you define keyword-based rules to block or allow specific records globally. Access them from the filter toolbar or Settings."));
-                drawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayAdvancedFiltersExampleBody", "For example, you can hide all records containing 'SS2_Tag_' to declutter Sim Settlements content from your results."));
+                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayAdvancedFiltersBody", "Advanced Record Filters let you define keyword-based rules to block or allow specific records globally. Access them from the filter toolbar or Settings."));
+                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayAdvancedFiltersExampleBody", "For example, you can hide all records containing 'SS2_Tag_' to declutter Sim Settlements content from your results."));
 
                 ImGui::Spacing();
                 ImGui::TextDisabled("%s", ResolveString(localize, "General", "sHelpOverlayInventory", "Inventory Tab"));
-                drawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayInventoryBody", "The Inventory tab shows your current player inventory grouped by category. You can inspect, drop, or favorite items directly from it."));
-                drawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayInventoryComponentBody", "Components are automatically substituted to their usable scrap form when given, so they work for crafting. This can be toggled in Settings > Gameplay."));
+                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayInventoryBody", "The Inventory tab shows your current player inventory grouped by category. You can inspect, drop, or favorite items directly from it."));
+                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayInventoryComponentBody", "Components are automatically substituted to their usable scrap form when given, so they work for crafting. This can be toggled in Settings > Gameplay."));
 
                 ImGui::Spacing();
                 ImGui::TextDisabled("%s", ResolveString(localize, "General", "sHelpOverlaySafeActions", "Safe Actions"));
-                drawWrappedBullet(ResolveString(localize, "General", "sHelpOverlaySafeActionsBody", "Viewing details, copying IDs, and filtering are safe. Give, spawn, and teleport actions are explicit and important actions ask for confirmation."));
-                drawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayMainMenuActionsBody", "Gameplay actions stay disabled in the main menu by default for stability. Only enable them if you understand the risks and want that behavior."));
-                drawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayHistoryBody", "The Action History panel in the status bar shows recent give, spawn, and teleport actions, with one-click undo when the action can be reversed."));
+                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlaySafeActionsBody", "Viewing details, copying IDs, and filtering are safe. Give, spawn, and teleport actions are explicit and important actions ask for confirmation."));
+                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayMainMenuActionsBody", "Gameplay actions stay disabled in the main menu by default for stability. Only enable them if you understand the risks and want that behavior."));
+                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayHistoryBody", "The Action History panel in the status bar shows recent give, spawn, and teleport actions, with one-click undo when the action can be reversed."));
                 ImGui::PopTextWrapPos();
             }
             ImGui::EndChild();

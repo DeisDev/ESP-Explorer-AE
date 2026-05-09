@@ -3,6 +3,7 @@
 #include "Config/Config.h"
 
 #include "GUI/Widgets/ContextMenu.h"
+#include "GUI/Widgets/FormatUtils.h"
 #include "GUI/Widgets/FormActions.h"
 #include "GUI/Widgets/SharedUtils.h"
 
@@ -88,13 +89,12 @@ namespace ESPExplorerAE::PluginBrowserHelpers
             return true;
         }
 
-        char formIDBuffer[16]{};
-        std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", entry.formID);
+        const std::string formIDText = FormatUtils::FormID(entry.formID);
 
         if (SharedUtils::ContainsByMode(entry.name, query, caseSensitive) ||
             SharedUtils::ContainsByMode(entry.category, query, caseSensitive) ||
             SharedUtils::ContainsByMode(entry.sourcePlugin, query, caseSensitive) ||
-            SharedUtils::ContainsByMode(formIDBuffer, query, caseSensitive)) {
+            SharedUtils::ContainsByMode(formIDText, query, caseSensitive)) {
             return true;
         }
 
@@ -109,6 +109,11 @@ namespace ESPExplorerAE::PluginBrowserHelpers
         }
 
         return SharedUtils::EqualsCaseInsensitive(category, "unknown") || SharedUtils::EqualsCaseInsensitive(category, "<unknown>");
+    }
+
+    std::string CopyLabel(const char* label, std::size_t count)
+    {
+        return std::string(label) + " (" + std::to_string(count) + ")";
     }
 
     std::string BuildPluginDisplayName(std::string_view pluginName, const std::vector<PluginInfo>& plugins)
@@ -328,35 +333,23 @@ namespace ESPExplorerAE::PluginBrowserHelpers
 
             const auto selectedEntries = CollectSelectedEntries(cache, dataVersion, context);
             if (!selectedEntries.empty()) {
-                if (ImGui::MenuItem((std::string(context.localize("General", "sCopyFormID", "Copy FormID")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                if (ImGui::MenuItem(CopyLabel(context.localize("General", "sCopyFormID", "Copy FormID"), selectedEntries.size()).c_str())) {
                     std::vector<std::string> values{};
                     values.reserve(selectedEntries.size());
                     for (const auto& selectedEntry : selectedEntries) {
-                        char idBuffer[16]{};
-                        std::snprintf(idBuffer, sizeof(idBuffer), "%08X", selectedEntry.formID);
-                        values.emplace_back(idBuffer);
+                        values.push_back(FormatUtils::FormID(selectedEntry.formID));
                     }
-                    const auto text = SharedUtils::BuildParenthesizedList(values);
+                    const auto text = FormatUtils::MultiCopyList(values, Config::Get().multiCopyFormat);
                     ImGui::SetClipboardText(text.c_str());
                 }
 
-                if (ImGui::MenuItem((std::string(context.localize("General", "sCopyRecordSource", "Copy Record Source")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
-                    std::vector<std::string> values{};
-                    values.reserve(selectedEntries.size());
-                    for (const auto& selectedEntry : selectedEntries) {
-                        values.push_back(selectedEntry.sourcePlugin);
-                    }
-                    const auto text = SharedUtils::BuildParenthesizedList(values);
-                    ImGui::SetClipboardText(text.c_str());
-                }
-
-                if (ImGui::MenuItem((std::string(context.localize("General", "sCopyName", "Copy Name")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                if (ImGui::MenuItem(CopyLabel(context.localize("General", "sCopyName", "Copy Name"), selectedEntries.size()).c_str())) {
                     std::vector<std::string> values{};
                     values.reserve(selectedEntries.size());
                     for (const auto& selectedEntry : selectedEntries) {
                         values.push_back(selectedEntry.name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : selectedEntry.name);
                     }
-                    const auto text = SharedUtils::BuildParenthesizedList(values);
+                    const auto text = FormatUtils::MultiCopyList(values, Config::Get().multiCopyFormat);
                     ImGui::SetClipboardText(text.c_str());
                 }
 
