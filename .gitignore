@@ -8,7 +8,6 @@ vs*/
 *.zip
 compile_commands.json
 *.ttf
-/dist/package
 /reference
 *.bin
 /.venv

@@ -596,7 +596,7 @@ namespace ESPExplorerAE
             DrawBoolLine(FD(context, "sCantWaitHere"), mutableCell->GetCantWaitHere(), popupCounter, context);
             DrawUIntLine(FD(context, "sFlags"), cellForm->cellFlags.underlying(), popupCounter, context);
             DrawUIntLine(FD(context, "sGameFlags"), cellForm->cellGameFlags, popupCounter, context);
-            DrawUIntLine(FD(context, "sCellState"), cellForm->cellState.underlying(), popupCounter, context);
+            DrawUIntLine(FD(context, "sCellState"), std::to_underlying(cellForm->cellState), popupCounter, context);
             DrawIntLine(FD(context, "sX"), mutableCell->GetDataX(), popupCounter, context);
             DrawIntLine(FD(context, "sY"), mutableCell->GetDataY(), popupCounter, context);
             DrawFormReferenceLine(FD(context, "sEncounterZone"), cellForm->GetEncounterZone(), context, popupCounter);

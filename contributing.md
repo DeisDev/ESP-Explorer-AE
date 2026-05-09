@@ -39,12 +39,22 @@ Localization is part of feature completeness.
 - If you cannot provide a real translation, copy the English value rather than leaving the key missing.
 - Treat English as the canonical reference.
 
+## Themes
+
+Themes are data-driven `.ini` files under `dist/themes`. Runtime overrides can also be placed under `Data/Interface/ESPExplorerAE/themes`.
+
+- Start from an existing theme file and keep the same key structure.
+- Use clear lowercase filenames with hyphens, such as `vault-tec.ini`.
+- Pick readable foreground, accent, disabled, and background colors; test the theme against dense tables, popups, and disabled text.
+- Keep contrast usable at different font sizes and with Pip-Boy color sync disabled.
+- Run `xmake package` for packaging changes so the new or updated theme is included under `Data/Interface/ESPExplorerAE/themes`.
+
 ## Testing
 
 There is no dedicated automated test suite right now. Please validate changes with the tools available:
 
 - Run `xmake` from the repository root.
-- For packaging changes, run `./Scripts/package_dist.ps1`.
+- For packaging changes, run `xmake package`.
 - For UI changes, test in-game when possible and mention what you checked.
 - For bug fixes, verify the old behavior fails and the new behavior works when practical.
 
