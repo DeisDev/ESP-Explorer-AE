@@ -24,6 +24,7 @@ namespace ESPExplorerAE
         bool waitingForToggleKey{ false };
         constexpr auto kNexusModsUrl = "https://www.nexusmods.com/fallout4/mods/102223";
         constexpr auto kNexusBugReportUrl = "https://www.nexusmods.com/fallout4/mods/102223?tab=bugs";
+        constexpr auto kGitHubUrl = "https://github.com/DeisDev/ESP-Explorer-AE";
         constexpr auto kBuyMeACoffeeUrl = "https://buymeacoffee.com/DeisDev";
 
         const char* L(std::string_view section, std::string_view key, const char* fallback)
@@ -467,10 +468,6 @@ namespace ESPExplorerAE
             const float available = buttonRowWidth();
             return (std::max)((available - style.ItemSpacing.x) * 0.5f, 160.0f);
         };
-        const auto tripleButtonWidth = [&style, &buttonRowWidth]() {
-            const float available = buttonRowWidth();
-            return (available - style.ItemSpacing.x * 2.0f) / 3.0f;
-        };
         const float popupScale = (std::clamp)(settings.fontSize / 20.0f, 0.75f, 1.5f);
         const auto setConfirmationPopupSizing = [&](const char* primaryLabel, const char* secondaryLabel) {
             const float primaryWidth = ImGui::CalcTextSize(primaryLabel).x + style.FramePadding.x * 2.0f + 36.0f;
@@ -902,33 +899,20 @@ namespace ESPExplorerAE
         ImGui::Spacing();
         sectionSpacing();
 
-        const float compactAboutButtonWidth = tripleButtonWidth();
-        const bool useSingleRowAboutButtons = compactAboutButtonWidth >= 150.0f;
-
-        if (useSingleRowAboutButtons) {
-            if (ImGui::Button(L("Settings", "sOpenNexusMods", "Open Nexus Mods Page"), ImVec2(compactAboutButtonWidth, 0.0f))) {
-                ShellExecuteA(nullptr, "open", kNexusModsUrl, nullptr, nullptr, SW_SHOWNORMAL);
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(L("Settings", "sOpenBugReport", "Report a Bug"), ImVec2(compactAboutButtonWidth, 0.0f))) {
-                ShellExecuteA(nullptr, "open", kNexusBugReportUrl, nullptr, nullptr, SW_SHOWNORMAL);
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(L("Settings", "sOpenBuyMeACoffee", "Buy Me A Coffee"), ImVec2(compactAboutButtonWidth, 0.0f))) {
-                ShellExecuteA(nullptr, "open", kBuyMeACoffeeUrl, nullptr, nullptr, SW_SHOWNORMAL);
-            }
-        } else {
-            const float firstRowButtonWidth = (buttonRowWidth() - style.ItemSpacing.x) * 0.5f;
-            if (ImGui::Button(L("Settings", "sOpenNexusMods", "Open Nexus Mods Page"), ImVec2(firstRowButtonWidth, 0.0f))) {
-                ShellExecuteA(nullptr, "open", kNexusModsUrl, nullptr, nullptr, SW_SHOWNORMAL);
-            }
-            ImGui::SameLine();
-            if (ImGui::Button(L("Settings", "sOpenBugReport", "Report a Bug"), ImVec2(firstRowButtonWidth, 0.0f))) {
-                ShellExecuteA(nullptr, "open", kNexusBugReportUrl, nullptr, nullptr, SW_SHOWNORMAL);
-            }
-            if (ImGui::Button(L("Settings", "sOpenBuyMeACoffee", "Buy Me A Coffee"), ImVec2(buttonRowWidth(), 0.0f))) {
-                ShellExecuteA(nullptr, "open", kBuyMeACoffeeUrl, nullptr, nullptr, SW_SHOWNORMAL);
-            }
+        const float aboutButtonWidth = dualButtonWidth();
+        if (ImGui::Button(L("Settings", "sOpenNexusMods", "Open Nexus Mods Page"), ImVec2(aboutButtonWidth, 0.0f))) {
+            ShellExecuteA(nullptr, "open", kNexusModsUrl, nullptr, nullptr, SW_SHOWNORMAL);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(L("Settings", "sOpenGitHub", "GitHub"), ImVec2(aboutButtonWidth, 0.0f))) {
+            ShellExecuteA(nullptr, "open", kGitHubUrl, nullptr, nullptr, SW_SHOWNORMAL);
+        }
+        if (ImGui::Button(L("Settings", "sOpenBugReport", "Report a Bug"), ImVec2(aboutButtonWidth, 0.0f))) {
+            ShellExecuteA(nullptr, "open", kNexusBugReportUrl, nullptr, nullptr, SW_SHOWNORMAL);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(L("Settings", "sOpenBuyMeACoffee", "Buy Me A Coffee"), ImVec2(aboutButtonWidth, 0.0f))) {
+            ShellExecuteA(nullptr, "open", kBuyMeACoffeeUrl, nullptr, nullptr, SW_SHOWNORMAL);
         }
         if (ImGui::Button(L("Settings", "sShowHelpOverlay", "Show Help Overlay"), ImVec2(buttonRowWidth(), 0.0f))) {
             MainWindowPopups::OpenHelpOverlay();

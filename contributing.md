@@ -44,7 +44,7 @@ Localization is part of feature completeness.
 There is no dedicated automated test suite right now. Please validate changes with the tools available:
 
 - Run `xmake` from the repository root.
-- For packaging changes, run `./Scripts/package_dist.ps1`.
+- For packaging changes, run `xmake package`.
 - For UI changes, test in-game when possible and mention what you checked.
 - For bug fixes, verify the old behavior fails and the new behavior works when practical.
 
