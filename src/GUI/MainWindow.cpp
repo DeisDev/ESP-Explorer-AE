@@ -14,6 +14,7 @@
 #include "GUI/Tabs/SettingsTab.h"
 #include "GUI/Tabs/SpellPerkBrowserTab.h"
 #include "GUI/Widgets/ContextMenu.h"
+#include "GUI/Widgets/FormatUtils.h"
 #include "GUI/Widgets/FormActions.h"
 #include "GUI/Widgets/FormTable.h"
 #include "GUI/Widgets/ItemGrantPopup.h"
@@ -571,13 +572,12 @@ namespace ESPExplorerAE
                 return true;
             }
 
-            char formIDBuffer[16]{};
-            std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", entry.formID);
+            const std::string formIDText = FormatUtils::FormID(entry.formID);
 
             if (SharedUtils::ContainsByMode(entry.name, query, caseSensitive) ||
                 SharedUtils::ContainsByMode(entry.category, query, caseSensitive) ||
                 SharedUtils::ContainsByMode(entry.sourcePlugin, query, caseSensitive) ||
-                SharedUtils::ContainsByMode(formIDBuffer, query, caseSensitive)) {
+                SharedUtils::ContainsByMode(formIDText, query, caseSensitive)) {
                 return true;
             }
 
@@ -658,14 +658,13 @@ namespace ESPExplorerAE
                     OpenItemGrantPopup(entry);
                 },
                 .inspectFormInPluginBrowser = [](std::uint32_t formID) {
-                    char formIDBuffer[16]{};
-                    std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", formID);
+                    const std::string formIDText = FormatUtils::FormID(formID);
                     requestedMainTab = "Plugin Browser";
                     selectedPluginFilter.clear();
                     selectedPluginDiagnostics.clear();
                     pluginGlobalSearchMode = true;
-                    pluginSearch = formIDBuffer;
-                    std::snprintf(pluginSearchBuffer, sizeof(pluginSearchBuffer), "%s", formIDBuffer);
+                    pluginSearch = formIDText;
+                    std::snprintf(pluginSearchBuffer, sizeof(pluginSearchBuffer), "%s", formIDText.c_str());
                     selectedPluginTreeRecordFormID = formID;
                     selectedPluginTreeRecordFormIDs.clear();
                     selectedPluginTreeRecordFormIDs.insert(formID);

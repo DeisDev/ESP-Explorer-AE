@@ -1,5 +1,6 @@
 #include "GUI/Widgets/ContextMenu.h"
 
+#include "GUI/Widgets/FormatUtils.h"
 #include "GUI/Widgets/FormActions.h"
 
 #include <imgui.h>
@@ -115,7 +116,8 @@ namespace ESPExplorerAE
         const bool gameplayActionsAllowed = FormActions::AreGameplayActionsAllowed();
 
         ImGui::TextUnformatted(displayName);
-        ImGui::TextDisabled("%08X  |  %s  |  %s", entry.formID, entry.sourcePlugin.c_str(), entry.category.c_str());
+        const std::string formIDText = FormatUtils::FormID(entry.formID);
+        ImGui::TextDisabled("%s  |  %s  |  %s", formIDText.c_str(), entry.sourcePlugin.c_str(), entry.category.c_str());
         if (editorID) {
             ImGui::TextDisabled("%s: %s", L("General", "sEditorID", "EditorID"), editorID);
         }

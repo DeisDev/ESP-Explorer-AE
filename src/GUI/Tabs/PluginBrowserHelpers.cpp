@@ -3,6 +3,7 @@
 #include "Config/Config.h"
 
 #include "GUI/Widgets/ContextMenu.h"
+#include "GUI/Widgets/FormatUtils.h"
 #include "GUI/Widgets/FormActions.h"
 #include "GUI/Widgets/SharedUtils.h"
 
@@ -88,13 +89,12 @@ namespace ESPExplorerAE::PluginBrowserHelpers
             return true;
         }
 
-        char formIDBuffer[16]{};
-        std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", entry.formID);
+        const std::string formIDText = FormatUtils::FormID(entry.formID);
 
         if (SharedUtils::ContainsByMode(entry.name, query, caseSensitive) ||
             SharedUtils::ContainsByMode(entry.category, query, caseSensitive) ||
             SharedUtils::ContainsByMode(entry.sourcePlugin, query, caseSensitive) ||
-            SharedUtils::ContainsByMode(formIDBuffer, query, caseSensitive)) {
+            SharedUtils::ContainsByMode(formIDText, query, caseSensitive)) {
             return true;
         }
 
@@ -332,11 +332,9 @@ namespace ESPExplorerAE::PluginBrowserHelpers
                     std::vector<std::string> values{};
                     values.reserve(selectedEntries.size());
                     for (const auto& selectedEntry : selectedEntries) {
-                        char idBuffer[16]{};
-                        std::snprintf(idBuffer, sizeof(idBuffer), "%08X", selectedEntry.formID);
-                        values.emplace_back(idBuffer);
+                        values.push_back(FormatUtils::FormID(selectedEntry.formID));
                     }
-                    const auto text = SharedUtils::BuildParenthesizedList(values);
+                    const auto text = FormatUtils::ParenthesizedList(values);
                     ImGui::SetClipboardText(text.c_str());
                 }
 
@@ -346,7 +344,7 @@ namespace ESPExplorerAE::PluginBrowserHelpers
                     for (const auto& selectedEntry : selectedEntries) {
                         values.push_back(selectedEntry.sourcePlugin);
                     }
-                    const auto text = SharedUtils::BuildParenthesizedList(values);
+                    const auto text = FormatUtils::ParenthesizedList(values);
                     ImGui::SetClipboardText(text.c_str());
                 }
 
@@ -356,7 +354,7 @@ namespace ESPExplorerAE::PluginBrowserHelpers
                     for (const auto& selectedEntry : selectedEntries) {
                         values.push_back(selectedEntry.name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : selectedEntry.name);
                     }
-                    const auto text = SharedUtils::BuildParenthesizedList(values);
+                    const auto text = FormatUtils::ParenthesizedList(values);
                     ImGui::SetClipboardText(text.c_str());
                 }
 

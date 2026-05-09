@@ -1,7 +1,9 @@
 #include "GUI/Widgets/FormTable.h"
 
 #include "GUI/Widgets/ContextMenu.h"
+#include "GUI/Widgets/FormatUtils.h"
 #include "GUI/Widgets/FormActions.h"
+#include "GUI/Widgets/ImGuiWidgetUtils.h"
 #include "GUI/Widgets/SharedUtils.h"
 
 #include "Localization/Language.h"
@@ -9,7 +11,6 @@
 #include <imgui.h>
 
 #include <cctype>
-#include <cstdio>
 
 namespace ESPExplorerAE
 {
@@ -159,15 +160,14 @@ namespace ESPExplorerAE
                 return true;
             }
 
-            char formIDBuffer[16]{};
-            std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", entry.formID);
+            const std::string formIDText = FormatUtils::FormID(entry.formID);
 
             if (SharedUtils::ContainsByMode(entry.name, query, caseSensitive) ||
                 SharedUtils::ContainsByMode(entry.sourcePlugin, query, caseSensitive) ||
                 SharedUtils::ContainsByMode(entry.category, query, caseSensitive) ||
                 SharedUtils::ContainsByMode(entry.race, query, caseSensitive) ||
                 SharedUtils::ContainsByMode(entry.factions, query, caseSensitive) ||
-                SharedUtils::ContainsByMode(formIDBuffer, query, caseSensitive)) {
+                SharedUtils::ContainsByMode(formIDText, query, caseSensitive)) {
                 return true;
             }
 
@@ -244,13 +244,9 @@ namespace ESPExplorerAE
 
         ImGui::Spacing();
 
-        auto drawWrappedButton = SharedUtils::DrawWrappedButton;
+        auto drawWrappedButton = ImGuiWidgetUtils::DrawWrappedButton;
         const bool gameplayActionsAllowed = FormActions::AreGameplayActionsAllowed();
-        const auto showDisabledTooltip = [&]() {
-            if (!gameplayActionsAllowed && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                ImGui::SetTooltip("%s", L("General", "sGameplayActionsDisabledInMainMenu", "Gameplay actions are disabled while the main menu is open."));
-            }
-        };
+        const char* disabledTooltip = L("General", "sGameplayActionsDisabledInMainMenu", "Gameplay actions are disabled while the main menu is open.");
 
         bool firstActionInRow = true;
 
@@ -277,9 +273,7 @@ namespace ESPExplorerAE
             std::vector<std::string> values{};
             values.reserve(selectedEntries.size());
             for (const auto& selectedEntry : selectedEntries) {
-                char idBuffer[16]{};
-                std::snprintf(idBuffer, sizeof(idBuffer), "%08X", selectedEntry.formID);
-                values.emplace_back(idBuffer);
+                values.push_back(FormatUtils::FormID(selectedEntry.formID));
             }
             const std::string clipboard = BuildLineList(values);
             ImGui::SetClipboardText(clipboard.c_str());
@@ -307,7 +301,7 @@ namespace ESPExplorerAE
             if (drawWrappedButton(bulkButtonLabel.c_str(), firstActionInRow)) {
                 invokePrimaryForSelection();
             }
-            showDisabledTooltip();
+            ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
         }
         if (quantityAction) {
             const char* qtyLabel = config.quantityActionLabel ? config.quantityActionLabel : L("NPCs", "sSpawnAtPlayer", "Spawn At Player");
@@ -319,7 +313,7 @@ namespace ESPExplorerAE
                     }
                 }
             }
-            showDisabledTooltip();
+            ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
             ImGui::SameLine();
             ImVec4 bulkFrameBg = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
             ImVec4 bulkFrameBgHovered = ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered);
@@ -393,8 +387,6 @@ namespace ESPExplorerAE
             sortSpecs->SpecsDirty = false;
         }
 
-        char formIDBuffer[16]{};
-
         ImGuiListClipper clipper;
         clipper.Begin(static_cast<int>(entries.size()));
         while (clipper.Step()) {
@@ -417,8 +409,8 @@ namespace ESPExplorerAE
                 };
 
                 ImGui::TableSetColumnIndex(0);
-                std::snprintf(formIDBuffer, sizeof(formIDBuffer), "%08X", entry.formID);
-                const bool rowClicked = ImGui::Selectable(formIDBuffer, rowIsSelected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap | ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0.0f, ImGui::GetTextLineHeight()));
+                const std::string formIDText = FormatUtils::FormID(entry.formID);
+                const bool rowClicked = ImGui::Selectable(formIDText.c_str(), rowIsSelected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap | ImGuiSelectableFlags_AllowDoubleClick, ImVec2(0.0f, ImGui::GetTextLineHeight()));
                 if (rowClicked) {
                     if (ImGui::GetIO().KeyShift && lastClicked >= 0 && lastClicked < static_cast<int>(entries.size())) {
                         const int rangeStart = (std::min)(lastClicked, rowIndex);
@@ -569,11 +561,9 @@ namespace ESPExplorerAE
                                 std::vector<std::string> values{};
                                 values.reserve(selectedEntries.size());
                                 for (const auto& selectedEntry : selectedEntries) {
-                                    char idBuffer[16]{};
-                                    std::snprintf(idBuffer, sizeof(idBuffer), "%08X", selectedEntry.formID);
-                                    values.emplace_back(idBuffer);
+                                    values.push_back(FormatUtils::FormID(selectedEntry.formID));
                                 }
-                                const std::string clipboard = SharedUtils::BuildParenthesizedList(values);
+                                const std::string clipboard = FormatUtils::ParenthesizedList(values);
                                 ImGui::SetClipboardText(clipboard.c_str());
                             }
 
@@ -583,7 +573,7 @@ namespace ESPExplorerAE
                                 for (const auto& selectedEntry : selectedEntries) {
                                     values.push_back(selectedEntry.sourcePlugin);
                                 }
-                                const std::string clipboard = SharedUtils::BuildParenthesizedList(values);
+                                const std::string clipboard = FormatUtils::ParenthesizedList(values);
                                 ImGui::SetClipboardText(clipboard.c_str());
                             }
 
@@ -593,7 +583,7 @@ namespace ESPExplorerAE
                                 for (const auto& selectedEntry : selectedEntries) {
                                     values.push_back(selectedEntry.name.empty() ? L("General", "sUnnamed", "<Unnamed>") : selectedEntry.name);
                                 }
-                                const std::string clipboard = SharedUtils::BuildParenthesizedList(values);
+                                const std::string clipboard = FormatUtils::ParenthesizedList(values);
                                 ImGui::SetClipboardText(clipboard.c_str());
                             }
 
@@ -685,7 +675,7 @@ namespace ESPExplorerAE
                         invokePrimaryForSelection();
                     }
                 }
-                showDisabledTooltip();
+                ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
                 if (disableThisAction) {
                     ImGui::EndDisabled();
                 }
@@ -711,7 +701,7 @@ namespace ESPExplorerAE
                         quantityAction(*selectedEntry, pendingQuantity);
                     }
                 }
-                showDisabledTooltip();
+                ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
                 ImGui::SameLine();
                 ImVec4 selectedFrameBg = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
                 ImVec4 selectedFrameBgHovered = ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered);

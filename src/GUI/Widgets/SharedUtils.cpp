@@ -47,20 +47,6 @@ namespace ESPExplorerAE
         return ContainsCaseInsensitive(text, query);
     }
 
-    std::string SharedUtils::BuildParenthesizedList(const std::vector<std::string>& values)
-    {
-        std::string text{};
-        for (std::size_t i = 0; i < values.size(); ++i) {
-            if (i > 0) {
-                text += ", ";
-            }
-            text += "(";
-            text += values[i];
-            text += ")";
-        }
-        return text;
-    }
-
     void SharedUtils::DrawCurrentItemChrome(bool active, bool hovered, bool accentTop, bool accentLeft)
     {
         ImDrawList* drawList = ImGui::GetWindowDrawList();
