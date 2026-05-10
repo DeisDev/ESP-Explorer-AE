@@ -1,0 +1,107 @@
+name: Nexus Bug Report
+description: Report a bug after installing ESP Explorer AE from Nexus Mods.
+title: "[Bug]: "
+labels: ["bug", "nexus-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting an issue. Please keep the report short, but include enough detail to reproduce the problem.
+
+        If the game crashes, attach the relevant crash log if you have one. If the menu opens but something looks wrong, screenshots help.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before reporting
+      options:
+        - label: I am using Fallout 4 Next-Gen / Anniversary Edition runtime 1.11.191.0.
+          required: true
+        - label: I installed the required F4SE version for my game runtime.
+          required: true
+        - label: I installed Address Library.
+          required: true
+        - label: I checked whether another in-game explorer, item menu, or input-hook mod may be conflicting.
+          required: false
+
+  - type: input
+    id: mod-version
+    attributes:
+      label: ESP Explorer AE version
+      description: The version shown on Nexus or in your mod manager.
+      placeholder: "Example: 1.5.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: Install method
+      options:
+        - Nexus/Vortex
+        - Mod Organizer 2
+        - Manual install
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the bug in plain language.
+      placeholder: "Example: Pressing INSERT opens the menu, but the Items tab is empty."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How do we reproduce it?
+      description: List the exact steps that trigger the problem.
+      placeholder: |
+        1. Launch through F4SE.
+        2. Load a save.
+        3. Press INSERT.
+        4. Open the Items tab.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      placeholder: "Example: The Items tab should show weapons, armor, ammo, and other item categories."
+    validations:
+      required: false
+
+  - type: textarea
+    id: mod-list
+    attributes:
+      label: Mod list or relevant mods
+      description: You do not need to paste a huge load order unless it matters. Include UI, input, item-menu, F4SE, and crash-related mods if you use them.
+      placeholder: |
+        Example:
+        - P71 In Game Shop Mod Explorer
+        - Fast AddItem Menu
+        - Buffout 4
+        - High FPS Physics Fix
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, crash reports, or screenshots
+      description: Attach files or paste the relevant part of the log. The plugin log is usually under Documents/My Games/Fallout4/F4SE.
+      placeholder: "Drag files here, paste log snippets, or add screenshot links."
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Add details that might matter, such as language, theme, controller use, ultrawide resolution, or when the issue started.
+    validations:
+      required: false
