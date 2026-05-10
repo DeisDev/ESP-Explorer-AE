@@ -8,34 +8,147 @@
   <a href="https://github.com/DeisDev/ESP-Explorer-AE/pulls"><img src="https://img.shields.io/github/issues-pr/DeisDev/ESP-Explorer-AE?style=social" alt="GitHub pull requests"></a>
 </p>
 
-ESP Explorer AE is an in-game ESP/ESM/ESL plugin and record explorer for Fallout 4 Anniversary Edition.
+<p align="center">
+  <a href="https://www.nexusmods.com/fallout4/mods/102223?tab=description"><img src="https://nexus-mods.github.io/NexusMods.App/Nexus/Images/Nexus-Icon.png" alt="ESP Explorer AE on Nexus Mods" width="48"></a>
+</p>
 
-It lets you browse the plugins, forms, and records in your load order without leaving the game. Inspect record details, search across categories, spawn items or NPCs, add spells and perks, manage your inventory, or teleport to cells while you play.
+ESP Explorer AE is an F4SE plugin for Fallout 4 AE / Next-Gen. It renders an
+in-game ImGui explorer for plugins, forms, player actions, diagnostics, logs,
+themes, and localization.
 
-The focus is speed, useful detail, and practical tools instead of bloated menus. It is built for large load orders, works with or without the official DLCs, and includes advanced filtering, diagnostics, favorites, recent records, action history with best-effort undo, log viewing, controller support, and multi-language support.
+> [!NOTE]
+> This repository is primarily for development. End-user downloads, screenshots,
+> and release notes belong on the Nexus Mods page.
 
-## Features
+## Repository Layout
 
-- Browse plugins, grouped records, and your load order in-game.
-- Optimized for both light and heavy load orders.
-- Supports ESL, ESM, and ESP plugins.
-- Dedicated tabs for Inventory, Items, NPCs, Cells, Objects, Spells, and Perks.
-- Full inventory browser with category tabs, search, equipped filtering, stack details, and quick actions.
-- Give, spawn, drop, remove, equip, unequip, duplicate, use, and teleport actions where applicable.
-- Weapon and armor mod inspection plus attach/detach support from the inventory tab.
-- Favorites, recent records, clipboard copy tools, and context-aware right-click menus across the UI.
-- Plugin diagnostics and advanced record inspection.
-- Rule-based advanced filters with saved rules, regex support, hidden-plugin management, and global plugin search.
-- Action History with best-effort undo for supported actions.
-- Optional automatic component substitution so crafting components are given as usable scrap items.
-- Built-in log viewer with copy and export support.
-- Data-driven themes, custom theme colors, font sizing, and optional Pip-Boy color sync.
-- Basic controller support with optional gamepad navigation.
-- Data-driven multi-language support.
+- `src/` - plugin source code.
+- `src/main.cpp` - F4SE entry point and startup sequence.
+- `src/Hooks/` - D3D11 Present hook, WndProc hook, cursor/input state, and menu visibility.
+- `src/GUI/` - ImGui renderer, main window, tabs, popups, shared widgets, and themes.
+- `src/Data/` - load-order, plugin, form, and category cache building.
+- `src/Config/` - INI-backed settings.
+- `src/Localization/` - language loading, fallback behavior, and font atlas support.
+- `src/Input/` - gamepad polling and overlay keyboard integration.
+- `src/Logging/` - file logging under `Documents/My Games/Fallout4/F4SE`.
+- `dist/lang/` - shipped language `.ini` files.
+- `dist/fonts/` - shipped runtime fonts.
+- `dist/themes/` - shipped theme `.ini` files.
+- `nexus/` - Nexus page assets and description text.
+- `Scripts/` - local helper scripts.
+- `lib/commonlibf4/` - CommonLibF4 dependency.
 
-Some shipped translations were created with LLM assistance and may still contain inaccuracies. English is the reference language.
+## Runtime Startup
 
-Want to make your own translation? Copy `en.ini` into `Data/Interface/ESPExplorerAE/lang`, rename it to your language code, translate the values, and optionally add `sName`, `sFontFiles`, and `sGlyphRanges` in the `Language` section if your language needs custom display text or font coverage.
+Initialization order matters because UI text, fonts, hooks, and cached game data
+depend on earlier systems being ready.
+
+1. `src/main.cpp` loads config.
+2. Logging is initialized from config.
+3. Localization is loaded for the configured language.
+4. F4SE messaging is registered.
+5. Hooks are installed.
+6. `DataManager` refreshes cached game data.
+
+Features that depend on localized strings or font coverage should assume config
+and language setup have completed before the UI is first drawn.
+
+## Build
+
+Build from the repository root with xmake:
+
+```powershell
+xmake f -m release -a x64
+xmake
+```
+
+The release DLL is written to:
+
+```text
+build/windows/x64/release/ESPExplorerAE.dll
+```
+
+For a debug-friendly release build:
+
+```powershell
+xmake f -m releasedbg -a x64
+xmake
+```
+
+For a clean release rebuild:
+
+```powershell
+xmake clean
+xmake f -m release -a x64
+xmake
+```
+
+## Packaging
+
+Package the current build with the shipped runtime assets:
+
+```powershell
+xmake package
+```
+
+The package is written under `build/packages/` and includes:
+
+- the built DLL;
+- `dist/lang/*.ini` under `Data/Interface/ESPExplorerAE/lang`;
+- `dist/fonts/*.ttf` under `Data/Interface/ESPExplorerAE/fonts`;
+- `dist/themes/*.ini` under `Data/Interface/ESPExplorerAE/themes`.
+
+Run packaging after changes to install layout, shipped languages, fonts, themes,
+or release metadata.
+
+## Runtime Assets
+
+At runtime, the plugin loads user/game-install assets first and falls back to
+the development `dist` folders.
+
+- Languages: `Data/Interface/ESPExplorerAE/lang`, then `dist/lang`.
+- Fonts: `Data/Interface/ESPExplorerAE/fonts`, then `dist/fonts`.
+- Themes: `Data/Interface/ESPExplorerAE/themes`, then `dist/themes`.
+
+This lets packaged installs use the normal Fallout 4 `Data` layout while local
+development can run from the repository assets.
+
+## Core Modules
+
+`DataManager` owns heavy game-data enumeration. It builds cached plugin, form,
+and category views from `RE::TESDataHandler` and `RE::TESForm::GetAllForms()`.
+UI code should read cached data rather than casually forcing refreshes.
+
+`MainWindow` owns top-level UI state, tab orchestration, modal popups, and the
+status bar. Most feature work lands in the relevant tab under `src/GUI/Tabs/`
+or in shared widgets under `src/GUI/Widgets/`.
+
+`ImGuiRenderer` owns ImGui context setup, theme application, and font rebuild
+processing. Language or font changes should preserve the existing sequence used
+by `SettingsTab`: save config, reload `Language`, then request a font rebuild
+through `FontManager`.
+
+`Config` persists favorites, filters, window state, theme settings, input
+settings, and other plugin options.
+
+## Localization
+
+Localization is part of feature completeness.
+
+- Route every user-facing label, button, menu item, tooltip, popup, status text,
+  and section header through the existing localization helpers.
+- Add new keys to `dist/lang/en.ini` first.
+- Mirror every new key across all shipped language files in `dist/lang/`.
+- If a real translation is not available, copy the English value rather than
+  omitting the key.
+- Keep section/key naming consistent with existing sections such as `General`,
+  `Settings`, `Items`, `NPCs`, `Objects`, `Spells`, `Player`, `PluginBrowser`,
+  `FormDetails`, and `Logs`.
+
+English is the reference language. Some shipped translations were created with
+LLM assistance and may contain mistakes.
+
+Language files may also declare display name and font coverage:
 
 ```ini
 [Language]
@@ -44,78 +157,37 @@ sFontFiles = NotoSans-Regular.ttf, MyPolishFont.ttf
 sGlyphRanges = default, cyrillic
 ```
 
-`sName` controls how the language appears in the settings menu. `sFontFiles` is a comma-separated fallback order resolved from `Data/Interface/ESPExplorerAE/fonts` first, then `dist/fonts`. `sGlyphRanges` optionally adds full ImGui preset ranges such as `default`, `cyrillic`, `japanese`, `chinese`, `chinese-full`, `korean`, `thai`, or `vietnamese`.
+`sFontFiles` is resolved from `Data/Interface/ESPExplorerAE/fonts` first, then
+`dist/fonts`. `sGlyphRanges` can include ImGui preset ranges such as `default`,
+`cyrillic`, `japanese`, `chinese`, `chinese-full`, `korean`, `thai`, or
+`vietnamese`.
 
-Themes are also data-driven. Shipped themes live in `Data/Interface/ESPExplorerAE/themes` at runtime and `dist/themes` during development. You can add or edit `.ini` theme files there without recompiling the plugin.
+## Themes
 
-## Installation
+Themes are data-driven `.ini` files. Shipped themes live in `dist/themes` and
+are packaged to `Data/Interface/ESPExplorerAE/themes`.
 
-1. Install the requirements: F4SE and Address Library.
-2. Drop the mod into your Fallout 4 game folder or install with a mod manager of your choice.
-3. Launch the game through F4SE.
+When adding or changing a theme:
 
-The default toggle key is `Insert`. You can rebind it at any time. The config file is created automatically next to the plugin in the `F4SE/Plugins` folder.
+- start from an existing file;
+- keep the same key structure;
+- use readable foreground, accent, disabled, and background colors;
+- test dense tables, disabled text, popups, and different font sizes;
+- run `xmake package` so the packaged layout includes the theme.
 
-## Compatibility
+## Validation
 
-This mod may clash with similar explorer/item menu mods. This mod will also likely clash with mods that also hook into mouse input, keyboard input, or similar systems. The following mods may work for your setup, but have been reported to cause issues:
+There is no dedicated automated test suite in this repository.
 
-- [P71 In Game Shop Mod Explorer](https://www.nexusmods.com/fallout4/mods/56922)
-- [Fast AddItem Menu](https://www.nexusmods.com/fallout4/mods/99301)
+Use the available checks:
 
-Compatibility notes:
+- run `xmake` for compile verification;
+- run `xmake package` for packaging changes;
+- test in-game for UI, input, hook, player-action, or rendering changes;
+- inspect all shipped language files for UI text changes.
 
-- Made for Fallout 4 Anniversary Edition runtime `1.11.191.0`.
-- Requires F4SE.
-- Requires Address Library.
-- Should work alongside most mods, but other input-hook or in-game menu mods may conflict.
-- Designed to be safe to install or uninstall mid-save.
-
-## Bug Reports
-
-If something breaks, keep the report short and useful.
-
-- What happened.
-- How to reproduce it.
-- Your mod list or anything unusual that might matter.
-- A screenshot or log if you have one.
-
-Bug reports with clear steps are much easier to fix than reports that only say it does not work.
-
-## Contributing
-
-All developers are welcome. Small, focused pull requests are much easier to review and merge than large grab-bag changes.
-
-Please put real care into changes before opening a PR: read the surrounding code, follow the existing style, build locally with `xmake`, and update localization files for any user-facing text. Do not submit blindly vibe-coded PRs. AI assistance is fine, but contributors are responsible for understanding, testing, and explaining the code they submit.
-
-For the full contributor guide, see [contributing.md](contributing.md).
-
-## Build From Source
-
-Run the production build from the workspace root:
-
-```powershell
-xmake f -m release -a x64
-xmake
-```
-
-This writes the production DLL to `build/windows/x64/release/ESPExplorerAE.dll`.
-
-If you want a clean production rebuild first, run:
-
-```powershell
-xmake clean
-xmake f -m release -a x64
-xmake
-```
-
-To package the current release DLL with the shipped fonts, languages, and themes, run:
-
-```powershell
-xmake package
-```
-
-That creates a zip archive under `build/packages/`, with the DLL and assets arranged under `Data/...` for mod-manager installation.
+High-risk areas include hook installation, input interception, font atlas rebuild
+timing, save-affecting player actions, and `DataManager::Refresh()` behavior.
 
 ## Contributors
 
@@ -123,23 +195,41 @@ That creates a zip archive under `build/packages/`, with the DLL and assets arra
   <img src="https://contrib.rocks/image?repo=DeisDev/ESP-Explorer-AE" alt="ESP Explorer AE contributors" />
 </a>
 
+## Contributing
+
+For contribution expectations, see [contributing.md](contributing.md).
+
+Short version:
+
+- keep pull requests focused;
+- follow nearby file style;
+- avoid speculative rewrites;
+- keep data enumeration separate from UI rendering;
+- prefer existing helpers for localization, filters, context menus, form actions,
+  and shared widgets;
+- build locally before submitting.
+
+AI-assisted code is allowed, but contributors are responsible for understanding,
+testing, and explaining their changes.
+
+## Developer Notes
+
+- This project is data-driven where practical. Before hardcoding game data,
+  check whether Fallout 4, F4SE, or CommonLibF4 exposes the data already.
+- Nexus page copy lives in `nexus/description.bbcode` and should stay separate
+  from developer documentation.
+
 ## Credits
 
 - F4SE team.
 - CommonLibF4 / libxse contributors.
-- ImGui Contributors.
-- SimpleIni Contributors.
-- ESP Explorer AE contributors. 
-
-## More Mods
-
-- [Immersive Main Menus - Oblivion Remastered](https://www.nexusmods.com/oblivionremastered/mods/788)
-- [Immersive Main Menus - Fallout 4](https://www.nexusmods.com/fallout4/mods/82077)
-
-## Support
-
-[Buy Me a Coffee](https://buymeacoffee.com/deisdev)
+- ImGui contributors.
+- SimpleIni contributors.
+- ESP Explorer AE contributors.
 
 ## License
 
-ESP Explorer AE source code is licensed under the GNU General Public License v3.0 only. Non-code assets, including images, screenshots, promotional artwork, mod page artwork, logos, icons, and other media assets, are all rights reserved unless a file states otherwise. See [LICENSE](LICENSE).
+ESP Explorer AE source code is licensed under the GNU General Public License
+v3.0 only. Non-code assets, including images, screenshots, promotional artwork,
+mod page artwork, logos, icons, and other media assets, are all rights reserved
+unless a file states otherwise. See [LICENSE](LICENSE).
