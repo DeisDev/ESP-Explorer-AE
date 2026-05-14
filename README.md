@@ -30,7 +30,7 @@ themes, and localization.
 - `src/Config/` - INI-backed settings.
 - `src/Localization/` - language loading, fallback behavior, and font atlas support.
 - `src/Input/` - gamepad polling and overlay keyboard integration.
-- `src/Logging/` - file logging under `Documents/My Games/Fallout4/F4SE`.
+- Logging uses CommonLib/F4SE's `REX::*` logging macros and writes to the standard plugin log under `Documents/My Games/Fallout4/F4SE`.
 - `dist/lang/` - shipped language `.ini` files.
 - `dist/fonts/` - shipped runtime fonts.
 - `dist/themes/` - shipped theme `.ini` files.

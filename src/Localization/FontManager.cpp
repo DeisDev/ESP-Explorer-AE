@@ -1,7 +1,6 @@
 #include "Localization/FontManager.h"
 
 #include "Localization/Language.h"
-#include "Logging/Logger.h"
 
 #include <imgui.h>
 
@@ -161,7 +160,7 @@ namespace ESPExplorerAE
     {
         auto& io = ImGui::GetIO();
         if (!io.Fonts || io.Fonts->Locked) {
-            Logger::Warn("Skipped font build because the atlas is unavailable or locked");
+            REX::WARN("{}", "Skipped font build because the atlas is unavailable or locked");
             return false;
         }
 
@@ -175,9 +174,9 @@ namespace ESPExplorerAE
         const auto fontsDir = ResolveFontsDirectory();
         fonts[currentSizeIndex] = BuildOneSize(io.Fonts, kPresetSizes[currentSizeIndex], fontsDir);
         if (fonts[currentSizeIndex]) {
-            Logger::Info("Built font atlas size index " + std::to_string(currentSizeIndex) + " for language " + currentLanguageCode);
+            REX::INFO("{}", "Built font atlas size index " + std::to_string(currentSizeIndex) + " for language " + currentLanguageCode);
         } else {
-            Logger::Warn("Failed to build font atlas for language " + currentLanguageCode);
+            REX::WARN("{}", "Failed to build font atlas for language " + currentLanguageCode);
         }
         return fonts[currentSizeIndex] != nullptr;
     }
@@ -218,7 +217,7 @@ namespace ESPExplorerAE
     {
         if (index >= 0 && index < kPresetCount) {
             if (currentSizeIndex != index) {
-                Logger::Verbose("Font size index changed to " + std::to_string(index));
+                REX::DEBUG("{}", "Font size index changed to " + std::to_string(index));
             }
             currentSizeIndex = index;
             EnsureCurrentFontBuilt();
@@ -243,7 +242,7 @@ namespace ESPExplorerAE
     {
         pendingLanguageCode = std::string(languageCode);
         pendingRebuild = true;
-        Logger::Info("Requested font rebuild for language " + pendingLanguageCode);
+        REX::INFO("{}", "Requested font rebuild for language " + pendingLanguageCode);
     }
 
     bool FontManager::HasPendingRebuild()

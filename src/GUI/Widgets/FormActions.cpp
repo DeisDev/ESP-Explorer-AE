@@ -3,7 +3,6 @@
 #include "Config/Config.h"
 #include "GUI/Widgets/FormatUtils.h"
 #include "Localization/Language.h"
-#include "Logging/Logger.h"
 
 #include <imgui.h>
 
@@ -222,7 +221,7 @@ namespace ESPExplorerAE
                         formID = object->GetFormID();
                         char buf[128]{};
                         std::snprintf(buf, sizeof(buf), "Component substitution: CMPO %08X -> MISC %08X", originalID, formID);
-                        Logger::Info(std::string(buf));
+                        REX::INFO("{}", std::string(buf));
                     }
                 }
             }
@@ -233,7 +232,7 @@ namespace ESPExplorerAE
             }
 
             player->AddInventoryItem(object, nullptr, count, nullptr, nullptr, nullptr);
-            Logger::Verbose("Gave item to player form=" + std::to_string(formID) + " count=" + std::to_string(count));
+            REX::DEBUG("{}", "Gave item to player form=" + std::to_string(formID) + " count=" + std::to_string(count));
 
             if (undoCommand) {
                 char command[128]{};
@@ -254,7 +253,7 @@ namespace ESPExplorerAE
                 if (!FormActions::ExecuteConsoleCommand(*commandIt)) {
                     return false;
                 }
-                Logger::Verbose(std::string("Undo command executed: ") + *commandIt);
+                REX::DEBUG("{}", std::string("Undo command executed: ") + *commandIt);
             }
 
             actionHistory.erase(it);
@@ -269,7 +268,7 @@ namespace ESPExplorerAE
 
             char command[128]{};
             std::snprintf(command, sizeof(command), "player.%s %08X %u", commandName, formID, count);
-            Logger::Verbose(std::string("Execute command: ") + command);
+            REX::DEBUG("{}", std::string("Execute command: ") + command);
             RE::Console::ExecuteCommand(command);
             return true;
         }
@@ -282,7 +281,7 @@ namespace ESPExplorerAE
 
             char command[96]{};
             std::snprintf(command, sizeof(command), "player.%s %08X", commandName, formID);
-            Logger::Verbose(std::string("Execute command: ") + command);
+            REX::DEBUG("{}", std::string("Execute command: ") + command);
             RE::Console::ExecuteCommand(command);
             return true;
         }
@@ -292,7 +291,7 @@ namespace ESPExplorerAE
     {
         const std::string formIDText = FormatUtils::FormID(formID);
         ImGui::SetClipboardText(formIDText.c_str());
-        Logger::Verbose(std::string("Copied FormID: ") + formIDText);
+        REX::DEBUG("{}", std::string("Copied FormID: ") + formIDText);
     }
 
     void FormActions::GiveToPlayer(std::uint32_t formID, std::uint32_t count)
@@ -416,7 +415,7 @@ namespace ESPExplorerAE
         const auto ammo = player->GetCurrentAmmo(RE::BGSEquipIndex{ kRightHandEquipIndex });
         if (ammo) {
             GiveToPlayer(ammo->GetFormID(), ammoCount);
-            Logger::Verbose("Added ammo for current weapon count=" + std::to_string(ammoCount));
+            REX::DEBUG("{}", "Added ammo for current weapon count=" + std::to_string(ammoCount));
             return true;
         }
 
@@ -426,7 +425,7 @@ namespace ESPExplorerAE
             auto* weapon = equippedObj.object->As<RE::TESObjectWEAP>();
             if (weapon && weapon->weaponData.ammo) {
                 GiveToPlayer(weapon->weaponData.ammo->GetFormID(), ammoCount);
-                Logger::Verbose("Added ammo for current weapon (from weapon data) count=" + std::to_string(ammoCount));
+                REX::DEBUG("{}", "Added ammo for current weapon (from weapon data) count=" + std::to_string(ammoCount));
                 return true;
             }
         }
@@ -448,7 +447,7 @@ namespace ESPExplorerAE
                     formID = component->scrapItem->GetFormID();
                     char buf[128]{};
                     std::snprintf(buf, sizeof(buf), "Component substitution (spawn): CMPO %08X -> MISC %08X", originalID, formID);
-                    Logger::Info(std::string(buf));
+                    REX::INFO("{}", std::string(buf));
                 }
             }
         }
@@ -457,7 +456,7 @@ namespace ESPExplorerAE
             return;
         }
 
-        Logger::Verbose("Spawn at player form=" + std::to_string(formID) + " count=" + std::to_string(count));
+        REX::DEBUG("{}", "Spawn at player form=" + std::to_string(formID) + " count=" + std::to_string(count));
         RecordAction(BuildSpawnDescription(LocalizeWithFallback("NPCs", "sSpawnNPC", "Spawn"), formID, count));
     }
 
@@ -475,7 +474,7 @@ namespace ESPExplorerAE
                     formID = component->scrapItem->GetFormID();
                     char buf[128]{};
                     std::snprintf(buf, sizeof(buf), "Component substitution (place): CMPO %08X -> MISC %08X", originalID, formID);
-                    Logger::Info(std::string(buf));
+                    REX::INFO("{}", std::string(buf));
                 }
             }
         }
@@ -484,7 +483,7 @@ namespace ESPExplorerAE
             return;
         }
 
-        Logger::Verbose("Place at player form=" + std::to_string(formID) + " count=" + std::to_string(count));
+        REX::DEBUG("{}", "Place at player form=" + std::to_string(formID) + " count=" + std::to_string(count));
         RecordAction(BuildSpawnDescription(LocalizeWithFallback("General", "sActionPlace", "Place"), formID, count));
     }
 
@@ -626,7 +625,7 @@ namespace ESPExplorerAE
             return false;
         }
 
-        Logger::Verbose(std::string("Execute console command: ") + std::string(command));
+        REX::DEBUG("{}", std::string("Execute console command: ") + std::string(command));
         RE::Console::ExecuteCommand(std::string(command).c_str());
         return true;
     }

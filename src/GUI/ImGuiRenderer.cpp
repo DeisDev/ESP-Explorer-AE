@@ -3,7 +3,6 @@
 #include "Config/Config.h"
 #include "Localization/FontManager.h"
 #include "Localization/Language.h"
-#include "Logging/Logger.h"
 
 #include <imgui.h>
 #include <backends/imgui_impl_dx11.h>
@@ -216,23 +215,23 @@ namespace ESPExplorerAE
         const int sizeIndex = FontManager::FindClosestSizeIndex(settings.fontSize);
         FontManager::SetCurrentSizeIndex(sizeIndex);
         if (!FontManager::BuildAll(Language::GetCurrentLanguageCode())) {
-            Logger::Warn("Initial font atlas build failed");
+            REX::WARN("{}", "Initial font atlas build failed");
         } else {
-            Logger::Info("Initial font atlas built for language " + Language::GetCurrentLanguageCode());
+            REX::INFO("{}", "Initial font atlas built for language " + Language::GetCurrentLanguageCode());
         }
 
         if (!ImGui_ImplWin32_Init(hwnd)) {
-            Logger::Error("ImGui Win32 initialization failed");
+            REX::Impl::Log(std::source_location::current(), REX::ELogLevel::Error, "ImGui Win32 initialization failed");
             return false;
         }
 
         if (!ImGui_ImplDX11_Init(device, context)) {
-            Logger::Error("ImGui DX11 initialization failed");
+            REX::Impl::Log(std::source_location::current(), REX::ELogLevel::Error, "ImGui DX11 initialization failed");
             return false;
         }
 
         initialized = true;
-        Logger::Info("ImGui renderer initialized");
+        REX::INFO("{}", "ImGui renderer initialized");
         return true;
     }
 
@@ -249,14 +248,14 @@ namespace ESPExplorerAE
         FontManager::EnsureCurrentFontBuilt();
 
         if (FontManager::HasPendingRebuild()) {
-            Logger::Info("Processing pending font rebuild");
+            REX::INFO("{}", "Processing pending font rebuild");
             ImGui_ImplDX11_InvalidateDeviceObjects();
             const bool rebuildSucceeded = FontManager::ProcessPendingRebuild();
             ImGui_ImplDX11_CreateDeviceObjects();
             if (rebuildSucceeded) {
-                Logger::Info("Font rebuild completed successfully");
+                REX::INFO("{}", "Font rebuild completed successfully");
             } else {
-                Logger::Warn("Font rebuild failed");
+                REX::WARN("{}", "Font rebuild failed");
             }
         }
 

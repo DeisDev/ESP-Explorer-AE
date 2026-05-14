@@ -1,7 +1,6 @@
 #include "GUI/ThemeManager.h"
 
 #include "Config/Config.h"
-#include "Logging/Logger.h"
 
 #include <cctype>
 #include <cmath>
@@ -156,7 +155,7 @@ namespace ESPExplorerAE
 
                 ThemePreset theme{};
                 if (!LoadThemeFile(entry.path(), theme)) {
-                    Logger::Warn("Skipped invalid theme file: " + entry.path().string());
+                    REX::WARN("{}", "Skipped invalid theme file: " + entry.path().string());
                     continue;
                 }
 
@@ -168,7 +167,7 @@ namespace ESPExplorerAE
                     return ToLower(existing.id) == ToLower(theme.id);
                 });
                 if (duplicate != fileThemes.end()) {
-                    Logger::Warn("Skipped duplicate theme id: " + theme.id);
+                    REX::WARN("{}", "Skipped duplicate theme id: " + theme.id);
                     continue;
                 }
 

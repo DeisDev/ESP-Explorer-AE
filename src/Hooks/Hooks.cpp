@@ -5,7 +5,6 @@
 #include "GUI/MainWindow.h"
 #include "GUI/Widgets/FormActions.h"
 #include "Input/GamepadInput.h"
-#include "Logging/Logger.h"
 
 #include <RE/B/BSGraphics.h>
 #include <RE/C/ControlMap.h>
@@ -389,7 +388,6 @@ namespace ESPExplorerAE
         auto* rendererWindow = RE::BSGraphics::GetCurrentRendererWindow();
         if (!rendererWindow || !rendererWindow->swapChain) {
             REX::WARN("Renderer window not ready for Present hook");
-            Logger::Warn("Renderer window not ready for Present hook");
             return;
         }
 
@@ -405,8 +403,7 @@ namespace ESPExplorerAE
 
         DWORD oldProtect = 0;
         if (!VirtualProtect(&vtable[8], sizeof(void*), PAGE_EXECUTE_READWRITE, &oldProtect)) {
-            REX::WARN("Failed to change vtable memory protection");
-            Logger::Error("Failed to change vtable memory protection");
+            REX::Impl::Log(std::source_location::current(), REX::ELogLevel::Error, "Failed to change vtable memory protection");
             originalPresent = nullptr;
             return;
         }
@@ -417,7 +414,6 @@ namespace ESPExplorerAE
         VirtualProtect(&vtable[8], sizeof(void*), oldProtect, &restoreProtect);
 
         REX::INFO("Present hook installed");
-        Logger::Info("Present hook installed");
     }
 
     HRESULT __stdcall Hooks::PresentHook(IDXGISwapChain* swapChain, UINT syncInterval, UINT flags)
@@ -437,7 +433,7 @@ namespace ESPExplorerAE
             GamepadInput::Poll();
 
             if (GamepadInput::WasMenuTogglePressed()) {
-                Logger::Verbose("Menu toggle requested via gamepad");
+                REX::DEBUG("{}", "Menu toggle requested via gamepad");
                 SetMenuVisible(!menuVisible);
             }
 
@@ -481,9 +477,9 @@ namespace ESPExplorerAE
             ResetTrackedInputs();
         }
 
-        Logger::Verbose(std::string("Menu visibility changed: ") + (menuVisible ? "visible" : "hidden"));
+        REX::DEBUG("{}", std::string("Menu visibility changed: ") + (menuVisible ? "visible" : "hidden"));
         if (menuVisible && IsBlockingGameMenuOpen()) {
-            Logger::Verbose("Menu rendering suppressed because a blocking game menu is open");
+            REX::DEBUG("{}", "Menu rendering suppressed because a blocking game menu is open");
         }
         UpdateCursorState();
         UpdateGamePause();
@@ -629,7 +625,7 @@ namespace ESPExplorerAE
         if (msg == WM_KEYUP) {
             const auto& settings = Config::Get();
             if (wParam == settings.toggleKey) {
-                Logger::Verbose("Menu toggle requested via keyboard");
+                REX::DEBUG("{}", "Menu toggle requested via keyboard");
                 SetMenuVisible(!menuVisible);
                 return 1;
             }
@@ -674,12 +670,12 @@ namespace ESPExplorerAE
         if (previousWndProc == 0) {
             const DWORD error = GetLastError();
             if (error != 0) {
-                Logger::Error("Failed to attach window procedure hook");
+                REX::Impl::Log(std::source_location::current(), REX::ELogLevel::Error, "Failed to attach window procedure hook");
                 return;
             }
         }
 
         originalWndProc = reinterpret_cast<WNDPROC>(previousWndProc);
-        Logger::Info("Window procedure hook installed");
+        REX::INFO("{}", "Window procedure hook installed");
     }
 }

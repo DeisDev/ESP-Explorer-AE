@@ -3,6 +3,10 @@
 #include <RE/Fallout.h>
 #include <F4SE/F4SE.h>
 
+#ifdef ERROR
+#undef ERROR
+#endif
+
 #include <SimpleIni.h>
 
 #include <string>

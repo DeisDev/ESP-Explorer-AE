@@ -1,7 +1,6 @@
 #include "Data/DataManager.h"
 
 #include "Config/Config.h"
-#include "Logging/Logger.h"
 
 #include <concepts>
 #include <cctype>
@@ -258,11 +257,11 @@ namespace ESPExplorerAE
 
     void DataManager::Refresh()
     {
-        Logger::Verbose("Data refresh started");
+        REX::DEBUG("{}", "Data refresh started");
 
         auto* dataHandler = RE::TESDataHandler::GetSingleton();
         if (!dataHandler) {
-            Logger::Warn("Data refresh aborted: TESDataHandler unavailable");
+            REX::WARN("{}", "Data refresh aborted: TESDataHandler unavailable");
             return;
         }
 
@@ -660,8 +659,8 @@ namespace ESPExplorerAE
             dataReady = true;
         }
 
-        Logger::Verbose(
-            "Data refresh finished: forms=" + std::to_string(counts.weapons + counts.armors + counts.ammo + counts.misc + counts.npcs + counts.activators + counts.containers + counts.statics + counts.furniture + counts.spells + counts.perks));
+        REX::DEBUG("Data refresh finished: forms={}",
+            counts.weapons + counts.armors + counts.ammo + counts.misc + counts.npcs + counts.activators + counts.containers + counts.statics + counts.furniture + counts.spells + counts.perks);
     }
 
     DataManager::DataView DataManager::GetDataView()

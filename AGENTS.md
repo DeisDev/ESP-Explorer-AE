@@ -73,7 +73,7 @@ Important consequence: any feature that depends on localized strings or font cov
 - `src/Localization/Language.cpp`: localized string loading with English fallback.
 - `src/Localization/FontManager.cpp`: language-aware font atlas building and rebuild requests.
 - `src/Input/GamepadInput.cpp`: XInput polling and Steam overlay keyboard support.
-- `src/Logging/Logger.cpp`: file logging under Documents/My Games/Fallout4/F4SE.
+- Logging uses CommonLib/F4SE's `REX::*` logging macros and the standard plugin log under Documents/My Games/Fallout4/F4SE.
 
 ## Localization Rules
 
