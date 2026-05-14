@@ -9,9 +9,9 @@
 
 namespace
 {
-    void SetLogLevel(bool verbose)
+    void SetLogLevel(bool debug)
     {
-        const auto level = verbose ? spdlog::level::debug : spdlog::level::info;
+        const auto level = debug ? spdlog::level::debug : spdlog::level::info;
         spdlog::set_level(level);
         spdlog::default_logger()->flush_on(level);
     }
@@ -48,7 +48,7 @@ F4SE_PLUGIN_LOAD(const F4SE::LoadInterface* a_f4se)
     }
 
     const auto& settings = ESPExplorerAE::Config::Get();
-    SetLogLevel(settings.verboseLogging);
+    SetLogLevel(settings.debugLogging);
     REX::INFO("Plugin load started");
 
     if (!ESPExplorerAE::Language::Load(settings.language)) {

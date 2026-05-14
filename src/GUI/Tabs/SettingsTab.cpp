@@ -27,12 +27,12 @@ namespace ESPExplorerAE
         constexpr auto kGitHubUrl = "https://github.com/DeisDev/ESP-Explorer-AE";
         constexpr auto kBuyMeACoffeeUrl = "https://buymeacoffee.com/DeisDev";
 
-        void SetLogLevel(bool verbose)
+        void SetLogLevel(bool debug)
         {
-            const auto level = verbose ? spdlog::level::debug : spdlog::level::info;
+            const auto level = debug ? spdlog::level::debug : spdlog::level::info;
             spdlog::set_level(level);
             spdlog::default_logger()->flush_on(level);
-            REX::INFO("Verbose logging {}", verbose ? "enabled" : "disabled");
+            REX::INFO("Debug logging {}", debug ? "enabled" : "disabled");
         }
 
         const char* L(std::string_view section, std::string_view key, const char* fallback)
@@ -862,8 +862,8 @@ namespace ESPExplorerAE
         if (BeginSection("SettingsLoggingSection", L("Settings", "sLoggingSection", "Logging"))) {
             sectionSpacing();
             changed = ImGui::Checkbox(L("Settings", "sShowLogsTab", "Show Logs Tab"), &settings.showLogsTab) || changed;
-            if (ImGui::Checkbox(L("Settings", "sVerboseLogging", "Verbose Logging"), &settings.verboseLogging)) {
-                SetLogLevel(settings.verboseLogging);
+            if (ImGui::Checkbox(L("Settings", "sDebugLogging", "Debug Logging"), &settings.debugLogging)) {
+                SetLogLevel(settings.debugLogging);
                 changed = true;
             }
             sectionSpacing();
@@ -930,7 +930,7 @@ namespace ESPExplorerAE
                 waitingForToggleKey = false;
                 currentLanguage = settings.language;
                 FontManager::SetCurrentSizeIndex(FontManager::FindClosestSizeIndex(settings.fontSize));
-                SetLogLevel(settings.verboseLogging);
+                SetLogLevel(settings.debugLogging);
                 changed = true;
                 languageChanged = languageChanged || resetLanguage;
                 ImGui::CloseCurrentPopup();
