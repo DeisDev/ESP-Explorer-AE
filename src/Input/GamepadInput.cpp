@@ -1,6 +1,5 @@
 #include "Input/GamepadInput.h"
 
-#include "Logging/Logger.h"
 
 #include <imgui.h>
 
@@ -108,7 +107,7 @@ namespace ESPExplorerAE
                             };
 
                             funcs.available = true;
-                            Logger::Info("Steam overlay keyboard functions loaded");
+                            REX::INFO("{}", "Steam overlay keyboard functions loaded");
                         }
                     }
 
@@ -126,13 +125,13 @@ namespace ESPExplorerAE
                             funcs.GetEnteredGamepadTextLength = getGPTLen;
                             funcs.GetEnteredGamepadTextInput = getGPTInput;
                             funcs.available = true;
-                            Logger::Info("Steam overlay keyboard (flat API) loaded");
+                            REX::INFO("{}", "Steam overlay keyboard (flat API) loaded");
                         }
                     }
                 }
 
                 if (!funcs.available) {
-                    Logger::Warn("Steam overlay keyboard not available");
+                    REX::WARN("{}", "Steam overlay keyboard not available");
                 }
             }
             return funcs;
@@ -152,7 +151,7 @@ namespace ESPExplorerAE
 
         if (!pXInputGetState) {
             if (gamepadConnected) {
-                Logger::Verbose("Gamepad disconnected");
+                REX::DEBUG("{}", "Gamepad disconnected");
             }
             gamepadConnected = false;
             usingGamepad = false;
@@ -166,7 +165,7 @@ namespace ESPExplorerAE
 
         if (result != ERROR_SUCCESS) {
             if (gamepadConnected) {
-                Logger::Verbose("Gamepad disconnected");
+                REX::DEBUG("{}", "Gamepad disconnected");
             }
             gamepadConnected = false;
             usingGamepad = false;
@@ -182,7 +181,7 @@ namespace ESPExplorerAE
 
         gamepadConnected = true;
         if (!loggedConnectedState) {
-            Logger::Info("Gamepad connected");
+            REX::INFO("{}", "Gamepad connected");
             loggedConnectedState = true;
         }
         ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_HasGamepad;
@@ -201,7 +200,7 @@ namespace ESPExplorerAE
         }
 
         if (usingGamepad && !loggedUsingGamepadState) {
-            Logger::Verbose("Input mode switched to gamepad");
+            REX::DEBUG("{}", "Input mode switched to gamepad");
             loggedUsingGamepadState = true;
         }
 
@@ -306,7 +305,7 @@ namespace ESPExplorerAE
     {
         auto& funcs = GetSteamFuncs();
         if (!funcs.available || !funcs.ShowGamepadTextInput) {
-            Logger::Verbose("Steam keyboard not available");
+            REX::DEBUG("{}", "Steam keyboard not available");
             return;
         }
 
@@ -316,14 +315,14 @@ namespace ESPExplorerAE
 
         if (funcs.ShowGamepadTextInput(0, 0, "Search", 256, "")) {
             steamKeyboardOpen = true;
-            Logger::Verbose("Steam keyboard opened");
+            REX::DEBUG("{}", "Steam keyboard opened");
         }
     }
 
     void GamepadInput::CloseSteamKeyboard()
     {
         steamKeyboardOpen = false;
-        Logger::Verbose("Steam keyboard closed");
+        REX::DEBUG("{}", "Steam keyboard closed");
     }
 
     bool GamepadInput::IsSteamKeyboardOpen()
@@ -349,7 +348,7 @@ namespace ESPExplorerAE
             if (funcs.GetEnteredGamepadTextInput(tempBuf, sizeof(tempBuf))) {
                 strncpy_s(buffer, bufferSize, tempBuf, _TRUNCATE);
                 value = buffer;
-                Logger::Verbose("Steam keyboard submitted text");
+                REX::DEBUG("{}", "Steam keyboard submitted text");
             }
         }
 

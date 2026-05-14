@@ -5,7 +5,6 @@
 #include "GUI/Widgets/ImGuiWidgetUtils.h"
 #include "GUI/Widgets/ModalUtils.h"
 #include "Localization/Language.h"
-#include "Logging/Logger.h"
 
 #include <imgui.h>
 
@@ -83,7 +82,7 @@ namespace ESPExplorerAE::MainWindowPopups
 
             helpOverlay.visible = false;
             helpOverlay.persistDismissal = false;
-            Logger::Verbose("Help overlay dismissed");
+            REX::DEBUG("{}", "Help overlay dismissed");
         }
 
         void RenderConfirmActionPopup(const LocalizeFn& localize)
@@ -279,7 +278,7 @@ namespace ESPExplorerAE::MainWindowPopups
 
     void RequestActionConfirmation(std::string title, std::string message, std::function<void()> callback)
     {
-        Logger::Verbose("Queued confirmation popup: " + title);
+        REX::DEBUG("{}", "Queued confirmation popup: " + title);
         confirmAction.title = std::move(title);
         confirmAction.message = std::move(message);
         confirmAction.callback = std::move(callback);
@@ -290,19 +289,19 @@ namespace ESPExplorerAE::MainWindowPopups
     void OpenGlobalValuePopup(std::uint32_t formID)
     {
         if (!FormActions::AreGameplayActionsAllowed()) {
-            Logger::Verbose("Blocked Set Global popup because gameplay actions are disabled");
+            REX::DEBUG("{}", "Blocked Set Global popup because gameplay actions are disabled");
             return;
         }
 
         auto* form = RE::TESForm::GetFormByID(formID);
         if (!form) {
-            Logger::Warn("Set Global popup requested for missing form");
+            REX::WARN("{}", "Set Global popup requested for missing form");
             return;
         }
 
         const auto* editorID = form->GetFormEditorID();
         if (!editorID || editorID[0] == '\0') {
-            Logger::Warn("Set Global popup requested for form without editor ID");
+            REX::WARN("{}", "Set Global popup requested for form without editor ID");
             return;
         }
 
@@ -311,7 +310,7 @@ namespace ESPExplorerAE::MainWindowPopups
         globalValuePopup.value = 0.0f;
         globalValuePopup.openRequested = true;
         globalValuePopup.visible = true;
-        Logger::Verbose("Opened Set Global popup for editor ID " + globalValuePopup.editorID);
+        REX::DEBUG("{}", "Opened Set Global popup for editor ID " + globalValuePopup.editorID);
     }
 
     void OpenHelpOverlay()
@@ -319,7 +318,7 @@ namespace ESPExplorerAE::MainWindowPopups
         helpOverlay.persistDismissal = true;
         helpOverlay.openRequested = true;
         helpOverlay.visible = true;
-        Logger::Verbose("Help overlay requested manually");
+        REX::DEBUG("{}", "Help overlay requested manually");
     }
 
     void OpenFirstRunHelpOverlay()
@@ -331,7 +330,7 @@ namespace ESPExplorerAE::MainWindowPopups
         helpOverlay.persistDismissal = true;
         helpOverlay.openRequested = true;
         helpOverlay.visible = true;
-        Logger::Verbose("Help overlay requested for first run");
+        REX::DEBUG("{}", "Help overlay requested for first run");
     }
 
     void HandleMenuVisibilityChanged(bool visible)
@@ -341,18 +340,18 @@ namespace ESPExplorerAE::MainWindowPopups
                 confirmAction.visible = false;
                 confirmAction.openRequested = false;
                 confirmAction.callback = {};
-                Logger::Verbose("Closed confirm action popup on menu hide");
+                REX::DEBUG("{}", "Closed confirm action popup on menu hide");
             }
             if (globalValuePopup.visible) {
                 globalValuePopup.visible = false;
                 globalValuePopup.openRequested = false;
-                Logger::Verbose("Closed global value popup on menu hide");
+                REX::DEBUG("{}", "Closed global value popup on menu hide");
             }
         }
 
         if (helpOverlay.visible) {
             helpOverlay.openRequested = true;
-            Logger::Verbose("Reopening help overlay after menu visibility change");
+            REX::DEBUG("{}", "Reopening help overlay after menu visibility change");
         }
     }
 

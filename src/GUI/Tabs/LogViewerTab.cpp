@@ -1,11 +1,11 @@
 #include "GUI/Tabs/LogViewerTab.h"
 
 #include "Hooks/Hooks.h"
-#include "Logging/Logger.h"
 
 #include <imgui.h>
 
 #include <commdlg.h>
+#include <ShlObj_core.h>
 #include <shellapi.h>
 
 #include <algorithm>
@@ -43,11 +43,39 @@ namespace ESPExplorerAE
             return extension == ".log" || extension == ".txt";
         }
 
+        std::filesystem::path ResolveDocumentsPath()
+        {
+            PWSTR path{ nullptr };
+            const HRESULT result = SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_DEFAULT, nullptr, &path);
+
+            if (SUCCEEDED(result) && path) {
+                std::filesystem::path docs(path);
+                CoTaskMemFree(path);
+                return docs;
+            }
+
+            if (path) {
+                CoTaskMemFree(path);
+            }
+
+            return std::filesystem::path("Documents");
+        }
+
+        std::filesystem::path GetLogDirectory()
+        {
+            return ResolveDocumentsPath() / "My Games" / std::string(F4SE::GetSaveFolderName()) / "F4SE";
+        }
+
+        std::filesystem::path GetMainLogPath()
+        {
+            return GetLogDirectory() / (std::string(F4SE::GetPluginName()) + ".log");
+        }
+
         void RefreshFileList()
         {
             state.files.clear();
 
-            const auto logDir = Logger::GetLogDirectory();
+            const auto logDir = GetLogDirectory();
             if (!std::filesystem::exists(logDir) || !std::filesystem::is_directory(logDir)) {
                 return;
             }
@@ -76,7 +104,7 @@ namespace ESPExplorerAE
             }
 
             if (state.selectedFile.empty()) {
-                const auto mainLogPath = Logger::GetMainLogPath();
+                const auto mainLogPath = GetMainLogPath();
                 auto match = std::ranges::find(state.files, mainLogPath);
                 if (match != state.files.end()) {
                     state.selectedFileIndex = static_cast<int>(std::distance(state.files.begin(), match));
@@ -131,12 +159,6 @@ namespace ESPExplorerAE
         void TailSelectedFile()
         {
             if (state.selectedFile.empty() || !std::filesystem::exists(state.selectedFile)) {
-                return;
-            }
-
-            const auto mainLogPath = Logger::GetMainLogPath();
-            if (state.selectedFile == mainLogPath) {
-                state.lines = Logger::GetRecentLines();
                 return;
             }
 
@@ -228,7 +250,7 @@ namespace ESPExplorerAE
 
             const auto sourceName = state.selectedFile.stem().string();
             const auto sourceExt = state.selectedFile.extension().string();
-            const auto suggestedPath = (Logger::GetLogDirectory() / (sourceName + "-" + timestamp + sourceExt)).string();
+            const auto suggestedPath = (GetLogDirectory() / (sourceName + "-" + timestamp + sourceExt)).string();
 
             std::array<char, MAX_PATH> filePathBuffer{};
             std::snprintf(filePathBuffer.data(), filePathBuffer.size(), "%s", suggestedPath.c_str());
@@ -333,7 +355,7 @@ namespace ESPExplorerAE
 
             const char* openFolderLabel = localize("Logs", "sOpenFolder", "Open Folder");
             if (wrappedButton(openFolderLabel)) {
-                const auto folder = Logger::GetLogDirectory().string();
+                const auto folder = GetLogDirectory().string();
                 ShellExecuteA(nullptr, "open", folder.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
             }
 

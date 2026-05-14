@@ -25,7 +25,6 @@
 #include "Hooks/Hooks.h"
 #include "Input/GamepadInput.h"
 #include "Localization/Language.h"
-#include "Logging/Logger.h"
 
 #include <imgui.h>
 
@@ -1226,7 +1225,7 @@ namespace ESPExplorerAE
     {
         MainWindowPopups::HandleMenuVisibilityChanged(visible);
         RecordFiltersWidget::HandleMenuVisibilityChanged(visible);
-        Logger::Verbose(std::string("Main window visibility handler: ") + (visible ? "shown" : "hidden"));
+        REX::DEBUG("{}", std::string("Main window visibility handler: ") + (visible ? "shown" : "hidden"));
 
         if (!visible) {
             ItemGrantPopup::Close();
@@ -1252,7 +1251,7 @@ namespace ESPExplorerAE
         const auto previousActiveTab = activeMainTab;
 
         if (refreshDataRequested && !refreshDataInProgress) {
-            Logger::Info("Main window starting requested data refresh");
+            REX::INFO("{}", "Main window starting requested data refresh");
             refreshDataInProgress = true;
             DataManager::Refresh();
             FormTable::ClearCaches();
@@ -1260,7 +1259,7 @@ namespace ESPExplorerAE
             ContextMenu::ClearCaches();
             refreshDataInProgress = false;
             refreshDataRequested = false;
-            Logger::Info("Main window finished requested data refresh");
+            REX::INFO("{}", "Main window finished requested data refresh");
         }
 
         const auto& settings = Config::Get();
@@ -1296,7 +1295,7 @@ namespace ESPExplorerAE
                 mutableSettings.windowW = clampedWindowSize.x;
                 mutableSettings.windowH = clampedWindowSize.y;
                 Config::RequestSave();
-                Logger::Verbose("Adjusted saved main window placement to fit the active viewport");
+                REX::DEBUG("{}", "Adjusted saved main window placement to fit the active viewport");
 
                 initialWindowPos = clampedWindowPos;
                 initialWindowSize = clampedWindowSize;
@@ -1408,7 +1407,7 @@ namespace ESPExplorerAE
                         } else {
                             if (ImGui::Button(L("General", "sRefreshData", "Refresh Data"))) {
                                 refreshDataRequested = true;
-                                Logger::Verbose("Refresh Data requested from Plugin Browser tab");
+                                REX::DEBUG("{}", "Refresh Data requested from Plugin Browser tab");
                             }
                         }
 
@@ -1612,7 +1611,7 @@ namespace ESPExplorerAE
             }
 
             if (activeMainTab != previousActiveTab && !activeMainTab.empty()) {
-                Logger::Verbose("Active tab changed to: " + activeMainTab);
+                REX::DEBUG("{}", "Active tab changed to: " + activeMainTab);
             }
 
             auto& mutableSettings = Config::GetMutable();
@@ -1627,7 +1626,7 @@ namespace ESPExplorerAE
         }
         ImGui::End();
         if (!windowOpen) {
-            Logger::Verbose("Main window close button pressed");
+            REX::DEBUG("{}", "Main window close button pressed");
             Hooks::SetMenuVisible(false);
         }
     }

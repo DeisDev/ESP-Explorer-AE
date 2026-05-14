@@ -9,7 +9,6 @@
 #include "GUI/Widgets/MainWindowPopups.h"
 #include "GUI/Widgets/SearchBar.h"
 #include "GUI/Widgets/SharedUtils.h"
-#include "Logging/Logger.h"
 
 #include <imgui.h>
 
@@ -573,7 +572,7 @@ namespace ESPExplorerAE
             }
 
             player->RemoveItem(data);
-            Logger::Verbose(std::string(drop ? "Dropped inventory stack form=" : "Removed inventory stack form=") + std::to_string(entry.formID) + " stack=" + std::to_string(entry.stackID) + " count=" + std::to_string(count));
+            REX::DEBUG("{}", std::string(drop ? "Dropped inventory stack form=" : "Removed inventory stack form=") + std::to_string(entry.formID) + " stack=" + std::to_string(entry.stackID) + " count=" + std::to_string(count));
             MarkRefreshNeeded();
             return true;
         }
@@ -613,7 +612,7 @@ namespace ESPExplorerAE
                 equipManager->UnequipObject(player, &objectInstance, 1, nullptr, entry.stackID, false, true, true, true, nullptr);
 
             if (result) {
-                Logger::Verbose(std::string(equip ? "Equipped inventory stack form=" : "Unequipped inventory stack form=") + std::to_string(entry.formID) + " stack=" + std::to_string(entry.stackID));
+                REX::DEBUG("{}", std::string(equip ? "Equipped inventory stack form=" : "Unequipped inventory stack form=") + std::to_string(entry.formID) + " stack=" + std::to_string(entry.stackID));
                 MarkRefreshNeeded();
             }
 

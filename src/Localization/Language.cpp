@@ -1,6 +1,5 @@
 #include "Localization/Language.h"
 
-#include "Logging/Logger.h"
 
 #include <algorithm>
 #include <cctype>
@@ -135,23 +134,23 @@ namespace ESPExplorerAE
         fallbackDefinition = { .code = "en", .displayName = "en" };
 
         currentLanguage = languageCode.empty() ? "en" : std::string(languageCode);
-        Logger::Info("Loading language: " + currentLanguage);
+        REX::INFO("{}", "Loading language: " + currentLanguage);
 
         const auto fallbackPath = ResolveLanguagePath("en");
         if (!LoadLanguageFile(fallbackPath, fallbackStrings, &fallbackDefinition)) {
-            Logger::Warn("Failed to load English fallback language file");
+            REX::WARN("{}", "Failed to load English fallback language file");
         }
 
         const auto requestedPath = ResolveLanguagePath(currentLanguage);
         if (LoadLanguageFile(requestedPath, strings, &currentDefinition)) {
-            Logger::Info("Loaded language file for: " + currentLanguage);
+            REX::INFO("{}", "Loaded language file for: " + currentLanguage);
             return true;
         }
 
         strings = fallbackStrings;
         currentLanguage = "en";
         currentDefinition = fallbackDefinition;
-        Logger::Warn("Requested language file unavailable, falling back to English");
+        REX::WARN("{}", "Requested language file unavailable, falling back to English");
         return !strings.empty();
     }
 

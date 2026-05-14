@@ -7,11 +7,11 @@
 #include "GUI/Widgets/ModalUtils.h"
 #include "GUI/Widgets/SharedUtils.h"
 #include "Input/GamepadInput.h"
-#include "Logging/Logger.h"
 #include "Localization/FontManager.h"
 #include "Localization/Language.h"
 
 #include <imgui.h>
+#include <spdlog/spdlog.h>
 
 #include <cmath>
 #include <RE/S/Setting.h>
@@ -26,6 +26,14 @@ namespace ESPExplorerAE
         constexpr auto kNexusBugReportUrl = "https://www.nexusmods.com/fallout4/mods/102223?tab=bugs";
         constexpr auto kGitHubUrl = "https://github.com/DeisDev/ESP-Explorer-AE";
         constexpr auto kBuyMeACoffeeUrl = "https://buymeacoffee.com/DeisDev";
+
+        void SetLogLevel(bool verbose)
+        {
+            const auto level = verbose ? spdlog::level::debug : spdlog::level::info;
+            spdlog::set_level(level);
+            spdlog::default_logger()->flush_on(level);
+            REX::INFO("Verbose logging {}", verbose ? "enabled" : "disabled");
+        }
 
         const char* L(std::string_view section, std::string_view key, const char* fallback)
         {
@@ -855,7 +863,7 @@ namespace ESPExplorerAE
             sectionSpacing();
             changed = ImGui::Checkbox(L("Settings", "sShowLogsTab", "Show Logs Tab"), &settings.showLogsTab) || changed;
             if (ImGui::Checkbox(L("Settings", "sVerboseLogging", "Verbose Logging"), &settings.verboseLogging)) {
-                Logger::SetVerboseEnabled(settings.verboseLogging);
+                SetLogLevel(settings.verboseLogging);
                 changed = true;
             }
             sectionSpacing();
@@ -922,7 +930,7 @@ namespace ESPExplorerAE
                 waitingForToggleKey = false;
                 currentLanguage = settings.language;
                 FontManager::SetCurrentSizeIndex(FontManager::FindClosestSizeIndex(settings.fontSize));
-                Logger::SetVerboseEnabled(settings.verboseLogging);
+                SetLogLevel(settings.verboseLogging);
                 changed = true;
                 languageChanged = languageChanged || resetLanguage;
                 ImGui::CloseCurrentPopup();
