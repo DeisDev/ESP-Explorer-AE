@@ -164,7 +164,7 @@ namespace ESPExplorerAE
 
         ini.SetBoolValue("Controller", "bEnableGamepadNav", settingsSnapshot.enableGamepadNav);
 
-        ini.SetBoolValue("Logging", "bVerboseLogging", settingsSnapshot.verboseLogging);
+        ini.SetBoolValue("Logging", "bDebugLogging", settingsSnapshot.debugLogging);
         ini.SetBoolValue("Logging", "bShowLogsTab", settingsSnapshot.showLogsTab);
 
         const auto favorites = SerializeFavorites(settingsSnapshot.favorites);
@@ -195,8 +195,9 @@ namespace ESPExplorerAE
         settings.pauseGameWhenMenuOpen = ini.GetBoolValue("General", "bPauseGameWhenMenuOpen", false);
         settings.hidePlayerHUDWhenMenuOpen = ini.GetBoolValue("General", "bHidePlayerHUDWhenMenuOpen", false);
         settings.godModeWhenMenuOpen = ini.GetBoolValue("General", "bGodModeWhenMenuOpen", false);
-        settings.verboseLogging = ini.GetBoolValue("Logging", "bVerboseLogging",
-                          ini.GetBoolValue("General", "bVerboseLogging", true));
+        settings.debugLogging = ini.GetBoolValue("Logging", "bDebugLogging",
+                          ini.GetBoolValue("Logging", "bVerboseLogging",
+                              ini.GetBoolValue("General", "bVerboseLogging", true)));
 
         settings.fontSize = static_cast<float>(ini.GetDoubleValue("UI", "fFontSize", 20.0));
         settings.windowAlpha = static_cast<float>(ini.GetDoubleValue("UI", "fWindowAlpha", 0.95));

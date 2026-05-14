@@ -20,7 +20,7 @@ namespace ESPExplorerAE
         bool pauseGameWhenMenuOpen{ false };
         bool hidePlayerHUDWhenMenuOpen{ false };
         bool godModeWhenMenuOpen{ false };
-        bool verboseLogging{ true };
+        bool debugLogging{ true };
         bool showLogsTab{ true };
         bool hideNonPlayable{ true };
         bool hideDeleted{ true };
