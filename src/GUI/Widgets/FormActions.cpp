@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <deque>
+#include <optional>
 #include <vector>
 
 namespace ESPExplorerAE
@@ -46,6 +47,7 @@ namespace ESPExplorerAE
         std::deque<PendingGiveEntry> pendingGiveEntries{};
         ActionHistoryEntry actionBatch{};
         bool actionBatchActive{ false };
+        std::optional<bool> playerGodModeState{};
         std::uint64_t nextActionID{ 1 };
         constexpr std::size_t kMaxUndoEntries = 64;
         constexpr std::size_t kDefaultPendingGiveActionsPerFrame = 8;
@@ -595,7 +597,12 @@ namespace ESPExplorerAE
     bool FormActions::IsPlayerGodModeEnabled()
     {
         auto* player = RE::PlayerCharacter::GetSingleton();
-        return player && player->IsGodMode();
+        if (!player) {
+            playerGodModeState.reset();
+            return false;
+        }
+
+        return player->IsGodMode() || playerGodModeState.value_or(false);
     }
 
     bool FormActions::AreGameplayActionsAllowed()
@@ -612,11 +619,13 @@ namespace ESPExplorerAE
             return;
         }
 
-        if (player->IsGodMode() == enabled) {
+        if (IsPlayerGodModeEnabled() == enabled) {
             return;
         }
 
-        ExecuteConsoleCommand("tgm");
+        if (ExecuteConsoleCommand("tgm")) {
+            playerGodModeState = enabled;
+        }
     }
 
     bool FormActions::ExecuteConsoleCommand(std::string_view command)

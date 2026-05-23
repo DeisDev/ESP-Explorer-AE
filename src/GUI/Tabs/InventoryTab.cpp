@@ -792,7 +792,7 @@ namespace ESPExplorerAE
             }
             ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
 
-            const char* godModeLabel = context.playerGodModeEnabled ? L(context, "Inventory", "sGodModeOff", "Godmode: ON") : L(context, "Inventory", "sGodModeOn", "Godmode: OFF");
+            const char* godModeLabel = context.playerGodModeEnabled ? L(context, "Inventory", "sGodModeOn", "Godmode: ON") : L(context, "Inventory", "sGodModeOff", "Godmode: OFF");
             wrappedSameLine(godModeLabel);
             if (ImGui::Button(godModeLabel)) {
                 FormActions::SetPlayerGodModeEnabled(!context.playerGodModeEnabled);
