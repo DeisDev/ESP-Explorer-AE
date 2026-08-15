@@ -1,6 +1,12 @@
+#include "Core/Profiling.h"
 #include "Localization/Language.h"
 
 
+#include "Core/SnapshotStore.h"
+#include "Core/SettingsValidation.h"
+#include <SimpleIni.h>
+#include <fstream>
+#include <stdexcept>
 #include <algorithm>
 #include <cctype>
 
@@ -8,6 +14,10 @@ namespace ESPExplorerAE
 {
     namespace
     {
+        SnapshotStore<LanguageSnapshot> snapshots;
+        std::mutex reloadMutex;
+        thread_local const LanguageSnapshot* frameSnapshot{};
+
         constexpr std::string_view kLanguageMetaSection = "Language";
         constexpr std::string_view kLanguageNameKey = "sName";
         constexpr std::string_view kLanguageFontsKey = "sFontFiles";
@@ -16,17 +26,24 @@ namespace ESPExplorerAE
         std::filesystem::path ResolveLanguageDirectory()
         {
             const auto runtimePath = std::filesystem::path("Data/Interface/ESPExplorerAE/lang");
-            if (std::filesystem::exists(runtimePath)) {
+            std::error_code error;
+            if (std::filesystem::exists(runtimePath, error) || error) {
                 return runtimePath;
             }
 
             return std::filesystem::path("dist/lang");
         }
 
-        std::filesystem::path ResolveLanguagePath(std::string_view code)
+        std::filesystem::path LanguagePath(const std::filesystem::path& directory, std::string_view code)
         {
-            const auto basePath = ResolveLanguageDirectory();
-            return basePath / (std::string(code) + ".ini");
+            const auto filename = std::string(code) + ".ini";
+            return directory / std::filesystem::path(std::u8string(filename.begin(), filename.end()));
+        }
+
+        std::string Stem(const std::filesystem::path& path)
+        {
+            const auto utf8 = path.stem().u8string();
+            return std::string(utf8.begin(), utf8.end());
         }
 
         std::string Trim(std::string_view value)
@@ -71,15 +88,16 @@ namespace ESPExplorerAE
             ini.SetUnicode();
 
             if (definition) {
-                definition->code = path.stem().string();
+                definition->code = Stem(path);
                 definition->displayName = definition->code;
                 definition->fontFiles.clear();
                 definition->glyphRanges.clear();
             }
 
-            if (ini.LoadFile(path.string().c_str()) < 0) {
-                return false;
-            }
+            std::ifstream file(path, std::ios::binary);
+            if (!file) return false;
+            const std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            if (file.bad() || bytes.empty() || bytes.find('\0') != std::string::npos || ini.LoadData(bytes) < 0) return false;
 
             if (definition) {
                 const char* displayName = ini.GetValue(kLanguageMetaSection.data(), kLanguageNameKey.data(), "");
@@ -114,142 +132,106 @@ namespace ESPExplorerAE
             return true;
         }
 
-        Language::Definition ReadLanguageDefinition(const std::filesystem::path& path)
+        std::shared_ptr<const LanguageTable> ReadTable(const std::filesystem::path& directory, std::string_view code)
         {
-            Language::Definition definition{
-                .code = path.stem().string(),
-                .displayName = path.stem().string()
-            };
-            std::unordered_map<std::string, std::string> ignored;
-            LoadLanguageFile(path, ignored, &definition);
-            return definition;
+            auto table = std::make_shared<LanguageTable>();
+            if (!LoadLanguageFile(LanguagePath(directory, code), table->strings, &table->definition)) return {};
+            // A metadata-only custom locale can deliberately use English strings.
+            if (table->strings.empty() && table->definition.fontFiles.empty() && table->definition.glyphRanges.empty() &&
+                table->definition.displayName == table->definition.code) return {};
+            return table;
         }
     }
 
-    bool Language::Load(std::string_view languageCode)
+    bool Language::Load(std::string_view languageCode, const Diagnostic& diagnostic)
     {
-        strings.clear();
-        fallbackStrings.clear();
-        currentDefinition = {};
-        fallbackDefinition = { .code = "en", .displayName = "en" };
+        return LoadFromDirectory(ResolveLanguageDirectory(), languageCode, diagnostic);
+    }
 
-        currentLanguage = languageCode.empty() ? "en" : std::string(languageCode);
-        REX::INFO("{}", "Loading language: " + currentLanguage);
-
-        const auto fallbackPath = ResolveLanguagePath("en");
-        if (!LoadLanguageFile(fallbackPath, fallbackStrings, &fallbackDefinition)) {
-            REX::WARN("{}", "Failed to load English fallback language file");
+    bool Language::LoadFromDirectory(const std::filesystem::path& directory, std::string_view languageCode, const Diagnostic& diagnostic)
+    {
+        const ProfileScope profileScope(ProfileMetric::LanguageLoad);
+        // Serialize reloads, never readers. Build a complete replacement before
+        // publishing it. A failed load retains the last usable locale and fonts.
+        std::lock_guard reload(reloadMutex);
+        const auto report = [&](std::string message) { if (diagnostic) diagnostic(std::move(message)); };
+        const auto code = languageCode.empty() ? std::string("en") : std::string(languageCode);
+        if (!ValidLanguageCode(code)) {
+            report("Invalid language code; retaining the current language");
+            return false;
         }
-
-        const auto requestedPath = ResolveLanguagePath(currentLanguage);
-        if (LoadLanguageFile(requestedPath, strings, &currentDefinition)) {
-            REX::INFO("{}", "Loaded language file for: " + currentLanguage);
+        try {
+            const auto previous = Read();
+            const auto englishFile = ReadTable(directory, "en");
+            auto english = englishFile;
+            if (!english) {
+                report("English language file unavailable; retaining the previous English fallback");
+                english = previous->english;
+            }
+            auto selected = code == "en" ? englishFile : ReadTable(directory, code);
+            if (!selected) {
+                report("Requested language file unavailable; falling back to English");
+                selected = englishFile;
+            }
+            if (!selected || (selected->strings.empty() && english->strings.empty())) {
+                report("No usable language strings; retaining the current language");
+                return false;
+            }
+            snapshots.Publish(std::make_shared<const LanguageSnapshot>(LanguageSnapshot{ std::move(selected), std::move(english) }));
             return true;
+        } catch (const std::filesystem::filesystem_error& error) {
+            report("Language load failed; retaining the current language: " + std::string(error.what()));
+            return false;
         }
-
-        strings = fallbackStrings;
-        currentLanguage = "en";
-        currentDefinition = fallbackDefinition;
-        REX::WARN("{}", "Requested language file unavailable, falling back to English");
-        return !strings.empty();
     }
 
-    std::string_view Language::Get(std::string_view section, std::string_view key)
+    std::shared_ptr<const LanguageSnapshot> Language::Read() { return snapshots.Read(); }
+
+    std::string Language::GetCopy(std::string_view section, std::string_view key)
     {
-        const auto mapKey = std::string(section) + "." + std::string(key);
-        const auto it = strings.find(mapKey);
-        if (it != strings.end()) {
-            return it->second;
-        }
-
-        const auto fallback = fallbackStrings.find(mapKey);
-        if (fallback != fallbackStrings.end()) {
-            return fallback->second;
-        }
-
-        static std::string empty{};
-        return empty;
+        const auto snapshot = Read();
+        return std::string(snapshot->Get(section, key));
     }
 
-    std::vector<Language::Definition> Language::ListAvailableLanguages()
+    Language::Frame::Frame() : snapshot(Read()), previous(frameSnapshot) { frameSnapshot = snapshot.get(); }
+    Language::Frame::~Frame() { frameSnapshot = previous; }
+
+    std::string_view Language::FrameText(std::string_view section, std::string_view key)
     {
-        std::vector<Definition> result;
-        const auto directory = ResolveLanguageDirectory();
-        if (!std::filesystem::exists(directory)) {
-            result.push_back({ .code = "en", .displayName = "English" });
-            return result;
-        }
-
-        for (const auto& entry : std::filesystem::directory_iterator(directory)) {
-            if (!entry.is_regular_file()) {
-                continue;
-            }
-
-            const auto ext = entry.path().extension().string();
-            if (_stricmp(ext.c_str(), ".ini") != 0) {
-                continue;
-            }
-
-            result.push_back(ReadLanguageDefinition(entry.path()));
-        }
-
-        if (result.empty()) {
-            result.push_back({ .code = "en", .displayName = "English" });
-        }
-
-        std::sort(result.begin(), result.end(), [](const Definition& left, const Definition& right) {
-            return _stricmp(left.code.c_str(), right.code.c_str()) < 0;
-        });
-        result.erase(std::unique(result.begin(), result.end(), [](const Definition& left, const Definition& right) {
-            return _stricmp(left.code.c_str(), right.code.c_str()) == 0;
-        }), result.end());
-        return result;
+        if (!frameSnapshot) throw std::logic_error("Language::FrameText requires a Language::Frame owner");
+        return frameSnapshot->Get(section, key);
     }
 
     std::string Language::GetCurrentLanguageCode()
     {
-        return currentLanguage;
+        if (frameSnapshot) return frameSnapshot->selected->definition.code;
+        return Read()->selected->definition.code;
     }
 
-    std::vector<std::string> Language::GetActiveFontFiles()
+    std::vector<Language::Definition> Language::ListAvailableLanguages()
     {
-        if (!currentDefinition.fontFiles.empty()) {
-            return currentDefinition.fontFiles;
-        }
-
-        return fallbackDefinition.fontFiles;
+        return ListAvailableLanguages(ResolveLanguageDirectory());
     }
 
-    std::vector<std::string> Language::GetActiveGlyphRanges()
+    std::vector<Language::Definition> Language::ListAvailableLanguages(const std::filesystem::path& directory)
     {
-        if (!currentDefinition.glyphRanges.empty()) {
-            return currentDefinition.glyphRanges;
+        std::vector<Definition> result;
+        std::error_code error;
+        for (std::filesystem::directory_iterator it(directory, error), end; !error && it != end; it.increment(error)) {
+            if (!it->is_regular_file(error) || error) continue;
+            if (_stricmp(it->path().extension().string().c_str(), ".ini") != 0) continue;
+            const auto code = Stem(it->path());
+            if (!ValidLanguageCode(code)) continue;
+            if (const auto table = ReadTable(directory, code)) result.push_back(table->definition);
         }
-
-        return fallbackDefinition.glyphRanges;
-    }
-
-    std::vector<std::string_view> Language::GetActiveGlyphSamples()
-    {
-        std::vector<std::string_view> result;
-        result.reserve(fallbackStrings.size() + strings.size());
-
-        for (const auto& [key, value] : fallbackStrings) {
-            if (!value.empty()) {
-                result.push_back(value);
-            }
-        }
-
-        for (const auto& [key, value] : strings) {
-            if (!value.empty()) {
-                result.push_back(value);
-            }
-        }
-
-        if (!currentDefinition.displayName.empty()) {
-            result.push_back(currentDefinition.displayName);
-        }
-
+        if (result.empty()) result.push_back({ .code = "en", .displayName = "English" });
+        std::sort(result.begin(), result.end(), [](const Definition& left, const Definition& right) {
+            const int order = _stricmp(left.code.c_str(), right.code.c_str());
+            return order == 0 ? left.code < right.code : order < 0;
+        });
+        result.erase(std::unique(result.begin(), result.end(), [](const Definition& left, const Definition& right) {
+            return _stricmp(left.code.c_str(), right.code.c_str()) == 0;
+        }), result.end());
         return result;
     }
 }

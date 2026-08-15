@@ -1,33 +1,39 @@
 #pragma once
 
-#include "pch.h"
+#include "Core/LanguageSnapshot.h"
+#include <filesystem>
+#include <functional>
 
 namespace ESPExplorerAE
 {
     class Language
     {
     public:
-        struct Definition
-        {
-            std::string code;
-            std::string displayName;
-            std::vector<std::string> fontFiles;
-            std::vector<std::string> glyphRanges;
-        };
+        using Definition = LanguageDefinition;
+        using Diagnostic = std::function<void(std::string)>;
 
-        static bool Load(std::string_view languageCode);
-        static std::string_view Get(std::string_view section, std::string_view key);
+        static bool Load(std::string_view languageCode, const Diagnostic& diagnostic = {});
+        static bool LoadFromDirectory(const std::filesystem::path& directory, std::string_view languageCode, const Diagnostic& diagnostic = {});
+        static std::shared_ptr<const LanguageSnapshot> Read();
+        static std::string GetCopy(std::string_view section, std::string_view key);
         static std::vector<Definition> ListAvailableLanguages();
+        static std::vector<Definition> ListAvailableLanguages(const std::filesystem::path& directory);
         static std::string GetCurrentLanguageCode();
-        static std::vector<std::string> GetActiveFontFiles();
-        static std::vector<std::string> GetActiveGlyphRanges();
-        static std::vector<std::string_view> GetActiveGlyphSamples();
 
-    private:
-        static inline std::unordered_map<std::string, std::string> strings{};
-        static inline std::unordered_map<std::string, std::string> fallbackStrings{};
-        static inline std::string currentLanguage{ "en" };
-        static inline Definition currentDefinition{ .code = "en", .displayName = "en" };
-        static inline Definition fallbackDefinition{ .code = "en", .displayName = "en" };
+        // Pins one locale for legacy immediate-mode widgets throughout a frame.
+        // FrameText borrows only within this scope; other readers use Read/GetCopy.
+        // Nested scopes restore the enclosing frame. Each thread owns its pin.
+        class Frame
+        {
+        public:
+            Frame();
+            ~Frame();
+            Frame(const Frame&) = delete;
+            Frame& operator=(const Frame&) = delete;
+        private:
+            std::shared_ptr<const LanguageSnapshot> snapshot;
+            const LanguageSnapshot* previous{};
+        };
+        static std::string_view FrameText(std::string_view section, std::string_view key);
     };
 }
