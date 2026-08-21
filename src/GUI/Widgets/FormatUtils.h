@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Config/Config.h"
+#include "Core/CopyFormat.h"
 
 #include <cstdint>
 #include <span>

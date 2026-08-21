@@ -17,7 +17,7 @@ namespace ESPExplorerAE::ImGuiWidgetUtils
     bool DrawWrappedButton(const char* label, bool& firstInRow)
     {
         const auto& style = ImGui::GetStyle();
-        const float desiredWidth = ImGui::CalcTextSize(label).x + style.FramePadding.x * 2.0f;
+        const float desiredWidth = ImGui::CalcTextSize(label, nullptr, true).x + style.FramePadding.x * 2.0f;
 
         if (!firstInRow) {
             const float needed = style.ItemSpacing.x + desiredWidth;

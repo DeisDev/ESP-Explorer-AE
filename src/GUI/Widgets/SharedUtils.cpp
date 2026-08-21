@@ -41,7 +41,7 @@ namespace ESPExplorerAE
         }
 
         if (caseSensitive) {
-            return text.find(query) != std::string::npos;
+            return text.find(query) != std::string_view::npos;
         }
 
         return ContainsCaseInsensitive(text, query);
