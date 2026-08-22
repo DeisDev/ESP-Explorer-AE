@@ -1,6 +1,7 @@
 #include "GUI/Widgets/RecordFiltersWidget.h"
 
 #include "Filters/AdvancedRecordFilters.h"
+#include "Core/CatalogQuery.h"
 #include "GUI/Widgets/ImGuiWidgetUtils.h"
 #include "GUI/Widgets/SharedUtils.h"
 
@@ -11,36 +12,12 @@
 #include <cfloat>
 #include <cstdio>
 #include <ranges>
-#include <unordered_map>
+#include <numeric>
 
 namespace ESPExplorerAE
 {
     namespace
     {
-        struct AdvancedFilterEditorState
-        {
-            bool open{ false };
-            bool reopenAfterMenuShow{ false };
-            bool focusPending{ false };
-            int newField{ static_cast<int>(AdvancedFilterField::Any) };
-            int newMatch{ static_cast<int>(AdvancedFilterMatch::Contains) };
-            char newValue[256]{};
-            char keywordSearch[128]{};
-            char hiddenPluginSearch[128]{};
-            char ruleScopeSearch[128]{};
-        };
-
-        auto& GetEditorStates()
-        {
-            static std::unordered_map<std::string, AdvancedFilterEditorState> states{};
-            return states;
-        }
-
-        AdvancedFilterEditorState& GetEditorState(std::string_view idSuffix)
-        {
-            return GetEditorStates()[std::string(idSuffix)];
-        }
-
         const char* FieldLabel(const RecordFiltersWidget::LocalizeFn& localize, AdvancedFilterField field)
         {
             switch (field) {
@@ -171,7 +148,7 @@ namespace ESPExplorerAE
             return buf;
         }
 
-        bool DrawRuleScopeCombo(const RecordFiltersWidget::LocalizeFn& localize, const char* id, std::vector<std::string>& targetPlugins, char* searchBuf, std::size_t searchBufSize)
+        bool DrawRuleScopeCombo(const RecordFiltersWidget::LocalizeFn& localize, const char* id, std::vector<std::string>& targetPlugins, char* searchBuf, std::size_t searchBufSize, const AdvancedFilterEditorState& editorState)
         {
             bool changed = false;
             const auto label = FormatScopeLabel(localize, targetPlugins);
@@ -191,9 +168,9 @@ namespace ESPExplorerAE
                 }
                 ImGui::Separator();
 
-                const auto& available = AdvancedRecordFilters::GetAvailablePlugins();
                 int displayed = 0;
-                for (const auto& plugin : available) {
+                for (const auto index : editorState.pluginOrder) {
+                    const auto& plugin = editorState.catalog->plugins[index].filename;
                     if (searchBuf[0] != '\0' && !SharedUtils::ContainsCaseInsensitive(plugin, searchBuf)) {
                         continue;
                     }
@@ -309,7 +286,7 @@ namespace ESPExplorerAE
                 }
             }
 
-            const auto& availableKeywords = AdvancedRecordFilters::GetAvailableKeywords();
+            const auto& availableKeywords = editorState.catalog->availableKeywords;
             ImGui::SetNextItemWidth((std::min)(380.0f, ImGui::GetContentRegionAvail().x));
             if (ImGui::BeginCombo(
                     (std::string(localize("General", "sAdvancedFilterKeywordPicker", "Add Keyword Rule")) + "##KeywordPicker" + std::string(idSuffix)).c_str(),
@@ -370,7 +347,6 @@ namespace ESPExplorerAE
                 if (ImGui::CollapsingHeader(
                     (std::string(localize("General", "sHiddenPlugins", "Hidden Plugins")) + " (" + std::to_string(state.hiddenPlugins.size()) + ")###HiddenPluginsSection" + std::string(idSuffix)).c_str(),
                     state.hiddenPlugins.empty() ? ImGuiTreeNodeFlags_None : ImGuiTreeNodeFlags_DefaultOpen)) {
-                    const auto& availablePlugins = AdvancedRecordFilters::GetAvailablePlugins();
                     ImGui::SetNextItemWidth((std::min)(380.0f, ImGui::GetContentRegionAvail().x));
                     if (ImGui::BeginCombo(
                             (std::string(localize("General", "sHidePlugin", "Hide Plugin")) + "##HidePluginPicker" + std::string(idSuffix)).c_str(),
@@ -387,7 +363,8 @@ namespace ESPExplorerAE
                         ImGui::Separator();
 
                         int displayed = 0;
-                        for (const auto& plugin : availablePlugins) {
+                        for (const auto index : editorState.pluginOrder) {
+                            const auto& plugin = editorState.catalog->plugins[index].filename;
                             if (state.hiddenPlugins.contains(plugin)) continue;
                             if (editorState.hiddenPluginSearch[0] != '\0' && !SharedUtils::ContainsCaseInsensitive(plugin, editorState.hiddenPluginSearch)) continue;
 
@@ -471,7 +448,7 @@ namespace ESPExplorerAE
                         }
 
                         ImGui::TableSetColumnIndex(4);
-                        changed = DrawRuleScopeCombo(localize, "##Scope", rule.targetPlugins, editorState.ruleScopeSearch, sizeof(editorState.ruleScopeSearch)) || changed;
+                        changed = DrawRuleScopeCombo(localize, "##Scope", rule.targetPlugins, editorState.ruleScopeSearch, sizeof(editorState.ruleScopeSearch), editorState) || changed;
 
                         ImGui::TableSetColumnIndex(5);
                         if (ImGui::SmallButton(localize("General", "sRemove", "Remove"))) {
@@ -496,10 +473,10 @@ namespace ESPExplorerAE
         }
     }
 
-    bool RecordFiltersWidget::Draw(const LocalizeFn& localize, std::string_view idSuffix, RecordFilterState state)
+    bool RecordFiltersWidget::Draw(const LocalizeFn& localize, std::string_view idSuffix, RecordFilterState state,
+        AdvancedFilterEditorState& editorState, std::shared_ptr<const CatalogSnapshot> catalog)
     {
         bool changed = false;
-        auto& editorState = GetEditorState(idSuffix);
 
         const std::string nonPlayableLabel = std::string(localize("General", "sIncludeNonPlayable", "Include Non-Playable")) + "##NonPlayable" + std::string(idSuffix);
         if (ImGui::Checkbox(nonPlayableLabel.c_str(), &state.showNonPlayable)) {
@@ -554,26 +531,45 @@ namespace ESPExplorerAE
                 editorState.focusPending = true;
         }
 
-        if (editorState.open) {
+        if (editorState.open && catalog) {
+            editorState.UpdateChoices(std::move(catalog));
             changed = DrawAdvancedFiltersWindow(localize, idSuffix, state, editorState) || changed;
         }
 
+        if (!editorState.open) editorState.UpdateChoices({});
         return changed;
     }
 
-    void RecordFiltersWidget::HandleMenuVisibilityChanged(bool visible)
+    void AdvancedFilterEditorState::UpdateChoices(std::shared_ptr<const CatalogSnapshot> snapshot)
     {
-        auto& states = GetEditorStates();
-        for (auto& [_, editorState] : states) {
-            if (!visible) {
-                editorState.reopenAfterMenuShow = editorState.open;
-                editorState.open = false;
-                continue;
-            }
+        if (catalog == snapshot) return;
+        catalog = std::move(snapshot);
+        pluginOrder.clear();
+        if (!catalog) return;
+        pluginOrder.resize(catalog->plugins.size());
+        std::iota(pluginOrder.begin(), pluginOrder.end(), std::size_t{});
+        std::ranges::stable_sort(pluginOrder, [&](auto left, auto right) {
+            const auto& a = catalog->plugins[left].filename;
+            const auto& b = catalog->plugins[right].filename;
+            return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(),
+                [](unsigned char x, unsigned char y) { return FoldASCII(x) < FoldASCII(y); });
+        });
+    }
 
-            editorState.open = editorState.reopenAfterMenuShow;
-            editorState.focusPending = editorState.reopenAfterMenuShow;
-            editorState.reopenAfterMenuShow = false;
+    void AdvancedFilterEditorState::HandleMenuVisibilityChanged(bool visible)
+    {
+        if (menuVisible == visible) return;
+        menuVisible = visible;
+        if (!visible) {
+            reopenAfterMenuShow = open;
+            open = false;
+            // Choices will be reacquired from the supplied catalog on reopening.
+            catalog.reset();
+            pluginOrder.clear();
+        } else {
+            open = reopenAfterMenuShow;
+            focusPending = reopenAfterMenuShow;
+            reopenAfterMenuShow = false;
         }
     }
 }
