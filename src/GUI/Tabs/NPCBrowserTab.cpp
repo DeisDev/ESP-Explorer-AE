@@ -1,14 +1,6 @@
 #include "GUI/Tabs/NPCBrowserTab.h"
-
-#include "GUI/Widgets/FormActions.h"
-#include "GUI/Widgets/FormTable.h"
-#include "GUI/Widgets/RecordFilterCache.h"
-#include "GUI/Widgets/RecordFiltersWidget.h"
-#include "GUI/Widgets/SearchBar.h"
-
-#include <RE/T/TESActorBaseData.h>
-#include <RE/T/TESFaction.h>
-#include <RE/T/TESNPC.h>
+#include "Core/RecordActions.h"
+#include "GUI/Widgets/BrowserWidgets.h"
 
 #include <imgui.h>
 
@@ -16,140 +8,12 @@ namespace ESPExplorerAE
 {
     namespace
     {
-        enum class NPCFilterMode : int
-        {
-            kAll = 0,
-            kByRace,
-            kByFaction,
-            kEssential,
-            kUnique,
-            kProtected,
-            kMaleOnly,
-            kFemaleOnly
-        };
-
-        struct NPCFilterState
-        {
-            NPCFilterMode mode{ NPCFilterMode::kAll };
-            std::string selectedRace{};
-            std::string selectedFaction{};
-            char raceSearchBuffer[128]{};
-            char factionSearchBuffer[128]{};
-            bool raceDropdownJustOpened{ false };
-            bool factionDropdownJustOpened{ false };
-        };
-
-        const std::vector<FormEntry>& GetFilteredEntries(
-            RecordFilterCache& cacheState,
-            const std::vector<FormEntry>& source,
-            bool showPlayable,
-            bool showNonPlayable,
-            bool showNamed,
-            bool showUnnamed,
-            bool showDeleted,
-            std::uint64_t advancedFilterRevision,
-            const NPCBrowserTab::FilterEntriesFn& filterEntries)
-        {
-            return RecordFilterCache::GetFiltered(cacheState, source, showPlayable, showNonPlayable, showNamed, showUnnamed, showDeleted, advancedFilterRevision, filterEntries);
-        }
-
-        std::string GetFactionDisplayName(const RE::TESFaction* faction)
-        {
-            if (!faction) {
-                return {};
-            }
-
-            const auto* factionName = faction->GetFullName();
-            if (factionName && factionName[0] != '\0') {
-                return factionName;
-            }
-
-            const auto* factionEditorID = faction->GetFormEditorID();
-            if (factionEditorID && factionEditorID[0] != '\0') {
-                return factionEditorID;
-            }
-
-            return {};
-        }
-
-        struct NPCDerivedData
-        {
-            std::vector<std::string> races;
-            std::unordered_map<std::string, std::size_t> raceCounts;
-            std::vector<std::string> factions;
-            std::unordered_map<std::string, std::vector<FormEntry>> factionEntries;
-        };
-
-        NPCDerivedData BuildDerivedData(const std::vector<FormEntry>& filteredNPCs)
-        {
-            NPCDerivedData data;
-
-            std::unordered_set<std::string> seenRaces;
-            seenRaces.reserve(filteredNPCs.size());
-
-            for (const auto& entry : filteredNPCs) {
-                if (seenRaces.insert(entry.race).second) {
-                    data.races.push_back(entry.race);
-                }
-                data.raceCounts[entry.race]++;
-            }
-
-            std::ranges::sort(data.races, [](const std::string& left, const std::string& right) {
-                if (left.empty()) return false;
-                if (right.empty()) return true;
-                return left < right;
-            });
-
-            data.factionEntries.reserve(filteredNPCs.size());
-            for (const auto& entry : filteredNPCs) {
-                auto* npcForm = RE::TESForm::GetFormByID(entry.formID) ? RE::TESForm::GetFormByID(entry.formID)->As<RE::TESNPC>() : nullptr;
-                if (!npcForm) continue;
-
-                std::unordered_set<std::string> addedFactionLabels;
-                for (const auto& factionRank : npcForm->factions) {
-                    if (!factionRank.faction || factionRank.rank < 0) continue;
-                    const std::string factionLabel = GetFactionDisplayName(factionRank.faction);
-                    if (factionLabel.empty() || !addedFactionLabels.insert(factionLabel).second) continue;
-                    data.factionEntries[factionLabel].push_back(entry);
-                }
-            }
-
-            data.factions.reserve(data.factionEntries.size());
-            for (const auto& [label, _] : data.factionEntries) {
-                data.factions.push_back(label);
-            }
-            std::ranges::sort(data.factions);
-
-            return data;
-        }
-
-        bool NPCPassesAttributeFilter(const FormEntry& entry, NPCFilterMode mode)
-        {
-            auto* npcForm = RE::TESForm::GetFormByID(entry.formID) ? RE::TESForm::GetFormByID(entry.formID)->As<RE::TESNPC>() : nullptr;
-            if (!npcForm) return false;
-
-            switch (mode) {
-            case NPCFilterMode::kEssential:
-                return npcForm->IsEssential();
-            case NPCFilterMode::kUnique:
-                return npcForm->IsUnique();
-            case NPCFilterMode::kProtected:
-                return npcForm->IsProtected();
-            case NPCFilterMode::kMaleOnly:
-                return !npcForm->IsFemale();
-            case NPCFilterMode::kFemaleOnly:
-                return npcForm->IsFemale();
-            default:
-                return true;
-            }
-        }
-
         void DrawSearchableCombo(
             const char* comboId,
             const char* searchHint,
             const char* allLabel,
             const char* unknownLabel,
-            std::string& selected,
+            std::optional<std::string>& selected,
             char* searchBuffer,
             std::size_t searchBufferSize,
             bool& dropdownJustOpened,
@@ -157,9 +21,9 @@ namespace ESPExplorerAE
             const std::function<std::size_t(const std::string&)>& getCount,
             float comboWidth)
         {
-            std::string preview = selected.empty() ? allLabel : selected;
-            if (!selected.empty()) {
-                preview += " (" + std::to_string(getCount(selected)) + ")";
+            std::string preview = !selected ? allLabel : (selected->empty() ? unknownLabel : *selected);
+            if (selected) {
+                preview += " (" + std::to_string(getCount(*selected)) + ")";
             }
 
             ImGui::SetNextItemWidth(comboWidth);
@@ -180,8 +44,8 @@ namespace ESPExplorerAE
 
                 ImGui::Separator();
 
-                if (ImGui::Selectable(allLabel, selected.empty())) {
-                    selected.clear();
+                if (ImGui::Selectable((std::string(allLabel) + "###All").c_str(), !selected)) {
+                    selected.reset();
                     dropdownJustOpened = false;
                 }
 
@@ -189,16 +53,10 @@ namespace ESPExplorerAE
                 for (const auto& item : items) {
                     const char* displayName = item.empty() ? unknownLabel : item.c_str();
 
-                    if (!filter.empty()) {
-                        std::string displayLower(displayName);
-                        std::string filterLower(filter);
-                        std::ranges::transform(displayLower, displayLower.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-                        std::ranges::transform(filterLower, filterLower.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-                        if (displayLower.find(filterLower) == std::string::npos) continue;
-                    }
+                    if (!TextContains(displayName, filter)) continue;
 
                     const std::size_t count = getCount(item);
-                    const std::string label = std::string(displayName) + " (" + std::to_string(count) + ")";
+                    const std::string label = std::string(displayName) + " (" + std::to_string(count) + ")###" + item;
                     if (ImGui::Selectable(label.c_str(), selected == item)) {
                         selected = item;
                         dropdownJustOpened = false;
@@ -212,78 +70,27 @@ namespace ESPExplorerAE
         }
     }
 
-    void NPCBrowserTab::Draw(
-        const FormCache& cache,
-        char* searchBuffer,
-        std::size_t searchBufferSize,
-        std::string& searchText,
-        std::string_view selectedPluginFilter,
-        bool& showPlayableRecords,
-        bool& showNonPlayableRecords,
-        bool& showNamedRecords,
-        bool& showUnnamedRecords,
-        bool& showDeletedRecords,
-        std::vector<AdvancedFilterRule>& advancedRules,
-        std::unordered_set<std::string>& hiddenPlugins,
-        std::uint64_t advancedFilterRevision,
-        bool* searchFocusPending,
-        std::unordered_set<std::uint32_t>& favoriteForms,
-        const std::function<void()>& drawPluginFilterStatus,
-        const std::function<void()>& persistListFilters,
-        const std::function<void()>&,
-        const FilterEntriesFn& filterEntries,
-        const LocalizeFn& localize,
-        const ContextMenuCallbacks* contextCallbacks)
+    void NPCBrowserTab::Draw(NPCBrowserState& state, const BrowserView& view, BrowserRequests& requests)
     {
-        if (RecordFiltersWidget::Draw(
-                localize,
-                "NPCBrowser",
-                RecordFilterState{
-                    .showNonPlayable = showNonPlayableRecords,
-                    .showUnnamed = showUnnamedRecords,
-                    .showDeleted = showDeletedRecords,
-                    .advancedRules = advancedRules,
-                    .hiddenPlugins = hiddenPlugins })) {
-            persistListFilters();
+        BrowserWidgets::DrawControls(state.browser, view, requests, "NPCBrowser", "NPCs", "NPC Search");
+        auto& rows = state.browser.categories["NPC_"];
+        auto baseQuery = BrowserWidgets::MakeQuery(state.browser, view, rows, "NPC_");
+        // Facet counts keep the existing global-filter scope, independent of the
+        // selected race/faction, text search and plugin narrowing.
+        auto facetQuery = baseQuery;
+        facetQuery.search.clear();
+        facetQuery.plugin.clear();
+        facetQuery.sortColumn = 0;
+        facetQuery.ascending = true;
+        const auto& facetResult = state.facetQuery.Update(view.catalog, facetQuery, view.filters.advancedRecordFilters, view.filters.advancedRecordFilterRevision);
+        const ResultRevision facetRevision{ view.catalog->generation, facetResult.revision };
+        if (state.facetRevision != facetRevision) {
+            state.facets = NPCFacets::Build(facetResult);
+            state.facetRevision = facetRevision;
         }
-
-        SearchBar::Draw(localize("NPCs", "sSearch", "NPC Search"), searchBuffer, searchBufferSize, searchText, searchFocusPending);
-        drawPluginFilterStatus();
-        ImGui::Separator();
-
-        const FormTableConfig tableConfig{
-            .tableId = "NPCTable",
-            .primaryActionLabel = localize("NPCs", "sSpawnNPC", "Spawn"),
-            .quantityActionLabel = nullptr,
-            .allowFavorites = true
-        };
-
-        static RecordFilterCache npcFilterCache{};
-        const auto& filteredNPCs = GetFilteredEntries(
-            npcFilterCache,
-            cache.npcs,
-            showPlayableRecords,
-            showNonPlayableRecords,
-            showNamedRecords,
-            showUnnamedRecords,
-            showDeletedRecords,
-            advancedFilterRevision,
-            filterEntries);
-
-        static NPCFilterState filterState{};
-
-        static NPCDerivedData derivedData{};
-        static const std::vector<FormEntry>* lastSource{ nullptr };
-        static std::size_t lastSourceSize{ 0 };
-        static std::uint64_t lastDataVersion{ 0 };
-        const auto dataVersion = DataManager::GetDataVersion();
-        if (lastSource != &filteredNPCs || lastSourceSize != filteredNPCs.size() || lastDataVersion != dataVersion) {
-            derivedData = BuildDerivedData(filteredNPCs);
-            lastSource = &filteredNPCs;
-            lastSourceSize = filteredNPCs.size();
-            lastDataVersion = dataVersion;
-        }
-
+        const auto& localize = view.localize;
+        auto& filterState = state.filters;
+        const auto& derivedData = state.facets;
         struct FilterModeEntry { NPCFilterMode mode; const char* label; };
         const FilterModeEntry filterModes[] = {
             { NPCFilterMode::kAll,        localize("General", "sAll", "") },
@@ -310,8 +117,8 @@ namespace ESPExplorerAE
             for (const auto& fm : filterModes) {
                 if (ImGui::Selectable(fm.label, filterState.mode == fm.mode)) {
                     filterState.mode = fm.mode;
-                    filterState.selectedRace.clear();
-                    filterState.selectedFaction.clear();
+                    filterState.selectedRace.reset();
+                    filterState.selectedFaction.reset();
                 }
             }
             ImGui::EndCombo();
@@ -326,9 +133,9 @@ namespace ESPExplorerAE
                 localize("General", "sAll", ""),
                 localize("General", "sUnknown", ""),
                 filterState.selectedRace,
-                filterState.raceSearchBuffer,
-                sizeof(filterState.raceSearchBuffer),
-                filterState.raceDropdownJustOpened,
+                state.raceSearchBuffer,
+                sizeof(state.raceSearchBuffer),
+                state.raceDropdownJustOpened,
                 derivedData.races,
                 [&](const std::string& race) -> std::size_t {
                     auto it = derivedData.raceCounts.find(race);
@@ -346,100 +153,36 @@ namespace ESPExplorerAE
                 localize("General", "sAll", ""),
                 localize("General", "sUnknown", ""),
                 filterState.selectedFaction,
-                filterState.factionSearchBuffer,
-                sizeof(filterState.factionSearchBuffer),
-                filterState.factionDropdownJustOpened,
+                state.factionSearchBuffer,
+                sizeof(state.factionSearchBuffer),
+                state.factionDropdownJustOpened,
                 derivedData.factions,
                 [&](const std::string& faction) -> std::size_t {
-                    auto it = derivedData.factionEntries.find(faction);
-                    return it != derivedData.factionEntries.end() ? it->second.size() : 0;
+                    auto it = derivedData.factionCounts.find(faction);
+                    return it != derivedData.factionCounts.end() ? it->second : 0;
                 },
                 subComboWidth);
         }
 
         ImGui::Separator();
 
-        std::vector<FormEntry> displayEntries;
-
-        switch (filterState.mode) {
-        case NPCFilterMode::kAll:
-            displayEntries = filteredNPCs;
-            break;
-
-        case NPCFilterMode::kByRace:
-            if (filterState.selectedRace.empty()) {
-                displayEntries = filteredNPCs;
-            } else {
-                displayEntries.reserve(filteredNPCs.size() / 4);
-                for (const auto& entry : filteredNPCs) {
-                    if (entry.race == filterState.selectedRace) {
-                        displayEntries.push_back(entry);
-                    }
-                }
-            }
-            break;
-
-        case NPCFilterMode::kByFaction:
-            if (filterState.selectedFaction.empty()) {
-                displayEntries = filteredNPCs;
-            } else {
-                auto it = derivedData.factionEntries.find(filterState.selectedFaction);
-                if (it != derivedData.factionEntries.end()) {
-                    displayEntries = it->second;
-                }
-            }
-            break;
-
-        case NPCFilterMode::kEssential:
-        case NPCFilterMode::kUnique:
-        case NPCFilterMode::kProtected:
-        case NPCFilterMode::kMaleOnly:
-        case NPCFilterMode::kFemaleOnly:
-            displayEntries.reserve(filteredNPCs.size() / 4);
-            for (const auto& entry : filteredNPCs) {
-                if (NPCPassesAttributeFilter(entry, filterState.mode)) {
-                    displayEntries.push_back(entry);
-                }
-            }
-            break;
-        }
-
-        ImGui::TextDisabled("%zu %s", displayEntries.size(), localize("NPCs", "sResults", ""));
-        ImGui::SameLine();
-
+        baseQuery.npc = state.filters;
+        const auto& result = rows.query.Update(view.catalog, baseQuery, view.filters.advancedRecordFilters, view.filters.advancedRecordFilterRevision);
+        ImGui::TextDisabled("%zu %s", result.order.size(), localize("NPCs", "sResults", "NPCs"));
         if (filterState.mode != NPCFilterMode::kAll) {
             ImGui::SameLine();
-            if (ImGui::SmallButton(localize("General", "sClearFilter", "Clear Filter"))) {
-                filterState.mode = NPCFilterMode::kAll;
-                filterState.selectedRace.clear();
-                filterState.selectedFaction.clear();
-            }
+            if (ImGui::SmallButton((std::string(localize("General", "sClearFilter", "Clear Filter")) + "###ClearNPCFilter").c_str())) state.filters = {};
         }
-
-        ContextMenuCallbacks npcContextCallbacks{};
-        const ContextMenuCallbacks* effectiveContextCallbacks = contextCallbacks;
-        if (contextCallbacks) {
-            npcContextCallbacks = *contextCallbacks;
-            npcContextCallbacks.canSpawnEntry = [](const FormEntry&) {
-                return true;
-            };
-            npcContextCallbacks.spawnEntry = [](const FormEntry& entry, std::uint32_t quantity) {
-                FormActions::SpawnAtPlayer(entry.formID, quantity);
-            };
-            effectiveContextCallbacks = &npcContextCallbacks;
-        }
-
-        FormTable::Draw(
-            displayEntries,
-            searchText,
-            selectedPluginFilter,
-            tableConfig,
-            [](const FormEntry& entry) {
-                FormActions::SpawnAtPlayer(entry.formID, 1);
-            },
-            {},
-            {},
-            &favoriteForms,
-            effectiveContextCallbacks);
+        const FormTableConfig config{
+            .tableId = "NPCTable", .primaryActionLabel = localize("NPCs", "sSpawnNPC", "Spawn"),
+            .allowFavorites = true, .gameplayActionsAllowed = view.gameplayReady, .copyFormat = view.copyFormat
+        };
+        const FormTableActions actions{
+            .primary = [&](const FormEntry& entry) { BrowserWidgets::Emit(requests, view, entry, ActionKind::Spawn); },
+            .rowContext = [&](const FormEntry& entry, bool multiple) { BrowserWidgets::DrawContext(entry, multiple ? BrowserWidgets::ContextScope::Selection : BrowserWidgets::ContextScope::Single, rows.contextQuantities, view, requests); },
+            .canPrimary = [](const FormEntry& entry) { return !entry.isDeleted && SupportsRecordAction(entry.category, ActionKind::Spawn); },
+            .selected = [&](auto id) { requests.recentSelections.push_back(id); }
+        };
+        FormTable::DrawPrepared(rows.table, result, config, actions, &view.favorites);
     }
 }

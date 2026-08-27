@@ -1,40 +1,32 @@
 #pragma once
 
-#include "Data/DataManager.h"
-#include "Filters/AdvancedRecordFilters.h"
-#include "GUI/Widgets/ContextMenu.h"
-
-#include <functional>
+#include "GUI/BrowserState.h"
 
 namespace ESPExplorerAE
 {
+    struct NPCBrowserState
+    {
+        BrowserState browser;
+        NPCQuery filters;
+        char raceSearchBuffer[128]{};
+        char factionSearchBuffer[128]{};
+        bool raceDropdownJustOpened{};
+        bool factionDropdownJustOpened{};
+        BrowserQuery facetQuery;
+        NPCFacets facets;
+        std::optional<ResultRevision> facetRevision;
+
+        void ResetSession()
+        {
+            browser.ResetSession();
+            facetQuery.Clear();
+            facetRevision.reset();
+        }
+    };
+
     class NPCBrowserTab
     {
     public:
-        using LocalizeFn = std::function<const char*(std::string_view, std::string_view, const char*)>;
-        using FilterEntriesFn = std::function<std::vector<FormEntry>(const std::vector<FormEntry>&)>;
-
-        static void Draw(
-            const FormCache& cache,
-            char* searchBuffer,
-            std::size_t searchBufferSize,
-            std::string& searchText,
-            std::string_view selectedPluginFilter,
-            bool& showPlayableRecords,
-            bool& showNonPlayableRecords,
-            bool& showNamedRecords,
-            bool& showUnnamedRecords,
-            bool& showDeletedRecords,
-            std::vector<AdvancedFilterRule>& advancedRules,
-            std::unordered_set<std::string>& hiddenPlugins,
-            std::uint64_t advancedFilterRevision,
-            bool* searchFocusPending,
-            std::unordered_set<std::uint32_t>& favoriteForms,
-            const std::function<void()>& drawPluginFilterStatus,
-            const std::function<void()>& persistListFilters,
-            const std::function<void()>& persistFilterCheckboxes,
-            const FilterEntriesFn& filterEntries,
-            const LocalizeFn& localize,
-            const ContextMenuCallbacks* contextCallbacks = nullptr);
+        static void Draw(NPCBrowserState& state, const BrowserView& view, BrowserRequests& requests);
     };
 }
