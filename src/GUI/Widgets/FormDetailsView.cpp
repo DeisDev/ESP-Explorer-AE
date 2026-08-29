@@ -1,38 +1,8 @@
+#include "Core/Profiling.h"
 #include "GUI/Widgets/FormDetailsView.h"
-
-#include "Data/DataManager.h"
 #include "GUI/Widgets/FormatUtils.h"
 
 #include <imgui.h>
-
-#include <RE/A/AlchemyItem.h>
-#include <RE/B/BGSConstructibleObject.h>
-#include <RE/B/BGSEncounterZone.h>
-#include <RE/B/BGSKeywordForm.h>
-#include <RE/B/BGSLightingTemplate.h>
-#include <RE/B/BGSLocation.h>
-#include <RE/B/BGSOutfit.h>
-#include <RE/T/TESAmmo.h>
-#include <RE/T/TESDataHandler.h>
-#include <RE/T/TESFullName.h>
-#include <RE/T/TESFurniture.h>
-#include <RE/T/TESGlobal.h>
-#include <RE/T/TESNPC.h>
-#include <RE/T/TESObjectACTI.h>
-#include <RE/T/TESObjectCELL.h>
-#include <RE/T/TESObjectARMO.h>
-#include <RE/T/TESObjectCONT.h>
-#include <RE/T/TESObjectSTAT.h>
-#include <RE/T/TESObjectWEAP.h>
-#include <RE/T/TESQuest.h>
-#include <RE/T/TESWeather.h>
-#include <RE/S/SpellItem.h>
-#include <RE/T/TESSound.h>
-#include <RE/T/TESValueForm.h>
-#include <RE/T/TESWaterForm.h>
-#include <RE/T/TESWeightForm.h>
-#include <RE/T/TESWorldSpace.h>
-
 #include <cstdio>
 
 namespace ESPExplorerAE
@@ -43,88 +13,27 @@ namespace ESPExplorerAE
         {
             return context.localize(section, key, "");
         }
-
         const char* FD(const FormDetailsViewContext& context, std::string_view key)
         {
             return context.localize("FormDetails", key, "");
         }
-
-        std::string ResolveFormName(const RE::TESForm* form)
+        std::string ResolveFormDisplay(const DetailReference& form, const FormDetailsViewContext& context)
         {
-            if (!form) {
-                return {};
+            if (!form.formID) return std::string(L(context, "General", "sNone"));
+            const auto id = FormatUtils::FormID(form.formID);
+            const auto name = !form.name.empty() ? form.name : !form.editorID.empty() ? form.editorID : id;
+            if (!form.editorID.empty()) {
+                if (!name.empty() && name != form.editorID) return name + " [" + form.editorID + "] (" + id + ")";
+                return form.editorID + " (" + id + ")";
             }
-
-            const auto fullName = RE::TESFullName::GetFullName(*form);
-            if (!fullName.empty()) {
-                return std::string(fullName);
-            }
-
-            const auto* editorID = form->GetFormEditorID();
-            if (editorID && editorID[0] != '\0') {
-                return std::string(editorID);
-            }
-
-            return FormatUtils::FormID(form->GetFormID());
+            return !name.empty() ? name + " (" + id + ")" : id;
         }
-
-        std::string ResolveFormDisplay(const RE::TESForm* form, const FormDetailsViewContext& context)
+        std::string BuildPluginDisplayName(std::string_view name, const CatalogSnapshot* catalog)
         {
-            if (!form) {
-                return std::string(L(context, "General", "sNone"));
+            if (catalog) for (const auto& plugin : catalog->plugins) {
+                if (plugin.filename == name && !plugin.formIDPrefix.empty()) return std::string(name) + " [" + plugin.formIDPrefix + "]";
             }
-
-            const auto name = ResolveFormName(form);
-            const auto* editorID = form->GetFormEditorID();
-
-            const std::string idText = FormatUtils::FormID(form->GetFormID());
-
-            if (editorID && editorID[0] != '\0') {
-                if (!name.empty() && name != editorID) {
-                    return name + " [" + editorID + "] (" + idText + ")";
-                }
-                return std::string(editorID) + " (" + idText + ")";
-            }
-
-            if (!name.empty()) {
-                return name + " (" + idText + ")";
-            }
-
-            return idText;
-        }
-
-        std::string FormatPluginFormIDPrefix(const RE::TESFile& file)
-        {
-            char buffer[16]{};
-            if (file.IsLight()) {
-                std::snprintf(buffer, sizeof(buffer), "FE %03X", file.GetSmallFileCompileIndex());
-            } else {
-                std::snprintf(buffer, sizeof(buffer), "%02X", file.GetCompileIndex());
-            }
-
-            return buffer;
-        }
-
-        std::string BuildPluginDisplayName(std::string_view pluginName)
-        {
-            if (pluginName.empty()) {
-                return {};
-            }
-
-            auto* dataHandler = RE::TESDataHandler::GetSingleton();
-            if (!dataHandler) {
-                return std::string(pluginName);
-            }
-
-            if (const auto* file = dataHandler->LookupLoadedModByName(pluginName)) {
-                return std::string(pluginName) + " [" + FormatPluginFormIDPrefix(*file) + "]";
-            }
-
-            if (const auto* file = dataHandler->LookupLoadedLightModByName(pluginName)) {
-                return std::string(pluginName) + " [" + FormatPluginFormIDPrefix(*file) + "]";
-            }
-
-            return std::string(pluginName);
+            return std::string(name);
         }
 
         void DrawCopyPopup(std::string_view value, int& popupCounter, const FormDetailsViewContext& context)
@@ -173,605 +82,447 @@ namespace ESPExplorerAE
             DrawTextLine(label, value ? L(context, "General", "sYes") : L(context, "General", "sNo"), popupCounter, context);
         }
 
-        void DrawFormReferenceLine(const char* label, const RE::TESForm* form, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawFormReferenceLine(const char* label, const DetailReference& form, const FormDetailsViewContext& context, int& popupCounter)
         {
             DrawTextLine(label, ResolveFormDisplay(form, context), popupCounter, context);
         }
 
-        std::uint32_t CountContainerEntries(const RE::TESContainer* container)
+        void DrawAdvancedWeaponDetails(const WeaponDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            return container ? container->numContainerObjects : 0;
-        }
-
-        std::uint32_t CountContainerItems(const RE::TESContainer* container)
-        {
-            if (!container) {
-                return 0;
-            }
-
-            std::uint32_t totalItems = 0;
-            container->ForEachContainerObject([&totalItems](RE::ContainerObject& entry) {
-                if (entry.count > 0) {
-                    totalItems += static_cast<std::uint32_t>(entry.count);
-                }
-                return true;
-            });
-            return totalItems;
-        }
-
-        void DrawAdvancedWeaponDetails(const RE::TESObjectWEAP* weaponForm, const FormDetailsViewContext& context, int& popupCounter)
-        {
-            if (!weaponForm) {
-                return;
-            }
-
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedWeaponData"));
 
-            DrawTextLine(FD(context, "sModel"), weaponForm->model.c_str(), popupCounter, context);
-            DrawFormReferenceLine(FD(context, "sEquipmentType"), weaponForm->GetEquipSlot(nullptr), context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sBlockBashImpactData"), weaponForm->blockBashImpactDataSet, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sBlockBashMaterial"), weaponForm->altBlockMaterialType, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sInstanceNamingRules"), weaponForm->instanceNamingRules, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sImpactDataSet"), weaponForm->weaponData.impactDataSet, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sOnHitEffect"), weaponForm->weaponData.effect, context, popupCounter);
-            DrawFormReferenceLine(L(context, "Items", "sAmmo"), weaponForm->weaponData.ammo, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sSkill"), weaponForm->weaponData.skill, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sResist"), weaponForm->weaponData.resistance, context, popupCounter);
+            DrawTextLine(FD(context, "sModel"), details.model, popupCounter, context);
+            DrawFormReferenceLine(FD(context, "sEquipmentType"), details.equipmentType, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sBlockBashImpactData"), details.blockBashImpactData, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sBlockBashMaterial"), details.blockBashMaterial, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sInstanceNamingRules"), details.instanceNamingRules, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sImpactDataSet"), details.impactDataSet, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sOnHitEffect"), details.onHitEffect, context, popupCounter);
+            DrawFormReferenceLine(L(context, "Items", "sAmmo"), details.ammo, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sSkill"), details.skill, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sResist"), details.resist, context, popupCounter);
 
-            DrawFloatLine(FD(context, "sSpeed"), weaponForm->weaponData.speed, popupCounter, context);
-            DrawFloatLine(FD(context, "sReloadSpeed"), weaponForm->weaponData.reloadSpeed, popupCounter, context);
-            DrawFloatLine(FD(context, "sReach"), weaponForm->weaponData.reach, popupCounter, context);
-            DrawFloatLine(FD(context, "sMinRange"), weaponForm->weaponData.minRange, popupCounter, context);
-            DrawFloatLine(FD(context, "sMaxRange"), weaponForm->weaponData.maxRange, popupCounter, context);
-            DrawFloatLine(FD(context, "sAttackDelay"), weaponForm->weaponData.attackDelaySec, popupCounter, context);
-            DrawFloatLine(FD(context, "sDamageOutOfRangeMult"), weaponForm->weaponData.outOfRangeDamageMult, popupCounter, context);
-            DrawFloatLine(FD(context, "sDamageOnHitMult"), weaponForm->weaponData.damageToWeaponMult, popupCounter, context);
-            DrawFloatLine(FD(context, "sDamageSecondary"), weaponForm->weaponData.secondaryDamage, popupCounter, context);
-            DrawFloatLine(L(context, "General", "sWeight"), weaponForm->weaponData.weight, popupCounter, context);
-            DrawUIntLine(L(context, "General", "sValue"), weaponForm->weaponData.value, popupCounter, context);
-            DrawUIntLine(FD(context, "sDamageBase"), weaponForm->weaponData.attackDamage, popupCounter, context);
-            DrawFloatLine(FD(context, "sActionPointCost"), weaponForm->weaponData.attackActionPointCost, popupCounter, context);
-            DrawFloatLine(FD(context, "sCriticalChargeBonus"), weaponForm->weaponData.criticalChargeBonus, popupCounter, context);
-            DrawFloatLine(FD(context, "sCriticalDamageMult"), weaponForm->weaponData.criticalDamageMult, popupCounter, context);
-            DrawFloatLine(FD(context, "sSoundLevelMult"), weaponForm->weaponData.soundLevelMult, popupCounter, context);
+            DrawFloatLine(FD(context, "sSpeed"), details.speed, popupCounter, context);
+            DrawFloatLine(FD(context, "sReloadSpeed"), details.reloadSpeed, popupCounter, context);
+            DrawFloatLine(FD(context, "sReach"), details.reach, popupCounter, context);
+            DrawFloatLine(FD(context, "sMinRange"), details.minRange, popupCounter, context);
+            DrawFloatLine(FD(context, "sMaxRange"), details.maxRange, popupCounter, context);
+            DrawFloatLine(FD(context, "sAttackDelay"), details.attackDelay, popupCounter, context);
+            DrawFloatLine(FD(context, "sDamageOutOfRangeMult"), details.damageOutOfRangeMult, popupCounter, context);
+            DrawFloatLine(FD(context, "sDamageOnHitMult"), details.damageOnHitMult, popupCounter, context);
+            DrawFloatLine(FD(context, "sDamageSecondary"), details.damageSecondary, popupCounter, context);
+            DrawFloatLine(L(context, "General", "sWeight"), details.weight, popupCounter, context);
+            DrawUIntLine(L(context, "General", "sValue"), details.value, popupCounter, context);
+            DrawUIntLine(FD(context, "sDamageBase"), details.damageBase, popupCounter, context);
+            DrawFloatLine(FD(context, "sActionPointCost"), details.actionPointCost, popupCounter, context);
+            DrawFloatLine(FD(context, "sCriticalChargeBonus"), details.criticalChargeBonus, popupCounter, context);
+            DrawFloatLine(FD(context, "sCriticalDamageMult"), details.criticalDamageMult, popupCounter, context);
+            DrawFloatLine(FD(context, "sSoundLevelMult"), details.soundLevelMult, popupCounter, context);
 
-            if (weaponForm->weaponData.rangedData) {
-                DrawFloatLine(FD(context, "sFireSeconds"), weaponForm->weaponData.rangedData->fireSeconds, popupCounter, context);
-                DrawFloatLine(FD(context, "sReloadSeconds"), weaponForm->weaponData.rangedData->reloadSeconds, popupCounter, context);
-                DrawUIntLine(FD(context, "sProjectiles"), static_cast<std::uint32_t>(weaponForm->weaponData.rangedData->numProjectiles), popupCounter, context);
-                DrawFormReferenceLine(FD(context, "sOverrideProjectile"), weaponForm->weaponData.rangedData->overrideProjectile, context, popupCounter);
+            if (details.hasRangedData) {
+                DrawFloatLine(FD(context, "sFireSeconds"), details.fireSeconds, popupCounter, context);
+                DrawFloatLine(FD(context, "sReloadSeconds"), details.reloadSeconds, popupCounter, context);
+                DrawUIntLine(FD(context, "sProjectiles"), details.projectiles, popupCounter, context);
+                DrawFormReferenceLine(FD(context, "sOverrideProjectile"), details.overrideProjectile, context, popupCounter);
             }
 
-            if (weaponForm->weaponData.damageTypes) {
-                const auto count = weaponForm->weaponData.damageTypes->size();
+            if (details.hasDamageTypes) {
+                const auto count = static_cast<std::uint32_t>(details.damageTypes.size());
                 DrawUIntLine(FD(context, "sDamageTypeEntries"), count, popupCounter, context);
-                if (count > 0 && ImGui::CollapsingHeader(FD(context, "sDamageTypeDetails"))) {
+                if (count > 0 && ImGui::CollapsingHeader((std::string(FD(context, "sDamageTypeDetails")) + "###DamageTypeDetails").c_str())) {
                     for (std::uint32_t index = 0; index < count; ++index) {
-                        const auto& pair = (*weaponForm->weaponData.damageTypes)[index];
+                        const auto& pair = details.damageTypes[index];
                         const auto key = std::string(FD(context, "sDamageType")) + " " + std::to_string(index + 1);
                         const auto valueKey = std::string(FD(context, "sDamageValue")) + " " + std::to_string(index + 1);
-                        DrawFormReferenceLine(key.c_str(), pair.first, context, popupCounter);
-                        DrawFloatLine(valueKey.c_str(), pair.second.f, popupCounter, context);
+                        DrawFormReferenceLine(key.c_str(), pair.form, context, popupCounter);
+                        DrawFloatLine(valueKey.c_str(), pair.value, popupCounter, context);
                     }
                 }
             }
 
-            if (weaponForm->weaponData.actorValues) {
-                const auto count = weaponForm->weaponData.actorValues->size();
+            if (details.hasActorValues) {
+                const auto count = static_cast<std::uint32_t>(details.actorValues.size());
                 DrawUIntLine(FD(context, "sActorValueEntries"), count, popupCounter, context);
-                if (count > 0 && ImGui::CollapsingHeader(FD(context, "sActorValueDetails"))) {
+                if (count > 0 && ImGui::CollapsingHeader((std::string(FD(context, "sActorValueDetails")) + "###ActorValueDetails").c_str())) {
                     for (std::uint32_t index = 0; index < count; ++index) {
-                        const auto& pair = (*weaponForm->weaponData.actorValues)[index];
+                        const auto& pair = details.actorValues[index];
                         const auto key = std::string(FD(context, "sActorValue")) + " " + std::to_string(index + 1);
                         const auto valueKey = std::string(FD(context, "sActorValueMagnitude")) + " " + std::to_string(index + 1);
-                        DrawFormReferenceLine(key.c_str(), pair.first, context, popupCounter);
-                        DrawFloatLine(valueKey.c_str(), pair.second.f, popupCounter, context);
+                        DrawFormReferenceLine(key.c_str(), pair.form, context, popupCounter);
+                        DrawFloatLine(valueKey.c_str(), pair.value, popupCounter, context);
                     }
                 }
             }
         }
 
-        void DrawAdvancedArmorDetails(const RE::TESObjectARMO* armorForm, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawAdvancedArmorDetails(const ArmorDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            if (!armorForm) {
-                return;
-            }
-
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedArmorData"));
 
-            DrawFormReferenceLine(FD(context, "sEquipmentType"), armorForm->GetEquipSlot(nullptr), context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sBlockBashImpactData"), armorForm->blockBashImpactDataSet, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sBlockBashMaterial"), armorForm->altBlockMaterialType, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sInstanceNamingRules"), armorForm->instanceNamingRules, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sEquipmentType"), details.equipmentType, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sBlockBashImpactData"), details.blockBashImpactData, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sBlockBashMaterial"), details.blockBashMaterial, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sInstanceNamingRules"), details.instanceNamingRules, context, popupCounter);
 
-            DrawUIntLine(L(context, "General", "sArmorRating"), armorForm->armorData.rating, popupCounter, context);
-            DrawUIntLine(FD(context, "sHealth"), armorForm->armorData.health, popupCounter, context);
-            DrawUIntLine(L(context, "General", "sValue"), armorForm->armorData.value, popupCounter, context);
-            DrawFloatLine(L(context, "General", "sWeight"), armorForm->armorData.weight, popupCounter, context);
-            DrawFloatLine(FD(context, "sColorRemapIndex"), armorForm->armorData.colorRemappingIndex, popupCounter, context);
+            DrawUIntLine(L(context, "General", "sArmorRating"), details.armorRating, popupCounter, context);
+            DrawUIntLine(FD(context, "sHealth"), details.health, popupCounter, context);
+            DrawUIntLine(L(context, "General", "sValue"), details.value, popupCounter, context);
+            DrawFloatLine(L(context, "General", "sWeight"), details.weight, popupCounter, context);
+            DrawFloatLine(FD(context, "sColorRemapIndex"), details.colorRemapIndex, popupCounter, context);
 
-            if (!armorForm->worldModel[0].model.empty()) {
-                DrawTextLine(FD(context, "sModel"), armorForm->worldModel[0].model.c_str(), popupCounter, context);
+            if (!details.model.empty()) {
+                DrawTextLine(FD(context, "sModel"), details.model, popupCounter, context);
             }
 
-            DrawUIntLine(FD(context, "sAddonCount"), armorForm->modelArray.size(), popupCounter, context);
+            DrawUIntLine(FD(context, "sAddonCount"), details.addonCount, popupCounter, context);
 
-            if (armorForm->armorData.damageTypes) {
-                DrawUIntLine(FD(context, "sDamageTypeEntries"), armorForm->armorData.damageTypes->size(), popupCounter, context);
+            if (details.hasDamageTypes) {
+                DrawUIntLine(FD(context, "sDamageTypeEntries"), details.damageTypeEntries, popupCounter, context);
             }
-            if (armorForm->armorData.actorValues) {
-                DrawUIntLine(FD(context, "sActorValueEntries"), armorForm->armorData.actorValues->size(), popupCounter, context);
+            if (details.hasActorValues) {
+                DrawUIntLine(FD(context, "sActorValueEntries"), details.actorValueEntries, popupCounter, context);
             }
         }
 
-        void DrawAdvancedNPCDetails(const RE::TESNPC* npcForm, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawAdvancedNPCDetails(const NPCDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            if (!npcForm) {
-                return;
-            }
-
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedNPCData"));
 
-            DrawFloatLine(FD(context, "sHeight"), npcForm->height, popupCounter, context);
-            DrawFloatLine(FD(context, "sHeightMax"), npcForm->heightMax, popupCounter, context);
-            DrawFormReferenceLine(FD(context, "sClass"), npcForm->cl, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sCombatStyle"), npcForm->combatStyle, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sDefaultOutfit"), npcForm->defOutfit, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sSleepOutfit"), npcForm->sleepOutfit, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sCrimeFaction"), npcForm->crimeFaction, context, popupCounter);
+            DrawFloatLine(FD(context, "sHeight"), details.height, popupCounter, context);
+            DrawFloatLine(FD(context, "sHeightMax"), details.heightMax, popupCounter, context);
+            DrawFormReferenceLine(FD(context, "sClass"), details.npcClass, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sCombatStyle"), details.combatStyle, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sDefaultOutfit"), details.defaultOutfit, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sSleepOutfit"), details.sleepOutfit, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sCrimeFaction"), details.crimeFaction, context, popupCounter);
         }
 
-        void DrawAdvancedSoundDetails(const RE::TESSound* soundForm, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawAdvancedSoundDetails(const SoundDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            if (!soundForm) {
-                return;
-            }
-
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedSoundData"));
 
-            DrawFormReferenceLine(L(context, "General", "sDescriptor"), soundForm->descriptor, context, popupCounter);
-            DrawFloatLine(FD(context, "sMinDelay"), soundForm->repeatData.minDelay, popupCounter, context);
-            DrawFloatLine(FD(context, "sMaxDelay"), soundForm->repeatData.maxDelay, popupCounter, context);
-            DrawTextLine(FD(context, "sStackable"), soundForm->repeatData.stackable ? L(context, "General", "sYes") : L(context, "General", "sNo"), popupCounter, context);
+            DrawFormReferenceLine(L(context, "General", "sDescriptor"), details.descriptor, context, popupCounter);
+            DrawFloatLine(FD(context, "sMinDelay"), details.minDelay, popupCounter, context);
+            DrawFloatLine(FD(context, "sMaxDelay"), details.maxDelay, popupCounter, context);
+            DrawBoolLine(FD(context, "sStackable"), details.stackable, popupCounter, context);
         }
 
-        void DrawAdvancedAmmoDetails(const RE::TESAmmo* ammoForm, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawAdvancedAmmoDetails(const AmmoDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            if (!ammoForm) {
-                return;
-            }
-
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedAmmoData"));
 
-            DrawTextLine(FD(context, "sModel"), ammoForm->model.c_str(), popupCounter, context);
-            DrawTextLine(FD(context, "sShellCasingModel"), ammoForm->shellCasing.model.c_str(), popupCounter, context);
-            DrawUIntLine(FD(context, "sHealth"), ammoForm->data.health, popupCounter, context);
-            DrawUIntLine(FD(context, "sFlags"), static_cast<std::uint32_t>(static_cast<unsigned char>(ammoForm->data.flags)), popupCounter, context);
-            DrawFormReferenceLine(FD(context, "sProjectile"), ammoForm->data.projectile, context, popupCounter);
+            DrawTextLine(FD(context, "sModel"), details.model, popupCounter, context);
+            DrawTextLine(FD(context, "sShellCasingModel"), details.shellCasingModel, popupCounter, context);
+            DrawUIntLine(FD(context, "sHealth"), details.health, popupCounter, context);
+            DrawUIntLine(FD(context, "sFlags"), details.flags, popupCounter, context);
+            DrawFormReferenceLine(FD(context, "sProjectile"), details.projectile, context, popupCounter);
         }
 
-        void DrawAdvancedAlchemyDetails(const RE::AlchemyItem* alchemyForm, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawAdvancedAlchemyDetails(const AlchemyDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            if (!alchemyForm) {
-                return;
-            }
-
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedAlchemyData"));
 
-            DrawTextLine(FD(context, "sModel"), alchemyForm->model.c_str(), popupCounter, context);
-            DrawFormReferenceLine(FD(context, "sEquipmentType"), alchemyForm->GetEquipSlot(nullptr), context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sAddictionItem"), alchemyForm->data.addictionItem, context, popupCounter);
-            DrawFloatLine(FD(context, "sAddictionChance"), alchemyForm->data.addictionChance, popupCounter, context);
-            DrawFormReferenceLine(FD(context, "sConsumptionSound"), alchemyForm->data.consumptionSound, context, popupCounter);
+            DrawTextLine(FD(context, "sModel"), details.model, popupCounter, context);
+            DrawFormReferenceLine(FD(context, "sEquipmentType"), details.equipmentType, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sAddictionItem"), details.addictionItem, context, popupCounter);
+            DrawFloatLine(FD(context, "sAddictionChance"), details.addictionChance, popupCounter, context);
+            DrawFormReferenceLine(FD(context, "sConsumptionSound"), details.consumptionSound, context, popupCounter);
         }
 
-        void DrawAdvancedGlobalDetails(const RE::TESGlobal* globalForm, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawAdvancedGlobalDetails(const GlobalDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            if (!globalForm) {
-                return;
-            }
-
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedGlobalData"));
 
-            DrawFloatLine(L(context, "General", "sValue"), globalForm->GetValue(), popupCounter, context);
+            DrawFloatLine(L(context, "General", "sValue"), details.value, popupCounter, context);
         }
 
-        void DrawAdvancedOutfitDetails(const RE::BGSOutfit* outfitForm, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawAdvancedOutfitDetails(const OutfitDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            if (!outfitForm) {
-                return;
-            }
-
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedOutfitData"));
 
-            DrawUIntLine(FD(context, "sOutfitItems"), static_cast<std::uint32_t>(outfitForm->outfitItems.size()), popupCounter, context);
+            DrawUIntLine(FD(context, "sOutfitItems"), details.outfitItems, popupCounter, context);
         }
 
-        void DrawAdvancedWeatherDetails(const RE::TESWeather* weatherForm, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawAdvancedWeatherDetails(const WeatherDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            if (!weatherForm) {
-                return;
-            }
-
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedWeatherData"));
 
-            DrawUIntLine(FD(context, "sFlags"), static_cast<std::uint32_t>(static_cast<unsigned char>(weatherForm->weatherData[static_cast<std::size_t>(RE::TESWeather::WeatherData::kFlags)])), popupCounter, context);
-            DrawUIntLine(FD(context, "sCloudLayers"), weatherForm->numCloudLayers, popupCounter, context);
-            DrawUIntLine(FD(context, "sSkyStatics"), static_cast<std::uint32_t>(weatherForm->skyStatics.size()), popupCounter, context);
-            DrawFloatLine(FD(context, "sVolatilityMult"), weatherForm->volatilityMult, popupCounter, context);
-            DrawFloatLine(FD(context, "sVisibilityMult"), weatherForm->visibilityMult, popupCounter, context);
-            if (!weatherForm->aurora.model.empty()) {
-                DrawTextLine(FD(context, "sAuroraModel"), weatherForm->aurora.model.c_str(), popupCounter, context);
+            DrawUIntLine(FD(context, "sFlags"), details.flags, popupCounter, context);
+            DrawUIntLine(FD(context, "sCloudLayers"), details.cloudLayers, popupCounter, context);
+            DrawUIntLine(FD(context, "sSkyStatics"), details.skyStatics, popupCounter, context);
+            DrawFloatLine(FD(context, "sVolatilityMult"), details.volatilityMult, popupCounter, context);
+            DrawFloatLine(FD(context, "sVisibilityMult"), details.visibilityMult, popupCounter, context);
+            if (!details.auroraModel.empty()) {
+                DrawTextLine(FD(context, "sAuroraModel"), details.auroraModel, popupCounter, context);
             }
         }
 
-        void DrawAdvancedActivatorDetails(const RE::TESObjectACTI* activatorForm, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawAdvancedActivatorDetails(const ActivatorDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            if (!activatorForm) {
-                return;
-            }
-
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedActivatorData"));
 
-            if (!activatorForm->model.empty()) {
-                DrawTextLine(FD(context, "sModel"), activatorForm->model.c_str(), popupCounter, context);
+            if (!details.model.empty()) {
+                DrawTextLine(FD(context, "sModel"), details.model, popupCounter, context);
             }
-            DrawFormReferenceLine(FD(context, "sMaterialSwap"), activatorForm->swapForm, context, popupCounter);
-            DrawFloatLine(FD(context, "sColorRemapIndex"), activatorForm->colorRemappingIndex, popupCounter, context);
-            DrawFormReferenceLine(FD(context, "sLoopSound"), activatorForm->soundLoop, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sActivateSound"), activatorForm->soundActivate, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sWaterType"), activatorForm->waterForm, context, popupCounter);
-            DrawUIntLine(FD(context, "sFlags"), activatorForm->flags, popupCounter, context);
+            DrawFormReferenceLine(FD(context, "sMaterialSwap"), details.materialSwap, context, popupCounter);
+            DrawFloatLine(FD(context, "sColorRemapIndex"), details.colorRemapIndex, popupCounter, context);
+            DrawFormReferenceLine(FD(context, "sLoopSound"), details.loopSound, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sActivateSound"), details.activateSound, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sWaterType"), details.waterType, context, popupCounter);
+            DrawUIntLine(FD(context, "sFlags"), details.flags, popupCounter, context);
         }
 
-        void DrawAdvancedContainerDetails(const RE::TESObjectCONT* containerForm, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawAdvancedContainerDetails(const ContainerDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            if (!containerForm) {
-                return;
-            }
-
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedContainerData"));
 
-            if (!containerForm->model.empty()) {
-                DrawTextLine(FD(context, "sModel"), containerForm->model.c_str(), popupCounter, context);
+            if (!details.model.empty()) {
+                DrawTextLine(FD(context, "sModel"), details.model, popupCounter, context);
             }
-            DrawFormReferenceLine(FD(context, "sMaterialSwap"), containerForm->swapForm, context, popupCounter);
-            DrawFloatLine(FD(context, "sColorRemapIndex"), containerForm->colorRemappingIndex, popupCounter, context);
-            DrawFloatLine(L(context, "General", "sWeight"), containerForm->weight, popupCounter, context);
-            DrawUIntLine(FD(context, "sFlags"), static_cast<std::uint32_t>(static_cast<unsigned char>(containerForm->data.contFlags)), popupCounter, context);
-            DrawUIntLine(FD(context, "sContainerEntries"), CountContainerEntries(containerForm), popupCounter, context);
-            DrawUIntLine(FD(context, "sContainerItems"), CountContainerItems(containerForm), popupCounter, context);
-            DrawFormReferenceLine(FD(context, "sOpenSound"), containerForm->openSound, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sCloseSound"), containerForm->closeSound, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sTakeAllSound"), containerForm->takeAllSound, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sContainsOnlyList"), containerForm->containsOnlyList, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sMaterialSwap"), details.materialSwap, context, popupCounter);
+            DrawFloatLine(FD(context, "sColorRemapIndex"), details.colorRemapIndex, popupCounter, context);
+            DrawFloatLine(L(context, "General", "sWeight"), details.weight, popupCounter, context);
+            DrawUIntLine(FD(context, "sFlags"), details.flags, popupCounter, context);
+            DrawUIntLine(FD(context, "sContainerEntries"), details.containerEntries, popupCounter, context);
+            DrawUIntLine(FD(context, "sContainerItems"), details.containerItems, popupCounter, context);
+            DrawFormReferenceLine(FD(context, "sOpenSound"), details.openSound, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sCloseSound"), details.closeSound, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sTakeAllSound"), details.takeAllSound, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sContainsOnlyList"), details.containsOnlyList, context, popupCounter);
         }
 
-        void DrawAdvancedStaticDetails(const RE::TESObjectSTAT* staticForm, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawAdvancedStaticDetails(const StaticDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            if (!staticForm) {
-                return;
-            }
-
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedStaticData"));
 
-            if (!staticForm->model.empty()) {
-                DrawTextLine(FD(context, "sModel"), staticForm->model.c_str(), popupCounter, context);
+            if (!details.model.empty()) {
+                DrawTextLine(FD(context, "sModel"), details.model, popupCounter, context);
             }
-            DrawFormReferenceLine(FD(context, "sMaterialSwap"), staticForm->swapForm, context, popupCounter);
-            DrawFloatLine(FD(context, "sColorRemapIndex"), staticForm->colorRemappingIndex, popupCounter, context);
-            DrawFloatLine(FD(context, "sMaterialThresholdAngle"), staticForm->data.materialThresholdAngle, popupCounter, context);
-            DrawFloatLine(FD(context, "sLeafAmplitude"), staticForm->data.leafAmplitude, popupCounter, context);
-            DrawFloatLine(FD(context, "sLeafFrequency"), staticForm->data.leafFrequency, popupCounter, context);
+            DrawFormReferenceLine(FD(context, "sMaterialSwap"), details.materialSwap, context, popupCounter);
+            DrawFloatLine(FD(context, "sColorRemapIndex"), details.colorRemapIndex, popupCounter, context);
+            DrawFloatLine(FD(context, "sMaterialThresholdAngle"), details.materialThresholdAngle, popupCounter, context);
+            DrawFloatLine(FD(context, "sLeafAmplitude"), details.leafAmplitude, popupCounter, context);
+            DrawFloatLine(FD(context, "sLeafFrequency"), details.leafFrequency, popupCounter, context);
         }
 
-        void DrawAdvancedFurnitureDetails(const RE::TESFurniture* furnitureForm, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawAdvancedFurnitureDetails(const FurnitureDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            if (!furnitureForm) {
-                return;
-            }
-
-            auto* mutableFurniture = const_cast<RE::TESFurniture*>(furnitureForm);
-            auto* container = mutableFurniture->GetContainer();
 
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedFurnitureData"));
 
-            DrawUIntLine(FD(context, "sEntryPoints"), static_cast<std::uint32_t>(furnitureForm->entryPointDataArray.size()), popupCounter, context);
-            DrawUIntLine(FD(context, "sMarkerCount"), static_cast<std::uint32_t>(furnitureForm->markersArray.size()), popupCounter, context);
-            DrawUIntLine(FD(context, "sAttachmentParentCount"), furnitureForm->attachParents.size, popupCounter, context);
-            DrawUIntLine(FD(context, "sFlags"), furnitureForm->furnFlags, popupCounter, context);
-            DrawIntLine(FD(context, "sWorkbenchType"), furnitureForm->wbData.type.underlying(), popupCounter, context);
-            DrawFormReferenceLine(FD(context, "sAssociatedForm"), furnitureForm->associatedForm, context, popupCounter);
-            DrawUIntLine(FD(context, "sContainerEntries"), CountContainerEntries(container), popupCounter, context);
-            DrawUIntLine(FD(context, "sContainerItems"), CountContainerItems(container), popupCounter, context);
+            DrawUIntLine(FD(context, "sEntryPoints"), details.entryPoints, popupCounter, context);
+            DrawUIntLine(FD(context, "sMarkerCount"), details.markerCount, popupCounter, context);
+            DrawUIntLine(FD(context, "sAttachmentParentCount"), details.attachmentParentCount, popupCounter, context);
+            DrawUIntLine(FD(context, "sFlags"), details.flags, popupCounter, context);
+            DrawIntLine(FD(context, "sWorkbenchType"), details.workbenchType, popupCounter, context);
+            DrawFormReferenceLine(FD(context, "sAssociatedForm"), details.associatedForm, context, popupCounter);
+            DrawUIntLine(FD(context, "sContainerEntries"), details.containerEntries, popupCounter, context);
+            DrawUIntLine(FD(context, "sContainerItems"), details.containerItems, popupCounter, context);
         }
 
-        void DrawAdvancedSpellDetails(const RE::SpellItem* spellForm, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawAdvancedSpellDetails(const SpellDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            if (!spellForm) {
-                return;
-            }
-
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedSpellData"));
 
-            DrawFormReferenceLine(FD(context, "sEquipmentType"), spellForm->GetEquipSlot(nullptr), context, popupCounter);
-            DrawIntLine(FD(context, "sCostOverride"), spellForm->data.costOverride, popupCounter, context);
-            DrawUIntLine(FD(context, "sFlags"), spellForm->data.flags, popupCounter, context);
-            DrawFloatLine(FD(context, "sCastDuration"), spellForm->data.castDuration, popupCounter, context);
-            DrawFloatLine(FD(context, "sRange"), spellForm->data.range, popupCounter, context);
-            DrawFloatLine(FD(context, "sChargeTime"), spellForm->data.chargeTime, popupCounter, context);
-            DrawFormReferenceLine(FD(context, "sCastingPerk"), spellForm->data.castingPerk, context, popupCounter);
-            DrawUIntLine(FD(context, "sEffectEntries"), static_cast<std::uint32_t>(spellForm->listOfEffects.size()), popupCounter, context);
-            DrawIntLine(FD(context, "sHostileCount"), spellForm->hostileCount, popupCounter, context);
-            DrawUIntLine(FD(context, "sPreloadCount"), spellForm->preloadCount, popupCounter, context);
+            DrawFormReferenceLine(FD(context, "sEquipmentType"), details.equipmentType, context, popupCounter);
+            DrawIntLine(FD(context, "sCostOverride"), details.costOverride, popupCounter, context);
+            DrawUIntLine(FD(context, "sFlags"), details.flags, popupCounter, context);
+            DrawFloatLine(FD(context, "sCastDuration"), details.castDuration, popupCounter, context);
+            DrawFloatLine(FD(context, "sRange"), details.range, popupCounter, context);
+            DrawFloatLine(FD(context, "sChargeTime"), details.chargeTime, popupCounter, context);
+            DrawFormReferenceLine(FD(context, "sCastingPerk"), details.castingPerk, context, popupCounter);
+            DrawUIntLine(FD(context, "sEffectEntries"), details.effectEntries, popupCounter, context);
+            DrawIntLine(FD(context, "sHostileCount"), details.hostileCount, popupCounter, context);
+            DrawUIntLine(FD(context, "sPreloadCount"), details.preloadCount, popupCounter, context);
         }
 
-        void DrawAdvancedPerkDetails(const RE::BGSPerk* perkForm, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawAdvancedPerkDetails(const PerkDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            if (!perkForm) {
-                return;
-            }
-
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedPerkData"));
 
-            DrawBoolLine(FD(context, "sTrait"), perkForm->data.trait, popupCounter, context);
-            DrawBoolLine(L(context, "General", "sPlayable"), perkForm->data.playable, popupCounter, context);
-            DrawBoolLine(FD(context, "sHidden"), perkForm->data.hidden, popupCounter, context);
-            DrawIntLine(L(context, "General", "sLevel"), perkForm->data.level, popupCounter, context);
-            DrawIntLine(FD(context, "sNumRanks"), perkForm->data.numRanks, popupCounter, context);
-            DrawUIntLine(FD(context, "sPerkEntries"), static_cast<std::uint32_t>(perkForm->perkEntries.size()), popupCounter, context);
-            DrawFormReferenceLine(FD(context, "sNextPerk"), perkForm->nextPerk, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sSound"), perkForm->sound, context, popupCounter);
-            if (!perkForm->swfFile.empty()) {
-                DrawTextLine(FD(context, "sSWFFile"), perkForm->swfFile.c_str(), popupCounter, context);
+            DrawBoolLine(FD(context, "sTrait"), details.trait, popupCounter, context);
+            DrawBoolLine(L(context, "General", "sPlayable"), details.playable, popupCounter, context);
+            DrawBoolLine(FD(context, "sHidden"), details.hidden, popupCounter, context);
+            DrawIntLine(L(context, "General", "sLevel"), details.level, popupCounter, context);
+            DrawIntLine(FD(context, "sNumRanks"), details.numRanks, popupCounter, context);
+            DrawUIntLine(FD(context, "sPerkEntries"), details.perkEntries, popupCounter, context);
+            DrawFormReferenceLine(FD(context, "sNextPerk"), details.nextPerk, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sSound"), details.sound, context, popupCounter);
+            if (!details.swfFile.empty()) {
+                DrawTextLine(FD(context, "sSWFFile"), details.swfFile, popupCounter, context);
             }
         }
 
-        void DrawAdvancedConstructibleDetails(const RE::BGSConstructibleObject* constructibleForm, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawAdvancedConstructibleDetails(const ConstructibleDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            if (!constructibleForm) {
-                return;
-            }
-
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedConstructibleData"));
 
-            DrawFormReferenceLine(FD(context, "sCreatedItem"), constructibleForm->createdItem, context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sBenchKeyword"), constructibleForm->benchKeyword, context, popupCounter);
-            DrawUIntLine(FD(context, "sRequiredItems"), constructibleForm->requiredItems ? constructibleForm->requiredItems->size() : 0, popupCounter, context);
-            DrawUIntLine(FD(context, "sConstructedCount"), constructibleForm->data.numConstructed, popupCounter, context);
-            DrawUIntLine(FD(context, "sWorkshopPriority"), constructibleForm->data.workshopPriority, popupCounter, context);
+            DrawFormReferenceLine(FD(context, "sCreatedItem"), details.createdItem, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sBenchKeyword"), details.benchKeyword, context, popupCounter);
+            DrawUIntLine(FD(context, "sRequiredItems"), details.requiredItems, popupCounter, context);
+            DrawUIntLine(FD(context, "sConstructedCount"), details.constructedCount, popupCounter, context);
+            DrawUIntLine(FD(context, "sWorkshopPriority"), details.workshopPriority, popupCounter, context);
         }
 
-        void DrawAdvancedQuestDetails(const RE::TESQuest* questForm, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawAdvancedQuestDetails(const QuestDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            if (!questForm) {
-                return;
-            }
-
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedQuestData"));
 
-            DrawUIntLine(FD(context, "sCurrentStage"), questForm->currentStage, popupCounter, context);
-            DrawUIntLine(FD(context, "sEventID"), questForm->eventID, popupCounter, context);
-            DrawUIntLine(FD(context, "sStages"), questForm->stages.size(), popupCounter, context);
-            DrawUIntLine(FD(context, "sObjectives"), questForm->objectives.size(), popupCounter, context);
-            DrawUIntLine(FD(context, "sAliases"), questForm->aliases.size(), popupCounter, context);
-            DrawUIntLine(FD(context, "sAliasedReferences"), questForm->totalRefsAliased, popupCounter, context);
-            DrawTextLine(FD(context, "sAlreadyRun"), questForm->alreadyRun ? L(context, "General", "sYes") : L(context, "General", "sNo"), popupCounter, context);
-            DrawFloatLine(FD(context, "sDelayTime"), questForm->data.questDelayTime, popupCounter, context);
-            DrawIntLine(FD(context, "sPriority"), questForm->data.priority, popupCounter, context);
-            DrawIntLine(FD(context, "sQuestType"), questForm->data.questType, popupCounter, context);
-            DrawUIntLine(FD(context, "sFlags"), questForm->data.flags, popupCounter, context);
+            DrawUIntLine(FD(context, "sCurrentStage"), details.currentStage, popupCounter, context);
+            DrawUIntLine(FD(context, "sEventID"), details.eventID, popupCounter, context);
+            DrawUIntLine(FD(context, "sStages"), details.stages, popupCounter, context);
+            DrawUIntLine(FD(context, "sObjectives"), details.objectives, popupCounter, context);
+            DrawUIntLine(FD(context, "sAliases"), details.aliases, popupCounter, context);
+            DrawUIntLine(FD(context, "sAliasedReferences"), details.aliasedReferences, popupCounter, context);
+            DrawBoolLine(FD(context, "sAlreadyRun"), details.alreadyRun, popupCounter, context);
+            DrawFloatLine(FD(context, "sDelayTime"), details.delayTime, popupCounter, context);
+            DrawIntLine(FD(context, "sPriority"), details.priority, popupCounter, context);
+            DrawIntLine(FD(context, "sQuestType"), details.questType, popupCounter, context);
+            DrawUIntLine(FD(context, "sFlags"), details.flags, popupCounter, context);
         }
 
-        void DrawAdvancedCellDetails(const RE::TESObjectCELL* cellForm, const FormDetailsViewContext& context, int& popupCounter)
+        void DrawAdvancedCellDetails(const CellDetails& details, const FormDetailsViewContext& context, int& popupCounter)
         {
-            if (!cellForm) {
-                return;
-            }
-
-            auto* mutableCell = const_cast<RE::TESObjectCELL*>(cellForm);
 
             ImGui::Separator();
             ImGui::TextUnformatted(FD(context, "sAdvancedCellData"));
 
-            DrawBoolLine(FD(context, "sInterior"), cellForm->IsInterior(), popupCounter, context);
-            DrawBoolLine(FD(context, "sHasWater"), cellForm->HasWater(), popupCounter, context);
-            DrawBoolLine(FD(context, "sCantWaitHere"), mutableCell->GetCantWaitHere(), popupCounter, context);
-            DrawUIntLine(FD(context, "sFlags"), cellForm->cellFlags.underlying(), popupCounter, context);
-            DrawUIntLine(FD(context, "sGameFlags"), cellForm->cellGameFlags, popupCounter, context);
-            DrawUIntLine(FD(context, "sCellState"), std::to_underlying(cellForm->cellState), popupCounter, context);
-            DrawIntLine(FD(context, "sX"), mutableCell->GetDataX(), popupCounter, context);
-            DrawIntLine(FD(context, "sY"), mutableCell->GetDataY(), popupCounter, context);
-            DrawFormReferenceLine(FD(context, "sEncounterZone"), cellForm->GetEncounterZone(), context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sLocation"), cellForm->GetLocation(), context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sOwner"), mutableCell->GetOwner(), context, popupCounter);
-            DrawFormReferenceLine(FD(context, "sWaterType"), cellForm->GetWaterType(), context, popupCounter);
-            DrawFloatLine(FD(context, "sWaterHeight"), cellForm->waterHeight, popupCounter, context);
-            DrawFormReferenceLine(FD(context, "sLightingTemplate"), cellForm->lightingTemplate, context, popupCounter);
-            DrawUIntLine(FD(context, "sReferenceEntries"), static_cast<std::uint32_t>(cellForm->references.size()), popupCounter, context);
-            if (cellForm->IsExterior()) {
-                DrawFormReferenceLine(FD(context, "sWorldSpace"), cellForm->worldSpace, context, popupCounter);
+            DrawBoolLine(FD(context, "sInterior"), details.interior, popupCounter, context);
+            DrawBoolLine(FD(context, "sHasWater"), details.hasWater, popupCounter, context);
+            DrawBoolLine(FD(context, "sCantWaitHere"), details.cantWaitHere, popupCounter, context);
+            DrawUIntLine(FD(context, "sFlags"), details.flags, popupCounter, context);
+            DrawUIntLine(FD(context, "sGameFlags"), details.gameFlags, popupCounter, context);
+            DrawUIntLine(FD(context, "sCellState"), details.cellState, popupCounter, context);
+            DrawIntLine(FD(context, "sX"), details.x, popupCounter, context);
+            DrawIntLine(FD(context, "sY"), details.y, popupCounter, context);
+            DrawFormReferenceLine(FD(context, "sEncounterZone"), details.encounterZone, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sLocation"), details.location, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sOwner"), details.owner, context, popupCounter);
+            DrawFormReferenceLine(FD(context, "sWaterType"), details.waterType, context, popupCounter);
+            DrawFloatLine(FD(context, "sWaterHeight"), details.waterHeight, popupCounter, context);
+            DrawFormReferenceLine(FD(context, "sLightingTemplate"), details.lightingTemplate, context, popupCounter);
+            DrawUIntLine(FD(context, "sReferenceEntries"), details.referenceEntries, popupCounter, context);
+            if (details.exterior) {
+                DrawFormReferenceLine(FD(context, "sWorldSpace"), details.worldSpace, context, popupCounter);
             }
         }
 
-        void DrawKeywordDetails(const RE::TESForm* form, const FormDetailsViewContext& context)
+        void DrawKeywordDetails(const std::optional<std::vector<std::string>>& keywords, const FormDetailsViewContext& context)
         {
-            const auto keywordForm = form ? form->As<RE::BGSKeywordForm>() : nullptr;
-            if (!keywordForm) {
-                return;
-            }
-
+            if (!keywords) return;
             ImGui::Separator();
             ImGui::TextUnformatted(L(context, "General", "sKeywords"));
-
-            int displayed = 0;
-            keywordForm->ForEachKeyword([&displayed, &context](RE::BGSKeyword* keyword) {
-                if (!keyword || displayed >= 200) {
-                    return displayed >= 200 ? RE::BSContainer::ForEachResult::kStop : RE::BSContainer::ForEachResult::kContinue;
-                }
-
-                const auto text = keyword->formEditorID.c_str();
-                const auto keywordLabel = (text && text[0] != '\0') ? text : L(context, "General", "sUnnamedKeyword");
-                ImGui::BulletText("%s", keywordLabel);
-                const std::string keywordPopupID = "KeywordCopyPopup##" + std::to_string(displayed);
-                if (ImGui::BeginPopupContextItem(keywordPopupID.c_str())) {
-                    if (ImGui::MenuItem(L(context, "General", "sCopy"))) {
-                        ImGui::SetClipboardText(keywordLabel);
-                    }
+            for (std::size_t index = 0; index < keywords->size(); ++index) {
+                const auto& text = (*keywords)[index];
+                const auto* label = text.empty() ? L(context, "General", "sUnnamedKeyword") : text.c_str();
+                ImGui::BulletText("%s", label);
+                const auto id = "KeywordCopyPopup##" + std::to_string(index);
+                if (ImGui::BeginPopupContextItem(id.c_str())) {
+                    if (ImGui::MenuItem(L(context, "General", "sCopy"))) ImGui::SetClipboardText(label);
                     ImGui::EndPopup();
                 }
-
-                ++displayed;
-                return RE::BSContainer::ForEachResult::kContinue;
-            });
-
-            if (displayed == 0) {
-                ImGui::TextDisabled("%s", L(context, "General", "sNoKeywords"));
             }
+            if (keywords->empty()) ImGui::TextDisabled("%s", L(context, "General", "sNoKeywords"));
         }
     }
 
     void FormDetailsView::Draw(const FormEntry& selectedRecord, const FormDetailsViewContext& context)
     {
+        const ProfileScope profileScope(ProfileMetric::DetailsView);
+        ImGui::PushID(static_cast<int>(selectedRecord.formID));
         int detailCopyPopupCounter = 0;
-
         ImGui::TextUnformatted(selectedRecord.name.empty() ? L(context, "General", "sUnnamed") : selectedRecord.name.c_str());
         DrawCopyPopup(selectedRecord.name.empty() ? L(context, "General", "sUnnamed") : selectedRecord.name, detailCopyPopupCounter, context);
         ImGui::SameLine();
-        const std::string selectedFormIDText = FormatUtils::FormID(selectedRecord.formID);
-        ImGui::TextDisabled("%s", selectedFormIDText.c_str());
-        {
-            DrawCopyPopup(selectedFormIDText, detailCopyPopupCounter, context);
-        }
-
+        const auto id = FormatUtils::FormID(selectedRecord.formID);
+        ImGui::TextDisabled("%s", id.c_str());
+        DrawCopyPopup(id, detailCopyPopupCounter, context);
         ImGui::Separator();
-
-        DrawTextLine(L(context, "General", "sPlugin"), BuildPluginDisplayName(selectedRecord.sourcePlugin), detailCopyPopupCounter, context);
+        DrawTextLine(L(context, "General", "sPlugin"), BuildPluginDisplayName(selectedRecord.sourcePlugin, context.catalog), detailCopyPopupCounter, context);
         DrawTextLine(L(context, "General", "sCategory"), selectedRecord.category, detailCopyPopupCounter, context);
-        DrawTextLine(L(context, "General", "sPlayable"), selectedRecord.isPlayable ? L(context, "General", "sYes") : L(context, "General", "sNo"), detailCopyPopupCounter, context);
-        DrawTextLine(L(context, "General", "sDeleted"), selectedRecord.isDeleted ? L(context, "General", "sYes") : L(context, "General", "sNo"), detailCopyPopupCounter, context);
-
-        auto* form = RE::TESForm::GetFormByID(selectedRecord.formID);
-        if (!form) {
+        DrawBoolLine(L(context, "General", "sPlayable"), selectedRecord.isPlayable, detailCopyPopupCounter, context);
+        DrawBoolLine(L(context, "General", "sDeleted"), selectedRecord.isDeleted, detailCopyPopupCounter, context);
+        if (!context.details || context.details->key.formID != selectedRecord.formID ||
+            (context.catalog && context.details->key.catalogGeneration != context.catalog->generation) ||
+            context.details->key.advanced != context.showAdvancedDetailsView) {
+            ImGui::TextDisabled("%s", context.localize("FormDetails", "sLoading", "Loading record details..."));
+            ImGui::PopID();
             return;
         }
-
-        const auto* editorID = form->GetFormEditorID();
-        DrawTextLine(L(context, "General", "sEditorID"), (editorID && editorID[0] != '\0') ? editorID : L(context, "General", "sNone"), detailCopyPopupCounter, context);
-        DrawTextLine(L(context, "General", "sType"), form->GetFormTypeString(), detailCopyPopupCounter, context);
-        DrawUIntLine(L(context, "General", "sReferenceCount"), DataManager::GetPlacedReferenceCount(selectedRecord.formID), detailCopyPopupCounter, context);
-
-        if (const auto* valueForm = form->As<RE::TESValueForm>()) {
-            DrawIntLine(L(context, "General", "sValue"), valueForm->GetFormValue(), detailCopyPopupCounter, context);
+        const auto& details = *context.details;
+        if (details.status != DetailReadStatus::Available) {
+            ImGui::TextDisabled("%s", context.localize("FormDetails", "sUnavailable", "Record details are unavailable."));
+            ImGui::PopID();
+            return;
         }
-
-        if (const auto* weightForm = form->As<RE::TESWeightForm>()) {
-            DrawFloatLine(L(context, "General", "sWeight"), weightForm->GetFormWeight(), detailCopyPopupCounter, context);
+        DrawTextLine(L(context, "General", "sEditorID"), details.editorID.empty() ? L(context, "General", "sNone") : details.editorID, detailCopyPopupCounter, context);
+        DrawTextLine(L(context, "General", "sType"), details.type, detailCopyPopupCounter, context);
+        std::uint32_t referenceCount{};
+        if (context.catalog) {
+            const auto found = context.catalog->runtimeReferenceCounts.find(selectedRecord.formID);
+            if (found != context.catalog->runtimeReferenceCounts.end()) referenceCount = found->second;
         }
-
-        if (const auto* weaponForm = form->As<RE::TESObjectWEAP>()) {
-            DrawUIntLine(L(context, "General", "sDamage"), weaponForm->weaponData.attackDamage, detailCopyPopupCounter, context);
-            if (weaponForm->weaponData.attackSeconds > 0.0f) {
-                DrawFloatLine(L(context, "General", "sFireRate"), 1.0f / weaponForm->weaponData.attackSeconds, detailCopyPopupCounter, context);
-            }
-            DrawFormReferenceLine(L(context, "Items", "sAmmo"), weaponForm->weaponData.ammo, context, detailCopyPopupCounter);
-            DrawUIntLine(FD(context, "sAmmoCapacity"), weaponForm->weaponData.ammoCapacity, detailCopyPopupCounter, context);
-            DrawUIntLine(FD(context, "sAttachmentParentCount"), weaponForm->attachParents.size, detailCopyPopupCounter, context);
+        DrawUIntLine(context.localize("FormDetails", "sRuntimeReferenceCount", "Runtime-known references"), referenceCount, detailCopyPopupCounter, context);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", context.localize("FormDetails", "sRuntimeReferenceScope",
+            "References currently registered with the game; not all placed references in plugin files."));
+        if (details.value) DrawIntLine(L(context, "General", "sValue"), *details.value, detailCopyPopupCounter, context);
+        if (details.weight) DrawFloatLine(L(context, "General", "sWeight"), *details.weight, detailCopyPopupCounter, context);
+        if (const auto* weapon = std::get_if<WeaponDetails>(&details.specific)) {
+            DrawUIntLine(L(context, "General", "sDamage"), weapon->damageBase, detailCopyPopupCounter, context);
+            if (weapon->fireRate) DrawFloatLine(L(context, "General", "sFireRate"), *weapon->fireRate, detailCopyPopupCounter, context);
+            DrawFormReferenceLine(L(context, "Items", "sAmmo"), weapon->ammo, context, detailCopyPopupCounter);
+            DrawUIntLine(FD(context, "sAmmoCapacity"), weapon->ammoCapacity, detailCopyPopupCounter, context);
+            DrawUIntLine(FD(context, "sAttachmentParentCount"), weapon->attachmentParentCount, detailCopyPopupCounter, context);
         }
-
-        if (const auto* ammoForm = form->As<RE::TESAmmo>()) {
-            DrawFloatLine(L(context, "General", "sDamage"), ammoForm->data.damage, detailCopyPopupCounter, context);
+        if (const auto* ammo = std::get_if<AmmoDetails>(&details.specific)) DrawFloatLine(L(context, "General", "sDamage"), ammo->damage, detailCopyPopupCounter, context);
+        if (const auto* armor = std::get_if<ArmorDetails>(&details.specific)) {
+            DrawUIntLine(L(context, "General", "sArmorRating"), armor->armorRating, detailCopyPopupCounter, context);
+            DrawUIntLine(FD(context, "sAttachmentParentCount"), armor->attachmentParentCount, detailCopyPopupCounter, context);
         }
-
-        if (const auto* armorForm = form->As<RE::TESObjectARMO>()) {
-            DrawUIntLine(L(context, "General", "sArmorRating"), armorForm->armorData.rating, detailCopyPopupCounter, context);
-            DrawUIntLine(FD(context, "sAttachmentParentCount"), armorForm->attachParents.size, detailCopyPopupCounter, context);
+        if (const auto* npc = std::get_if<NPCDetails>(&details.specific)) {
+            DrawIntLine(L(context, "General", "sLevel"), npc->level, detailCopyPopupCounter, context);
+            DrawFormReferenceLine(L(context, "NPCs", "sResolvedRace"), npc->resolvedRace, context, detailCopyPopupCounter);
+            DrawUIntLine(FD(context, "sAttachmentParentCount"), npc->attachmentParentCount, detailCopyPopupCounter, context);
         }
-
-        if (const auto* npcForm = form->As<RE::TESNPC>()) {
-            DrawIntLine(L(context, "General", "sLevel"), npcForm->GetLevel(), detailCopyPopupCounter, context);
-            DrawFormReferenceLine(L(context, "NPCs", "sResolvedRace"), npcForm->GetFormRace(), context, detailCopyPopupCounter);
-            DrawUIntLine(FD(context, "sAttachmentParentCount"), npcForm->attachParents.size, detailCopyPopupCounter, context);
-        }
-
-        if (const auto* soundForm = form->As<RE::TESSound>()) {
-            DrawFormReferenceLine(L(context, "General", "sDescriptor"), soundForm->descriptor, context, detailCopyPopupCounter);
-        }
-
+        if (const auto* sound = std::get_if<SoundDetails>(&details.specific)) DrawFormReferenceLine(L(context, "General", "sDescriptor"), sound->descriptor, context, detailCopyPopupCounter);
         if (context.showAdvancedDetailsView) {
-            if (const auto* weaponForm = form->As<RE::TESObjectWEAP>()) {
-                DrawAdvancedWeaponDetails(weaponForm, context, detailCopyPopupCounter);
-            }
-            if (const auto* armorForm = form->As<RE::TESObjectARMO>()) {
-                DrawAdvancedArmorDetails(armorForm, context, detailCopyPopupCounter);
-            }
-            if (const auto* npcForm = form->As<RE::TESNPC>()) {
-                DrawAdvancedNPCDetails(npcForm, context, detailCopyPopupCounter);
-            }
-            if (const auto* soundForm = form->As<RE::TESSound>()) {
-                DrawAdvancedSoundDetails(soundForm, context, detailCopyPopupCounter);
-            }
-            if (const auto* globalForm = form->As<RE::TESGlobal>()) {
-                DrawAdvancedGlobalDetails(globalForm, context, detailCopyPopupCounter);
-            }
-            if (const auto* outfitForm = form->As<RE::BGSOutfit>()) {
-                DrawAdvancedOutfitDetails(outfitForm, context, detailCopyPopupCounter);
-            }
-            if (const auto* weatherForm = form->As<RE::TESWeather>()) {
-                DrawAdvancedWeatherDetails(weatherForm, context, detailCopyPopupCounter);
-            }
-            if (const auto* activatorForm = form->As<RE::TESObjectACTI>()) {
-                DrawAdvancedActivatorDetails(activatorForm, context, detailCopyPopupCounter);
-            }
-            if (const auto* containerForm = form->As<RE::TESObjectCONT>()) {
-                DrawAdvancedContainerDetails(containerForm, context, detailCopyPopupCounter);
-            }
-            if (const auto* staticForm = form->As<RE::TESObjectSTAT>()) {
-                DrawAdvancedStaticDetails(staticForm, context, detailCopyPopupCounter);
-            }
-            if (const auto* furnitureForm = form->As<RE::TESFurniture>()) {
-                DrawAdvancedFurnitureDetails(furnitureForm, context, detailCopyPopupCounter);
-            }
-            if (const auto* spellForm = form->As<RE::SpellItem>()) {
-                DrawAdvancedSpellDetails(spellForm, context, detailCopyPopupCounter);
-            }
-            if (const auto* perkForm = form->As<RE::BGSPerk>()) {
-                DrawAdvancedPerkDetails(perkForm, context, detailCopyPopupCounter);
-            }
-            if (const auto* ammoForm = form->As<RE::TESAmmo>()) {
-                DrawAdvancedAmmoDetails(ammoForm, context, detailCopyPopupCounter);
-            }
-            if (const auto* alchemyForm = form->As<RE::AlchemyItem>()) {
-                DrawAdvancedAlchemyDetails(alchemyForm, context, detailCopyPopupCounter);
-            }
-            if (const auto* constructibleForm = form->As<RE::BGSConstructibleObject>()) {
-                DrawAdvancedConstructibleDetails(constructibleForm, context, detailCopyPopupCounter);
-            }
-            if (const auto* questForm = form->As<RE::TESQuest>()) {
-                DrawAdvancedQuestDetails(questForm, context, detailCopyPopupCounter);
-            }
-            if (const auto* cellForm = form->As<RE::TESObjectCELL>()) {
-                DrawAdvancedCellDetails(cellForm, context, detailCopyPopupCounter);
-            }
+            if (const auto* value = std::get_if<WeaponDetails>(&details.specific)) DrawAdvancedWeaponDetails(*value, context, detailCopyPopupCounter);
+            if (const auto* value = std::get_if<ArmorDetails>(&details.specific)) DrawAdvancedArmorDetails(*value, context, detailCopyPopupCounter);
+            if (const auto* value = std::get_if<NPCDetails>(&details.specific)) DrawAdvancedNPCDetails(*value, context, detailCopyPopupCounter);
+            if (const auto* value = std::get_if<SoundDetails>(&details.specific)) DrawAdvancedSoundDetails(*value, context, detailCopyPopupCounter);
+            if (const auto* value = std::get_if<GlobalDetails>(&details.specific)) DrawAdvancedGlobalDetails(*value, context, detailCopyPopupCounter);
+            if (const auto* value = std::get_if<OutfitDetails>(&details.specific)) DrawAdvancedOutfitDetails(*value, context, detailCopyPopupCounter);
+            if (const auto* value = std::get_if<WeatherDetails>(&details.specific)) DrawAdvancedWeatherDetails(*value, context, detailCopyPopupCounter);
+            if (const auto* value = std::get_if<ActivatorDetails>(&details.specific)) DrawAdvancedActivatorDetails(*value, context, detailCopyPopupCounter);
+            if (const auto* value = std::get_if<ContainerDetails>(&details.specific)) DrawAdvancedContainerDetails(*value, context, detailCopyPopupCounter);
+            if (const auto* value = std::get_if<StaticDetails>(&details.specific)) DrawAdvancedStaticDetails(*value, context, detailCopyPopupCounter);
+            if (const auto* value = std::get_if<FurnitureDetails>(&details.specific)) DrawAdvancedFurnitureDetails(*value, context, detailCopyPopupCounter);
+            if (const auto* value = std::get_if<SpellDetails>(&details.specific)) DrawAdvancedSpellDetails(*value, context, detailCopyPopupCounter);
+            if (const auto* value = std::get_if<PerkDetails>(&details.specific)) DrawAdvancedPerkDetails(*value, context, detailCopyPopupCounter);
+            if (const auto* value = std::get_if<AmmoDetails>(&details.specific)) DrawAdvancedAmmoDetails(*value, context, detailCopyPopupCounter);
+            if (const auto* value = std::get_if<AlchemyDetails>(&details.specific)) DrawAdvancedAlchemyDetails(*value, context, detailCopyPopupCounter);
+            if (const auto* value = std::get_if<ConstructibleDetails>(&details.specific)) DrawAdvancedConstructibleDetails(*value, context, detailCopyPopupCounter);
+            if (const auto* value = std::get_if<QuestDetails>(&details.specific)) DrawAdvancedQuestDetails(*value, context, detailCopyPopupCounter);
+            if (const auto* value = std::get_if<CellDetails>(&details.specific)) DrawAdvancedCellDetails(*value, context, detailCopyPopupCounter);
         }
-
-        DrawKeywordDetails(form, context);
+        DrawKeywordDetails(details.keywords, context);
+        ImGui::PopID();
     }
 }
