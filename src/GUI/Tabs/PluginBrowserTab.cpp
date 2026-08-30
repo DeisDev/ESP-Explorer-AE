@@ -5,6 +5,7 @@
 #include "Input/GamepadInput.h"
 
 #include "GUI/Widgets/RecordFiltersWidget.h"
+#include "GUI/Widgets/ActionFeedback.h"
 
 #include <imgui.h>
 
@@ -13,37 +14,44 @@ namespace ESPExplorerAE
     using namespace PluginBrowserHelpers;
     using namespace PluginBrowserPanels;
 
-    void PluginBrowserTab::Draw(const std::vector<PluginInfo>& plugins, const FormCache& cache, std::uint64_t dataVersion, PluginBrowserTabContext& context)
+    void PluginBrowserTab::Draw(PluginBrowserState& state, const PluginBrowserView& view, PluginBrowserRequests& requests)
     {
+        if (!view.records.catalog) return;
+        Context context{ state, view, requests };
+        const auto& snapshot = view.records.catalog;
+        ActionFeedback::Draw(state.admission, view.records.localize);
+        const auto& cache = *snapshot;
+        const auto& plugins = snapshot->plugins;
         bool listFilterSettingsChanged = false;
 
-        const float clearBtnWidth = ImGui::CalcTextSize("X").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+        const auto* clearLabel = view.records.localize("General", "sClearSearchButton", "X");
+        const float clearBtnWidth = ImGui::CalcTextSize(clearLabel).x + ImGui::GetStyle().FramePadding.x * 2.0f;
         const float searchFieldWidth = ImGui::GetContentRegionAvail().x * 0.55f - clearBtnWidth - ImGui::GetStyle().ItemSpacing.x;
         ImGui::SetNextItemWidth(searchFieldWidth);
-        if (context.searchFocusPending && *context.searchFocusPending && !ImGui::IsAnyItemActive() && !GamepadInput::IsUsingGamepad()) {
+        if (context.state.focusPending && !ImGui::IsAnyItemActive() && !GamepadInput::IsUsingGamepad()) {
             ImGui::SetKeyboardFocusHere();
-            *context.searchFocusPending = false;
+            context.state.focusPending = false;
         }
-        if (ImGui::InputTextWithHint("##PluginSearchInput", context.localize("PluginBrowser", "sSearch", "Plugin Search"), context.pluginSearchBuffer, context.pluginSearchBufferSize)) {
-            context.pluginSearch = context.pluginSearchBuffer;
+        if (ImGui::InputTextWithHint("##PluginSearchInput", context.view.records.localize("PluginBrowser", "sSearch", "Plugin Search"), context.state.searchBuffer.data(), context.state.searchBuffer.size())) {
+            context.state.search = context.state.searchBuffer.data();
         }
-        if (ImGui::IsItemActive() && ImGui::IsKeyPressed(ImGuiKey_Escape, false) && context.pluginSearchBuffer[0] != '\0') {
-            context.pluginSearchBuffer[0] = '\0';
-            context.pluginSearch.clear();
+        if (ImGui::IsItemActive() && ImGui::IsKeyPressed(ImGuiKey_Escape, false) && context.state.searchBuffer[0] != '\0') {
+            context.state.searchBuffer[0] = '\0';
+            context.state.search.clear();
         }
         ImGui::SameLine();
-        if (ImGui::Button("X##PluginSearchClear")) {
-            context.pluginSearchBuffer[0] = '\0';
-            context.pluginSearch.clear();
+        if (ImGui::Button((std::string(clearLabel) + "###PluginSearchClear").c_str())) {
+            context.state.searchBuffer[0] = '\0';
+            context.state.search.clear();
         }
         ImGui::SameLine();
 
-        if (ImGui::Button(context.localize("PluginBrowser", "sClearFilter", "Clear Plugin Filter"))) {
-            context.selectedPluginFilter.clear();
+        if (ImGui::Button(context.view.records.localize("PluginBrowser", "sClearFilter", "Clear Plugin Filter"))) {
+            context.requests.pluginFilter = std::string{};
         }
 
-        if (ImGui::Checkbox(context.localize("PluginBrowser", "sGlobalSearch", "Global Search"), &context.pluginGlobalSearchMode)) {
-            context.persistFilterCheckboxes();
+        if (ImGui::Checkbox(context.view.records.localize("PluginBrowser", "sGlobalSearch", "Global Search"), &context.state.globalSearch)) {
+            context.requests.settingsChanged = true;
         }
         {
             auto wrappedSameLine = [](const char* label) {
@@ -52,46 +60,58 @@ namespace ESPExplorerAE
                     ImGui::SameLine();
                 }
             };
-            const char* unknownLabel = context.localize("PluginBrowser", "sShowUnknownCategories", "Show Unknown Categories");
+            const char* unknownLabel = context.view.records.localize("PluginBrowser", "sShowUnknownCategories", "Show Unknown Categories");
             wrappedSameLine(unknownLabel);
-            if (ImGui::Checkbox(unknownLabel, &context.showUnknownCategories)) {
+            if (ImGui::Checkbox(unknownLabel, &context.state.showUnknown)) {
                 listFilterSettingsChanged = true;
-                context.persistFilterCheckboxes();
+                context.requests.settingsChanged = true;
             }
         }
 
-        if (!context.selectedPluginFilter.empty()) {
-            const std::string activePluginLabel = BuildPluginDisplayName(context.selectedPluginFilter, plugins);
-            ImGui::Text("%s: %s", context.localize("PluginBrowser", "sActiveFilter", "Active"), activePluginLabel.c_str());
+        if (!context.view.records.pluginFilter.empty()) {
+            const std::string activePluginLabel = BuildPluginDisplayName(context.view.records.pluginFilter, plugins);
+            ImGui::Text("%s: %s", context.view.records.localize("PluginBrowser", "sActiveFilter", "Active"), activePluginLabel.c_str());
         }
 
         if (RecordFiltersWidget::Draw(
-                context.localize,
+                context.view.records.localize,
                 "PluginBrowser",
                 RecordFilterState{
-                    .showNonPlayable = context.showNonPlayableRecords,
-                    .showUnnamed = context.showUnnamedRecords,
-                    .showDeleted = context.showDeletedRecords,
-                    .advancedRules = context.advancedRules,
-                    .hiddenPlugins = context.hiddenPlugins })) {
+                    .showNonPlayable = context.view.records.filters.showNonPlayableRecords,
+                    .showUnnamed = context.view.records.filters.showUnnamedRecords,
+                    .showDeleted = context.view.records.filters.showDeletedRecords,
+                    .advancedRules = context.view.records.filters.advancedRecordFilters,
+                    .hiddenPlugins = context.view.records.filters.hiddenPlugins }, context.state.filterEditor, context.view.records.catalog)) {
             listFilterSettingsChanged = true;
         }
 
         if (listFilterSettingsChanged) {
-            context.persistListFilters();
+            ++context.view.records.filters.advancedRecordFilterRevision;
+            context.requests.records.filtersChanged = true;
         }
 
-        RebuildCachesIfNeeded(plugins, cache, dataVersion, context);
+        CatalogQuery filter;
+        filter.plugin = context.requests.pluginFilter ? *context.requests.pluginFilter : std::string(context.view.records.pluginFilter);
+        filter.search = context.state.search;
+        filter.showPlayable = context.view.records.filters.showPlayableRecords;
+        filter.showNonPlayable = context.view.records.filters.showNonPlayableRecords;
+        filter.showNamed = context.view.records.filters.showNamedRecords;
+        filter.showUnnamed = context.view.records.filters.showUnnamedRecords;
+        filter.showDeleted = context.view.records.filters.showDeletedRecords;
+        filter.hiddenPlugins = context.view.records.filters.hiddenPlugins;
+        const auto& result = context.state.query.Update(snapshot, std::move(filter), context.view.records.filters.advancedRecordFilters,
+            context.view.records.filters.advancedRecordFilterRevision, context.state.showUnknown, context.state.globalSearch);
+        context.state.selection.Reconcile(result.eligibleIDs);
 
         const float totalWidth = ImGui::GetContentRegionAvail().x;
         const float minDetailsWidth = 520.0f;
         const float preferredLeftWidth = totalWidth * 0.52f;
         const float maxLeftWidth = (std::max)(220.0f, totalWidth - minDetailsWidth - ImGui::GetStyle().ItemSpacing.x);
         const float leftWidth = (std::clamp)(preferredLeftWidth, 220.0f, maxLeftWidth);
-        DrawTreePane(plugins, cache, dataVersion, context, leftWidth);
+        DrawTreePane(plugins, cache, context, leftWidth);
 
         ImGui::SameLine();
 
-        DrawDetailsPane(plugins, cache, dataVersion, context);
+        DrawDetailsPane(plugins, cache, context);
     }
 }

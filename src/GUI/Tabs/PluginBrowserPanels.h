@@ -1,9 +1,9 @@
 #pragma once
 
-#include "GUI/Tabs/PluginBrowserTab.h"
+#include "GUI/Tabs/PluginBrowserHelpers.h"
 
 namespace ESPExplorerAE::PluginBrowserPanels
 {
-    void DrawTreePane(const std::vector<PluginInfo>& plugins, const FormCache& cache, std::uint64_t dataVersion, PluginBrowserTabContext& context, float leftWidth);
-    void DrawDetailsPane(const std::vector<PluginInfo>& plugins, const FormCache& cache, std::uint64_t dataVersion, PluginBrowserTabContext& context);
+    void DrawTreePane(const std::vector<PluginInfo>& plugins, const CatalogSnapshot& cache, PluginBrowserHelpers::Context& context, float leftWidth);
+    void DrawDetailsPane(const std::vector<PluginInfo>& plugins, const CatalogSnapshot& cache, PluginBrowserHelpers::Context& context);
 }

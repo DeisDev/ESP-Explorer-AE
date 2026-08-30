@@ -1,34 +1,19 @@
 #include "GUI/Tabs/PluginBrowserHelpers.h"
 
-#include "Config/Config.h"
 
-#include "GUI/Widgets/ContextMenu.h"
+
+#include "GUI/Widgets/BrowserWidgets.h"
+#include "Core/RecordActions.h"
 #include "GUI/Widgets/FormatUtils.h"
-#include "GUI/Widgets/FormActions.h"
-#include "GUI/Widgets/SharedUtils.h"
+
 
 #include <algorithm>
-#include <cctype>
-#include <cstdio>
+#include <ranges>
 
 namespace ESPExplorerAE::PluginBrowserHelpers
 {
     namespace
     {
-        std::unordered_map<std::uint32_t, std::string> editorIdCache{};
-
-        std::string_view GetEditorID(std::uint32_t formID)
-        {
-            auto [it, inserted] = editorIdCache.try_emplace(formID);
-            if (inserted) {
-                if (const char* editorID = ContextMenu::TryGetEditorID(formID)) {
-                    it->second = editorID;
-                }
-            }
-
-            return it->second;
-        }
-
         bool IsDataCategory(std::string_view category)
         {
             return category == "KYWD" || category == "FLST" || category == "GLOB" || category == "COBJ";
@@ -42,78 +27,12 @@ namespace ESPExplorerAE::PluginBrowserHelpers
             return it != plugins.end() ? &(*it) : nullptr;
         }
 
-        ContextMenuCallbacks BuildContextCallbacks(PluginBrowserTabContext& context)
-        {
-            ContextMenuCallbacks callbacks{};
-            callbacks.localize = context.localize;
-            callbacks.openItemGrantPopup = context.openItemGrantPopup;
-            callbacks.openGlobalValuePopup = context.openGlobalValuePopup;
-            callbacks.requestActionConfirmation = context.requestActionConfirmation;
-            callbacks.favorites = &context.favoriteForms;
-            callbacks.equipWeaponAmmoCount = context.equipWeaponAmmoCount;
-            return callbacks;
-        }
+
     }
 
-    bool PassesLocalRecordFilters(const FormEntry& entry, const PluginBrowserTabContext& context)
+    std::string CopyLabel(const char* label, std::size_t count, const char* id)
     {
-        if (!context.showPlayableRecords && entry.isPlayable) {
-            return false;
-        }
-        if (!context.showNonPlayableRecords && !entry.isPlayable) {
-            return false;
-        }
-
-        const bool hasName = !entry.name.empty();
-        if (!context.showNamedRecords && hasName) {
-            return false;
-        }
-        if (!context.showUnnamedRecords && !hasName) {
-            return false;
-        }
-
-        if (!context.showDeletedRecords && entry.isDeleted) {
-            return false;
-        }
-
-        if (context.passesAdvancedFilters && !context.passesAdvancedFilters(entry)) {
-            return false;
-        }
-
-        return true;
-    }
-
-    bool MatchesPluginSearch(const FormEntry& entry, std::string_view query, bool caseSensitive)
-    {
-        if (query.empty()) {
-            return true;
-        }
-
-        const std::string formIDText = FormatUtils::FormID(entry.formID);
-
-        if (SharedUtils::ContainsByMode(entry.name, query, caseSensitive) ||
-            SharedUtils::ContainsByMode(entry.category, query, caseSensitive) ||
-            SharedUtils::ContainsByMode(entry.sourcePlugin, query, caseSensitive) ||
-            SharedUtils::ContainsByMode(formIDText, query, caseSensitive)) {
-            return true;
-        }
-
-        const auto editorID = GetEditorID(entry.formID);
-        return !editorID.empty() && SharedUtils::ContainsByMode(editorID, query, caseSensitive);
-    }
-
-    bool IsUnknownCategory(std::string_view category)
-    {
-        if (category.empty()) {
-            return true;
-        }
-
-        return SharedUtils::EqualsCaseInsensitive(category, "unknown") || SharedUtils::EqualsCaseInsensitive(category, "<unknown>");
-    }
-
-    std::string CopyLabel(const char* label, std::size_t count)
-    {
-        return std::string(label) + " (" + std::to_string(count) + ")";
+        return std::string(label) + " (" + std::to_string(count) + ")###" + id;
     }
 
     std::string BuildPluginDisplayName(std::string_view pluginName, const std::vector<PluginInfo>& plugins)
@@ -125,71 +44,71 @@ namespace ESPExplorerAE::PluginBrowserHelpers
         return std::string(pluginName);
     }
 
-    std::string CategoryDisplayName(std::string_view category, const PluginBrowserTabContext& context)
+    std::string CategoryDisplayName(std::string_view category, const Context& context)
     {
         if (category == "WEAP" || category == "Weapon") {
-            return context.localize("Items", "sWeapons", "Weapons");
+            return context.view.records.localize("Items", "sWeapons", "Weapons");
         }
         if (category == "ARMO" || category == "Armor") {
-            return context.localize("Items", "sArmor", "Armor");
+            return context.view.records.localize("Items", "sArmor", "Armor");
         }
         if (category == "AMMO" || category == "Ammo") {
-            return context.localize("General", "sAmmunition", "Ammunition");
+            return context.view.records.localize("General", "sAmmunition", "Ammunition");
         }
         if (category == "ALCH") {
-            return context.localize("General", "sAidChems", "Aid/Chems");
+            return context.view.records.localize("General", "sAidChems", "Aid/Chems");
         }
         if (category == "BOOK") {
-            return context.localize("General", "sBooks", "Books");
+            return context.view.records.localize("General", "sBooks", "Books");
         }
         if (category == "MISC" || category == "Misc") {
-            return context.localize("General", "sMiscellaneous", "Miscellaneous");
+            return context.view.records.localize("General", "sMiscellaneous", "Miscellaneous");
         }
         if (category == "KEYM") {
-            return context.localize("General", "sKeys", "Keys");
+            return context.view.records.localize("General", "sKeys", "Keys");
         }
         if (category == "NOTE") {
-            return context.localize("General", "sHolotapesNotes", "Holotapes/Notes");
+            return context.view.records.localize("General", "sHolotapesNotes", "Holotapes/Notes");
         }
         if (category == "NPC" || category == "NPC_") {
-            return context.localize("NPCs", "sTabName", "NPCs");
+            return context.view.records.localize("NPCs", "sTabName", "NPCs");
         }
         if (category == "LVLN") {
-            return context.localize("General", "sLeveledNPCs", "Leveled NPCs");
+            return context.view.records.localize("General", "sLeveledNPCs", "Leveled NPCs");
         }
         if (category == "ACTI" || category == "Activator") {
-            return context.localize("Objects", "sActivators", "Activators");
+            return context.view.records.localize("Objects", "sActivators", "Activators");
         }
         if (category == "CONT" || category == "Container") {
-            return context.localize("Objects", "sContainers", "Containers");
+            return context.view.records.localize("Objects", "sContainers", "Containers");
         }
         if (category == "STAT" || category == "Static") {
-            return context.localize("General", "sStaticObjects", "Static Objects");
+            return context.view.records.localize("General", "sStaticObjects", "Static Objects");
         }
         if (category == "FURN" || category == "Furniture") {
-            return context.localize("Objects", "sFurniture", "Furniture");
+            return context.view.records.localize("Objects", "sFurniture", "Furniture");
         }
         if (category == "SPEL" || category == "Spell") {
-            return context.localize("Spells", "sSpells", "Spells");
+            return context.view.records.localize("Spells", "sSpells", "Spells");
         }
         if (category == "PERK" || category == "Perk") {
-            return context.localize("Spells", "sPerks", "Perks");
+            return context.view.records.localize("Spells", "sPerks", "Perks");
         }
         if (category == "SNDR") {
-            return context.localize("General", "sSoundDescriptors", "Sound Descriptors");
+            return context.view.records.localize("General", "sSoundDescriptors", "Sound Descriptors");
         }
         if (category == "SOUN") {
-            return context.localize("General", "sSounds", "Sounds");
+            return context.view.records.localize("General", "sSounds", "Sounds");
         }
         return std::string(category);
     }
 
     ImVec4 CategoryColor(std::string_view category)
     {
-        if (ContextMenu::CanGiveItem(category)) {
+        if (SupportsRecordAction(category, ActionKind::Give)) {
             return ImVec4(0.40f, 0.80f, 0.40f, 1.00f);
         }
-        if (ContextMenu::CanSpawn(category)) {
+        if (SupportsRecordAction(category, ActionKind::Spawn)) {
             return ImVec4(0.82f, 0.62f, 0.38f, 1.00f);
         }
         if (category == "CELL" || category == "WRLD" || category == "LCTN" || category == "REGN") {
@@ -204,164 +123,115 @@ namespace ESPExplorerAE::PluginBrowserHelpers
         return ImVec4(0.86f, 0.86f, 0.86f, 1.00f);
     }
 
-    const FormEntry* FindRecordByFormID(const FormCache& cache, std::uint32_t formID, std::uint64_t dataVersion)
+    const FormEntry* FindRecordByFormID(const CatalogSnapshot& cache, std::uint32_t formID)
     {
-        static std::uint64_t indexedVersion{ 0 };
-        static std::unordered_map<std::uint32_t, const FormEntry*> formIDIndex{};
-
-        if (indexedVersion != dataVersion) {
-            formIDIndex.clear();
-            formIDIndex.reserve(cache.allRecords.size());
-            for (const auto& entry : cache.allRecords) {
-                formIDIndex[entry.formID] = &entry;
-            }
-
-            indexedVersion = dataVersion;
-        }
-
-        const auto it = formIDIndex.find(formID);
-        return it != formIDIndex.end() ? it->second : nullptr;
+        return cache.Find(formID);
     }
 
-    void TrackRecentRecord(std::uint32_t formID, PluginBrowserTabContext& context)
+    void TrackRecentRecord(std::uint32_t formID, Context& context)
     {
-        if (formID == 0) {
+        context.state.TrackRecent(formID, context.view.recentLimit);
+    }
+
+    void EnsurePrimarySelectionValid(Context& context)
+    {
+        if (context.state.selection.records.active != 0 && context.state.selection.records.selected.contains(context.state.selection.records.active)) {
             return;
         }
 
-        const std::size_t maxRecentRecords = static_cast<std::size_t>((std::clamp)(Config::Get().recentRecordsLimit, 5, 100));
-
-        context.recentPluginRecordFormIDs.erase(
-            std::remove(context.recentPluginRecordFormIDs.begin(), context.recentPluginRecordFormIDs.end(), formID),
-            context.recentPluginRecordFormIDs.end());
-        context.recentPluginRecordFormIDs.push_front(formID);
-
-        while (context.recentPluginRecordFormIDs.size() > maxRecentRecords) {
-            context.recentPluginRecordFormIDs.pop_back();
-        }
-    }
-
-    void EnsurePrimarySelectionValid(PluginBrowserTabContext& context)
-    {
-        if (context.selectedPluginTreeRecordFormID != 0 && context.selectedPluginTreeRecordFormIDs.contains(context.selectedPluginTreeRecordFormID)) {
+        if (context.state.selection.records.selected.empty()) {
+            context.state.selection.records.active = 0;
             return;
         }
 
-        if (context.selectedPluginTreeRecordFormIDs.empty()) {
-            context.selectedPluginTreeRecordFormID = 0;
-            return;
-        }
-
-        context.selectedPluginTreeRecordFormID = *context.selectedPluginTreeRecordFormIDs.begin();
+        context.state.selection.records.active = *std::ranges::min_element(context.state.selection.records.selected);
     }
 
-    std::vector<FormEntry> CollectSelectedGiveableEntries(const FormCache& cache, std::uint64_t dataVersion, const PluginBrowserTabContext& context)
+    std::vector<RecordIndex> CollectSelectedEntries(const CatalogSnapshot& cache, const Context& context)
     {
-        std::vector<FormEntry> selectedEntries{};
-        selectedEntries.reserve(context.selectedPluginTreeRecordFormIDs.size());
-
-        for (const auto selectedFormID : context.selectedPluginTreeRecordFormIDs) {
-            const auto* selectedEntry = FindRecordByFormID(cache, selectedFormID, dataVersion);
-            if (!selectedEntry || !ContextMenu::CanGiveItem(selectedEntry->category)) {
-                continue;
-            }
-
-            selectedEntries.push_back(*selectedEntry);
+        std::vector<RecordIndex> selected;
+        selected.reserve(context.state.selection.records.selected.size());
+        for (const auto index : context.state.query.Result().records.order) {
+            if (context.state.selection.records.selected.contains(cache.records[index].formID)) selected.push_back(index);
         }
-
-        return selectedEntries;
+        return selected;
     }
 
-    std::vector<FormEntry> CollectSelectedEntries(const FormCache& cache, std::uint64_t dataVersion, const PluginBrowserTabContext& context)
+    std::vector<RecordIndex> CollectSelectedGiveableEntries(const CatalogSnapshot& cache, const Context& context)
     {
-        std::vector<FormEntry> selectedEntries{};
-        selectedEntries.reserve(context.selectedPluginTreeRecordFormIDs.size());
-
-        for (const auto selectedFormID : context.selectedPluginTreeRecordFormIDs) {
-            const auto* selectedEntry = FindRecordByFormID(cache, selectedFormID, dataVersion);
-            if (!selectedEntry) {
-                continue;
-            }
-
-            selectedEntries.push_back(*selectedEntry);
-        }
-
-        return selectedEntries;
+        auto selected = CollectSelectedEntries(cache, context);
+        std::erase_if(selected, [&](RecordIndex index) {
+            const auto& record = cache.records[index];
+            return record.isDeleted || !SupportsRecordAction(record.category, ActionKind::Give);
+        });
+        return selected;
     }
 
-    void EquipRecordWithConfiguredAmmo(const FormEntry& record, int ammoCount)
+    void RequestGrant(std::span<const RecordIndex> records, Context& context)
     {
-        char command[64]{};
-        std::snprintf(command, sizeof(command), "player.equipitem %08X", record.formID);
-        FormActions::ExecuteConsoleCommand(command);
-
-        const bool isWeapon = record.category == "WEAP" || record.category == "Weapon";
-        if (!isWeapon || ammoCount <= 0) {
-            return;
-        }
-
-        const auto ammoFormID = FormActions::GetWeaponAmmoFormID(record.formID);
-        if (ammoFormID != 0) {
-            FormActions::GiveToPlayer(ammoFormID, static_cast<std::uint32_t>(ammoCount));
-        }
+        if (records.empty()) return;
+        BrowserRequests::Grant grant{ context.view.records.session, {} };
+        grant.forms.reserve(records.size());
+        for (const auto index : records) grant.forms.push_back(context.view.records.catalog->records[index].formID);
+        context.requests.records.grants.push_back(std::move(grant));
     }
 
-    void DrawRecordContextMenu(const FormEntry& record, bool isSelected, const FormCache& cache, std::uint64_t dataVersion, PluginBrowserTabContext& context)
+    void DrawRecordContextMenu(const FormEntry& record, bool isSelected, const CatalogSnapshot& cache, Context& context)
     {
-        if (ImGui::MenuItem(isSelected ? context.localize("General", "sDeselect", "Deselect") : context.localize("General", "sSelect", "Select"))) {
+        if (ImGui::MenuItem(isSelected ? context.view.records.localize("General", "sDeselect", "Deselect") : context.view.records.localize("General", "sSelect", "Select"))) {
             if (isSelected) {
-                context.selectedPluginTreeRecordFormIDs.erase(record.formID);
+                context.state.selection.records.selected.erase(record.formID);
             } else {
-                context.selectedPluginTreeRecordFormIDs.insert(record.formID);
-                context.selectedPluginTreeRecordFormID = record.formID;
-                context.pluginTreeLastClickedFormID = record.formID;
+                context.state.selection.records.selected.insert(record.formID);
+                context.state.selection.records.active = record.formID;
             }
             EnsurePrimarySelectionValid(context);
         }
 
         ImGui::Separator();
 
-        const bool isMultiSelectedRecord = isSelected && context.selectedPluginTreeRecordFormIDs.size() > 1;
+        const bool isMultiSelectedRecord = isSelected && context.state.selection.records.selected.size() > 1;
         if (isMultiSelectedRecord) {
-            const auto selectedGiveableEntries = CollectSelectedGiveableEntries(cache, dataVersion, context);
+            const auto selectedGiveableEntries = CollectSelectedGiveableEntries(cache, context);
             if (!selectedGiveableEntries.empty()) {
-                std::string grantLabel = std::string(context.localize("Items", "sGiveItem", "Give Item")) + " (" + std::to_string(selectedGiveableEntries.size()) + ")";
-                if (ImGui::MenuItem(grantLabel.c_str())) {
-                    context.openItemGrantPopupMultiple(selectedGiveableEntries);
+                std::string grantLabel = std::string(context.view.records.localize("Items", "sGiveItem", "Give Item")) + " (" + std::to_string(selectedGiveableEntries.size()) + ")###GiveSelection";
+                if (ImGui::MenuItem(grantLabel.c_str(), nullptr, false, context.view.records.gameplayReady)) {
+                    RequestGrant(selectedGiveableEntries, context);
                 }
             }
 
-            const auto selectedEntries = CollectSelectedEntries(cache, dataVersion, context);
+            const auto selectedIndices = CollectSelectedEntries(cache, context);
+            const auto selectedEntries = selectedIndices | std::views::transform([&](RecordIndex index) -> const FormEntry& { return cache.records[index]; });
             if (!selectedEntries.empty()) {
-                if (ImGui::MenuItem(CopyLabel(context.localize("General", "sCopyFormID", "Copy FormID"), selectedEntries.size()).c_str())) {
+                if (ImGui::MenuItem(CopyLabel(context.view.records.localize("General", "sCopyFormID", "Copy FormID"), selectedEntries.size(), "sCopyFormID").c_str())) {
                     std::vector<std::string> values{};
                     values.reserve(selectedEntries.size());
                     for (const auto& selectedEntry : selectedEntries) {
                         values.push_back(FormatUtils::FormID(selectedEntry.formID));
                     }
-                    const auto text = FormatUtils::MultiCopyList(values, Config::Get().multiCopyFormat);
+                    const auto text = FormatUtils::MultiCopyList(values, context.view.copyFormat);
                     ImGui::SetClipboardText(text.c_str());
                 }
 
-                if (ImGui::MenuItem(CopyLabel(context.localize("General", "sCopyName", "Copy Name"), selectedEntries.size()).c_str())) {
+                if (ImGui::MenuItem(CopyLabel(context.view.records.localize("General", "sCopyName", "Copy Name"), selectedEntries.size(), "sCopyName").c_str())) {
                     std::vector<std::string> values{};
                     values.reserve(selectedEntries.size());
                     for (const auto& selectedEntry : selectedEntries) {
-                        values.push_back(selectedEntry.name.empty() ? context.localize("General", "sUnnamed", "<Unnamed>") : selectedEntry.name);
+                        values.push_back(selectedEntry.name.empty() ? context.view.records.localize("General", "sUnnamed", "<Unnamed>") : selectedEntry.name);
                     }
-                    const auto text = FormatUtils::MultiCopyList(values, Config::Get().multiCopyFormat);
+                    const auto text = FormatUtils::MultiCopyList(values, context.view.copyFormat);
                     ImGui::SetClipboardText(text.c_str());
                 }
 
-                if (ImGui::MenuItem((std::string(context.localize("General", "sAddFavorite", "Add Favorite")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                if (ImGui::MenuItem(CopyLabel(context.view.records.localize("General", "sAddFavorite", "Add Favorite"), selectedEntries.size(), "sAddFavorite").c_str())) {
                     for (const auto& selectedEntry : selectedEntries) {
-                        context.favoriteForms.insert(selectedEntry.formID);
+                        context.view.records.favorites.insert(selectedEntry.formID);
                     }
                 }
 
-                if (ImGui::MenuItem((std::string(context.localize("General", "sRemoveFavorite", "Remove Favorite")) + " (" + std::to_string(selectedEntries.size()) + ")").c_str())) {
+                if (ImGui::MenuItem(CopyLabel(context.view.records.localize("General", "sRemoveFavorite", "Remove Favorite"), selectedEntries.size(), "sRemoveFavorite").c_str())) {
                     for (const auto& selectedEntry : selectedEntries) {
-                        context.favoriteForms.erase(selectedEntry.formID);
+                        context.view.records.favorites.erase(selectedEntry.formID);
                     }
                 }
             }
@@ -369,99 +239,8 @@ namespace ESPExplorerAE::PluginBrowserHelpers
             ImGui::Separator();
         }
 
-        auto callbacks = BuildContextCallbacks(context);
-        callbacks.hideCopyAndFavoriteActions = isMultiSelectedRecord;
-        ContextMenu::Draw(record, callbacks);
+        BrowserWidgets::DrawContext(record, isMultiSelectedRecord ? BrowserWidgets::ContextScope::ActiveInSelection : BrowserWidgets::ContextScope::Single,
+            context.state.contextQuantities, context.view.records, context.requests.records);
     }
 
-    void RebuildCachesIfNeeded(const std::vector<PluginInfo>& plugins, const FormCache& cache, std::uint64_t dataVersion, PluginBrowserTabContext& context)
-    {
-        const bool needsCacheRebuild =
-            context.pluginBrowserCacheVersion != dataVersion ||
-            context.pluginBrowserCacheSearch != context.pluginSearch ||
-            context.pluginBrowserCacheSelectedPlugin != context.selectedPluginFilter ||
-            context.pluginBrowserCacheShowPlayable != context.showPlayableRecords ||
-            context.pluginBrowserCacheShowNonPlayable != context.showNonPlayableRecords ||
-            context.pluginBrowserCacheShowNamed != context.showNamedRecords ||
-            context.pluginBrowserCacheShowUnnamed != context.showUnnamedRecords ||
-            context.pluginBrowserCacheShowDeleted != context.showDeletedRecords ||
-            context.pluginBrowserCacheAdvancedFilterRevision != context.advancedFilterRevision ||
-            context.pluginBrowserCacheShowUnknown != context.showUnknownCategories ||
-            context.pluginBrowserCacheGlobalSearchMode != context.pluginGlobalSearchMode;
-
-        if (!needsCacheRebuild) {
-            return;
-        }
-
-        context.pluginBrowserGroupedRecordsCache.clear();
-        context.pluginBrowserGroupedRecordsCache.reserve(plugins.size());
-        context.pluginBrowserGlobalSearchResultsCache.clear();
-        context.pluginBrowserGlobalSearchResultsCache.reserve(cache.allRecords.size());
-
-        for (const auto& entry : cache.allRecords) {
-            if (!PassesLocalRecordFilters(entry, context)) {
-                continue;
-            }
-
-            if (!context.showUnknownCategories && entry.sourcePlugin.empty()) {
-                continue;
-            }
-
-            if (!context.showUnknownCategories && IsUnknownCategory(entry.category)) {
-                continue;
-            }
-
-            const std::string pluginName = entry.sourcePlugin.empty() ? std::string(context.localize("General", "sUnknown", "<Unknown>")) : entry.sourcePlugin;
-            const bool searchMatches = MatchesPluginSearch(entry, context.pluginSearch, false);
-
-            if (context.pluginGlobalSearchMode && !context.pluginSearch.empty() && searchMatches) {
-                context.pluginBrowserGlobalSearchResultsCache.push_back(&entry);
-            }
-
-            if (!context.pluginGlobalSearchMode && !context.selectedPluginFilter.empty() && pluginName != context.selectedPluginFilter) {
-                continue;
-            }
-
-            if (!context.pluginSearch.empty() && !searchMatches) {
-                continue;
-            }
-
-            context.pluginBrowserGroupedRecordsCache[pluginName][entry.category].push_back(&entry);
-        }
-
-        context.pluginBrowserOrderedPluginsCache.clear();
-        context.pluginBrowserOrderedPluginsCache.reserve(context.pluginBrowserGroupedRecordsCache.size());
-        std::unordered_set<std::string> seenPlugins{};
-        seenPlugins.reserve(context.pluginBrowserGroupedRecordsCache.size());
-
-        for (const auto& plugin : plugins) {
-            if (context.pluginBrowserGroupedRecordsCache.contains(plugin.filename)) {
-                context.pluginBrowserOrderedPluginsCache.push_back(plugin.filename);
-                seenPlugins.insert(plugin.filename);
-            }
-        }
-
-        for (const auto& [pluginName, _] : context.pluginBrowserGroupedRecordsCache) {
-            if (!seenPlugins.contains(pluginName)) {
-                context.pluginBrowserOrderedPluginsCache.push_back(pluginName);
-            }
-        }
-
-        context.pluginBrowserCacheVersion = dataVersion;
-        context.pluginBrowserCacheSearch = context.pluginSearch;
-        context.pluginBrowserCacheSelectedPlugin = context.selectedPluginFilter;
-        context.pluginBrowserCacheShowPlayable = context.showPlayableRecords;
-        context.pluginBrowserCacheShowNonPlayable = context.showNonPlayableRecords;
-        context.pluginBrowserCacheShowNamed = context.showNamedRecords;
-        context.pluginBrowserCacheShowUnnamed = context.showUnnamedRecords;
-        context.pluginBrowserCacheShowDeleted = context.showDeletedRecords;
-        context.pluginBrowserCacheAdvancedFilterRevision = context.advancedFilterRevision;
-        context.pluginBrowserCacheShowUnknown = context.showUnknownCategories;
-        context.pluginBrowserCacheGlobalSearchMode = context.pluginGlobalSearchMode;
-    }
-
-    void ClearCaches()
-    {
-        editorIdCache.clear();
-    }
 }
