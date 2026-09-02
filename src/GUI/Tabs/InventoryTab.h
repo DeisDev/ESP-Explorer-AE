@@ -1,6 +1,11 @@
 #pragma once
 
-#include "Data/DataManager.h"
+#include "Core/CatalogSnapshot.h"
+#include "Core/Actions.h"
+#include "Core/RecordSelection.h"
+#include "Core/RecordDetails.h"
+#include "GUI/BrowserState.h"
+#include <array>
 
 #include <functional>
 
@@ -12,7 +17,7 @@ namespace ESPExplorerAE
         std::string name;
         std::string category;
         std::string sourcePlugin;
-        std::uint32_t count{ 0 };
+        std::uint64_t count{ 0 };
         float weight{ 0.0f };
         std::int32_t value{ 0 };
         bool isEquipped{ false };
@@ -22,31 +27,69 @@ namespace ESPExplorerAE
         std::uint32_t modCount{ 0 };
         std::uint16_t damage{ 0 };
         std::uint16_t armorRating{ 0 };
-        std::uint32_t stackID{ 0 };
+        std::uint64_t groupID{};
+        std::string editorID;
+        std::shared_ptr<const InventorySnapshot> source;
+        std::vector<InventoryIndex> stacks;
+        InventoryIndex representative{};
     };
 
-    struct InventoryTabContext
-    {
-        using LocalizeFn = std::function<const char*(std::string_view, std::string_view, const char*)>;
+    enum class InventoryCategoryTab { All, Weapons, Armor, Ammo, Aid, Misc, Keys, Notes, Components, Junk };
 
-        LocalizeFn localize;
-        bool& playerGodModeEnabled;
-        bool& playerNoClipEnabled;
-        int& playerCurrentWeaponAmmoAmount;
-        int& playerAllAmmoAmount;
-        int& playerPerkPointsAmount;
-        int& playerLevelAmount;
-        float& playerTimeOfDay;
-        const FormCache& cache;
-        bool* searchFocusPending{ nullptr };
-        std::function<void(const FormEntry&)> openItemGrantPopup;
-        std::function<void(std::uint32_t)> inspectFormInPluginBrowser;
+    struct InventoryQuickState
+    {
+        int currentAmmo{ 200 };
+        int allAmmo{ 100 };
+        int perkPoints{ 1 };
+        int level{ 1 };
+        float gameHour{ 12.0f };
+    };
+
+    struct InventoryTabState
+    {
+        std::shared_ptr<const InventorySnapshot> snapshot;
+        std::uint64_t catalogGeneration{};
+        std::vector<InventoryEntry> cachedInventory;
+        std::array<char, 256> inventorySearchBuffer{};
+        std::string inventorySearch;
+        InventoryCategoryTab activeCategory{ InventoryCategoryTab::All };
+        bool showEquippedOnly{};
+        bool focusPending{};
+        InventoryQuickState quick;
+        bool selectionChanged{};
+        OrderedSelection<std::uint64_t> selection;
+        std::unordered_map<std::uint64_t, std::uint64_t> instanceChoices;
+        std::unordered_map<std::uint64_t, int> desiredCounts;
+        ActionAdmission admission{ ActionAdmission::Accepted };
+        InventoryRejection rejection{ InventoryRejection::None };
+    };
+
+    struct InventoryTabView
+    {
+        std::function<const char*(std::string_view, std::string_view, const char*)> localize;
+        std::shared_ptr<const CatalogSnapshot> catalog;
+        std::shared_ptr<const InventorySnapshot> inventory;
+        std::shared_ptr<const RecordDetails> details;
+        std::uint64_t session{};
+        bool gameplayReady{};
+        bool godMode{};
+        bool advancedDetails{};
+    };
+
+    struct InventoryTabRequests
+    {
+        struct Confirmation { std::string title; std::string message; std::vector<ActionRequest> actions; };
+        BrowserRequests records;
+        std::vector<Confirmation> confirmations;
+        std::optional<std::uint32_t> inspect;
+        std::optional<DetailKey> details;
+        bool refresh{};
     };
 
     class InventoryTab
     {
     public:
-        static void Draw(InventoryTabContext& context);
-        static void ResetState();
+        static void Draw(InventoryTabState& state, const InventoryTabView& view, InventoryTabRequests& requests);
+        static void ResetState(InventoryTabState& state);
     };
 }
