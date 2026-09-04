@@ -6,21 +6,16 @@ namespace ESPExplorerAE::ModalUtils
 {
     namespace
     {
-        struct AspectRatioConstraint
-        {
-            float ratio;
-        };
-
         void KeepAspectRatio(ImGuiSizeCallbackData* data)
         {
-            const auto* ratioData = static_cast<const AspectRatioConstraint*>(data->UserData);
-            if (!ratioData || ratioData->ratio <= 0.0f) {
+            const auto* ratioData = static_cast<const float*>(data->UserData);
+            if (!ratioData || *ratioData <= 0.0f) {
                 return;
             }
 
             ImVec2 desired = data->DesiredSize;
-            const float widthFromHeight = desired.y * ratioData->ratio;
-            const float heightFromWidth = desired.x / ratioData->ratio;
+            const float widthFromHeight = desired.y * *ratioData;
+            const float heightFromWidth = desired.x / *ratioData;
 
             if (std::fabs(widthFromHeight - desired.x) < std::fabs(heightFromWidth - desired.y)) {
                 desired.x = widthFromHeight;
@@ -32,7 +27,7 @@ namespace ESPExplorerAE::ModalUtils
         }
     }
 
-    void SetNextPopupWindowSizing(const ImVec2& initialSize, const ImVec2& minSize, const ImVec2& maxSize, bool keepAspectRatio)
+    PopupSizing::PopupSizing(const ImVec2& initialSize, const ImVec2& minSize, const ImVec2& maxSize, bool keepAspectRatio)
     {
         ImGui::SetNextWindowSize(initialSize, ImGuiCond_Appearing);
         if (!keepAspectRatio || initialSize.x <= 0.0f || initialSize.y <= 0.0f) {
@@ -40,7 +35,7 @@ namespace ESPExplorerAE::ModalUtils
             return;
         }
 
-        AspectRatioConstraint ratioConstraint{ initialSize.x / initialSize.y };
-        ImGui::SetNextWindowSizeConstraints(minSize, maxSize, KeepAspectRatio, &ratioConstraint);
+        ratio = initialSize.x / initialSize.y;
+        ImGui::SetNextWindowSizeConstraints(minSize, maxSize, KeepAspectRatio, &ratio);
     }
 }

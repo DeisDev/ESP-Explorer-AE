@@ -1,364 +1,293 @@
 #include "GUI/Widgets/MainWindowPopups.h"
 
-#include "Config/Config.h"
-#include "GUI/Widgets/FormActions.h"
+#include "GUI/Widgets/ActionFeedback.h"
 #include "GUI/Widgets/ImGuiWidgetUtils.h"
 #include "GUI/Widgets/ModalUtils.h"
-#include "Localization/Language.h"
 
 #include <imgui.h>
 
 #include <algorithm>
-#include <cstdio>
+#include <cmath>
 #include <utility>
 
-#include <RE/T/TESForm.h>
-
-namespace ESPExplorerAE::MainWindowPopups
+namespace ESPExplorerAE
 {
     namespace
     {
-        struct ConfirmActionState
+        const char* ResolveString(const MainWindowPopups::LocalizeFn& localize,
+            std::string_view section, std::string_view key, const char* fallback)
         {
-            bool openRequested{ false };
-            bool visible{ false };
-            std::string title{};
-            std::string message{};
-            std::function<void()> callback{};
-        };
-
-        struct GlobalValuePopupState
-        {
-            bool openRequested{ false };
-            bool visible{ false };
-            std::uint32_t formID{ 0 };
-            std::string editorID{};
-            float value{ 0.0f };
-        };
-
-        struct HelpOverlayState
-        {
-            bool openRequested{ false };
-            bool visible{ false };
-            bool persistDismissal{ false };
-        };
-
-        ConfirmActionState confirmAction{};
-        GlobalValuePopupState globalValuePopup{};
-        HelpOverlayState helpOverlay{};
-
-        const char* ResolveString(const LocalizeFn& localize, std::string_view section, std::string_view key, const char* fallback)
-        {
-            if (localize) {
-                return localize(section, key, fallback);
-            }
-
-            const auto value = Language::Get(section, key);
-            return value.empty() ? fallback : value.data();
+            return localize ? localize(section, key, fallback) : fallback;
         }
 
-        std::string KeyNameFromVK(std::uint32_t vk)
+        void ClosePopup(const char* id)
         {
-            const auto scanCode = MapVirtualKeyA(vk, MAPVK_VK_TO_VSC);
-            const LONG keyData = static_cast<LONG>(static_cast<LPARAM>(scanCode) << 16);
-
-            char keyName[128]{};
-            if (GetKeyNameTextA(keyData, keyName, static_cast<int>(std::size(keyName))) > 0) {
-                return std::string(keyName);
-            }
-
-            return std::to_string(vk);
-        }
-
-        void DismissHelpOverlay()
-        {
-            if (helpOverlay.persistDismissal) {
-                auto& settings = Config::GetMutable();
-                if (!settings.firstRunHelpDismissed) {
-                    settings.firstRunHelpDismissed = true;
-                    Config::RequestSave();
-                }
-            }
-
-            helpOverlay.visible = false;
-            helpOverlay.persistDismissal = false;
-            REX::DEBUG("{}", "Help overlay dismissed");
-        }
-
-        void RenderConfirmActionPopup(const LocalizeFn& localize)
-        {
-            if (confirmAction.openRequested) {
-                ImGui::OpenPopup("##ConfirmActionPopup");
-                confirmAction.openRequested = false;
-            }
-
-            const float popupScale = (std::clamp)(Config::Get().fontSize / 20.0f, 0.75f, 1.5f);
-            const ImVec2 initialSize(460.0f * popupScale, 180.0f * popupScale);
-            ModalUtils::SetNextPopupWindowSizing(
-                initialSize,
-                ImVec2(initialSize.x * 0.8f, initialSize.y * 0.8f),
-                ImVec2(initialSize.x * 1.8f, initialSize.y * 1.8f));
-            if (!ImGui::BeginPopupModal("##ConfirmActionPopup", &confirmAction.visible)) {
-                return;
-            }
-
-            if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-                confirmAction.callback = {};
-                confirmAction.visible = false;
+            if (ImGui::BeginPopupModal(id)) {
                 ImGui::CloseCurrentPopup();
                 ImGui::EndPopup();
-                return;
             }
-
-            ImGui::TextUnformatted(confirmAction.title.empty() ? ResolveString(localize, "General", "sConfirm", "") : confirmAction.title.c_str());
-            ImGui::Separator();
-            ImGui::TextWrapped("%s", confirmAction.message.c_str());
-            ImGui::Spacing();
-
-            if (ImGui::IsWindowAppearing()) {
-                ImGui::SetKeyboardFocusHere();
-            }
-            if (ImGui::Button(ResolveString(localize, "General", "sConfirm", "Confirm"), ImVec2(110.0f, 0.0f))) {
-                if (confirmAction.callback) {
-                    confirmAction.callback();
-                }
-                confirmAction.callback = {};
-                confirmAction.visible = false;
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button(ResolveString(localize, "General", "sCancel", "Cancel"), ImVec2(110.0f, 0.0f))) {
-                confirmAction.callback = {};
-                confirmAction.visible = false;
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::EndPopup();
-        }
-
-        void RenderGlobalValuePopup(const LocalizeFn& localize)
-        {
-            if (globalValuePopup.openRequested) {
-                ImGui::OpenPopup("##SetGlobalValuePopup");
-                globalValuePopup.openRequested = false;
-            }
-
-            const float popupScale = (std::clamp)(Config::Get().fontSize / 20.0f, 0.75f, 1.5f);
-            const ImVec2 initialSize(430.0f * popupScale, 180.0f * popupScale);
-            ModalUtils::SetNextPopupWindowSizing(
-                initialSize,
-                ImVec2(initialSize.x * 0.8f, initialSize.y * 0.8f),
-                ImVec2(initialSize.x * 1.8f, initialSize.y * 1.8f));
-            if (!ImGui::BeginPopupModal("##SetGlobalValuePopup", &globalValuePopup.visible)) {
-                return;
-            }
-
-            if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-                globalValuePopup.visible = false;
-                ImGui::CloseCurrentPopup();
-                ImGui::EndPopup();
-                return;
-            }
-
-            ImGui::TextUnformatted(ResolveString(localize, "General", "sSetGlobal", "Set Global"));
-            ImGui::Separator();
-            ImGui::Text("%s: %s", ResolveString(localize, "General", "sEditorID", "EditorID"), globalValuePopup.editorID.c_str());
-            ImGui::SetNextItemWidth(-1.0f);
-            ImGui::InputFloat(ResolveString(localize, "General", "sValue", "Value"), &globalValuePopup.value, 1.0f, 10.0f, "%.3f");
-            ImGui::Spacing();
-
-            if (ImGui::IsWindowAppearing()) {
-                ImGui::SetKeyboardFocusHere();
-            }
-            const bool gameplayActionsAllowed = FormActions::AreGameplayActionsAllowed();
-            if (!gameplayActionsAllowed) {
-                ImGui::BeginDisabled(true);
-            }
-            if (ImGui::Button(ResolveString(localize, "General", "sApply", "Apply"), ImVec2(100.0f, 0.0f))) {
-                char command[256]{};
-                std::snprintf(command, sizeof(command), "set %s to %.3f", globalValuePopup.editorID.c_str(), globalValuePopup.value);
-                FormActions::ExecuteConsoleCommand(command);
-                globalValuePopup.visible = false;
-                ImGui::CloseCurrentPopup();
-            }
-            if (!gameplayActionsAllowed && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                ImGui::SetTooltip("%s", ResolveString(localize, "General", "sGameplayActionsDisabledInMainMenu", "Gameplay actions are disabled while the main menu is open."));
-            }
-            if (!gameplayActionsAllowed) {
-                ImGui::EndDisabled();
-            }
-
-            ImGui::SameLine();
-            if (ImGui::Button(ResolveString(localize, "General", "sCancel", "Cancel"), ImVec2(100.0f, 0.0f))) {
-                globalValuePopup.visible = false;
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::EndPopup();
-        }
-
-        void RenderHelpOverlay(const LocalizeFn& localize)
-        {
-            if (helpOverlay.openRequested) {
-                ImGui::OpenPopup("##HelpOverlayPopup");
-                helpOverlay.openRequested = false;
-            }
-
-            const float popupScale = (std::clamp)(Config::Get().fontSize / 20.0f, 0.75f, 1.5f);
-            const ImGuiViewport* viewport = ImGui::GetMainViewport();
-            const float maxWidth = (std::max)(420.0f, viewport->WorkSize.x - 48.0f);
-            const float maxHeight = (std::max)(320.0f, viewport->WorkSize.y - 48.0f);
-            const ImVec2 initialSize(
-                (std::min)(720.0f * popupScale, maxWidth),
-                (std::min)(640.0f * popupScale, maxHeight));
-            ModalUtils::SetNextPopupWindowSizing(
-                initialSize,
-                ImVec2(initialSize.x, initialSize.y),
-                ImVec2(initialSize.x, initialSize.y));
-            if (!ImGui::BeginPopupModal("##HelpOverlayPopup", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar)) {
-                return;
-            }
-
-            const auto toggleKeyName = KeyNameFromVK(Config::Get().toggleKey);
-            const auto toggleHelp = ResolveString(localize, "Settings", "sToggleKey", "Toggle Key");
-            const auto helpTitle = ResolveString(localize, "General", "sHelpOverlayTitle", "Getting Started");
-            const auto closeLabel = ResolveString(localize, "General", "sCloseHelpOverlay", "Start Exploring");
-            ImGui::TextUnformatted(helpTitle);
-            ImGui::Separator();
-
-            const float buttonHeight = ImGui::GetFrameHeightWithSpacing();
-            const float contentHeight = (std::max)(120.0f, ImGui::GetContentRegionAvail().y - buttonHeight - ImGui::GetStyle().ItemSpacing.y * 2.0f);
-            if (ImGui::BeginChild("##HelpOverlayContent", ImVec2(0.0f, contentHeight), false, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
-                ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x);
-                ImGui::TextDisabled("%s", ResolveString(localize, "General", "sHelpOverlayHotkeys", "Hotkeys"));
-                ImGuiWidgetUtils::DrawWrappedBullet(std::string(toggleHelp) + ": " + toggleKeyName);
-                ImGuiWidgetUtils::DrawWrappedBullet(std::string("Ctrl+Z: ") + ResolveString(localize, "General", "sUndoLastAction", "Undo Last Action"));
-                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayHotkeysBody", "Use the configured toggle key to open or close the menu at any time."));
-
-                ImGui::Spacing();
-                ImGui::TextDisabled("%s", ResolveString(localize, "General", "sHelpOverlayFilters", "Filters"));
-                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayFiltersBody", "Plugin filters narrow the left tree, while record filters hide or include playable, unnamed, deleted, and unknown records."));
-                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlaySearchBody", "Global Search scans every loaded record. Turn it off when you want to stay inside the active plugin filter."));
-                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayRuntimeRecordsBody", "ESP Explorer AE reads records after Fallout 4 has loaded and resolved them at runtime. Some values may differ from raw plugin data in xEdit."));
-
-                ImGui::Spacing();
-                ImGui::TextDisabled("%s", ResolveString(localize, "General", "sHelpOverlayFavorites", "Favorites And Recent"));
-                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayFavoritesBody", "Add favorites from record actions or context menus to pin important forms across sessions."));
-                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayRecentBody", "Recent Records tracks what you inspect most often, making it easy to jump back without searching again."));
-
-                ImGui::Spacing();
-                ImGui::TextDisabled("%s", ResolveString(localize, "General", "sHelpOverlayAdvancedFilters", "Advanced Filters"));
-                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayAdvancedFiltersBody", "Advanced Record Filters let you define keyword-based rules to block or allow specific records globally. Access them from the filter toolbar or Settings."));
-                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayAdvancedFiltersExampleBody", "For example, you can hide all records containing 'SS2_Tag_' to declutter Sim Settlements content from your results."));
-
-                ImGui::Spacing();
-                ImGui::TextDisabled("%s", ResolveString(localize, "General", "sHelpOverlayInventory", "Inventory Tab"));
-                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayInventoryBody", "The Inventory tab shows your current player inventory grouped by category. You can inspect, drop, or favorite items directly from it."));
-                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayInventoryComponentBody", "Components are automatically substituted to their usable scrap form when given, so they work for crafting. This can be toggled in Settings > Gameplay."));
-
-                ImGui::Spacing();
-                ImGui::TextDisabled("%s", ResolveString(localize, "General", "sHelpOverlaySafeActions", "Safe Actions"));
-                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlaySafeActionsBody", "Viewing details, copying IDs, and filtering are safe. Give, spawn, and teleport actions are explicit and important actions ask for confirmation."));
-                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayMainMenuActionsBody", "Gameplay actions stay disabled in the main menu by default for stability. Only enable them if you understand the risks and want that behavior."));
-                ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(localize, "General", "sHelpOverlayHistoryBody", "The Action History panel in the status bar shows recent give, spawn, and teleport actions, with one-click undo when the action can be reversed."));
-                ImGui::PopTextWrapPos();
-            }
-            ImGui::EndChild();
-
-            ImGui::Spacing();
-            if (ImGui::Button(closeLabel, ImVec2(ImGui::GetContentRegionAvail().x, 0.0f))) {
-                DismissHelpOverlay();
-                ImGui::CloseCurrentPopup();
-            }
-
-            ImGui::EndPopup();
         }
     }
 
-    void RequestActionConfirmation(std::string title, std::string message, std::function<void()> callback)
+    void MainWindowPopups::RequestActionConfirmation(std::string title, std::string message,
+        std::vector<ActionRequest> actions, Origin origin)
     {
-        REX::DEBUG("{}", "Queued confirmation popup: " + title);
-        confirmAction.title = std::move(title);
-        confirmAction.message = std::move(message);
-        confirmAction.callback = std::move(callback);
-        confirmAction.openRequested = true;
-        confirmAction.visible = true;
+        if (actions.empty()) return;
+        confirmations.push_back({ std::move(title), std::move(message),
+            { ++nextRevision, origin, std::move(actions) } });
     }
 
-    void OpenGlobalValuePopup(std::uint32_t formID)
+    void MainWindowPopups::OpenGlobalValuePopup(std::uint32_t formID, std::string editorID, std::uint64_t session)
     {
-        if (!FormActions::AreGameplayActionsAllowed()) {
-            REX::DEBUG("{}", "Blocked Set Global popup because gameplay actions are disabled");
-            return;
-        }
-
-        auto* form = RE::TESForm::GetFormByID(formID);
-        if (!form) {
-            REX::WARN("{}", "Set Global popup requested for missing form");
-            return;
-        }
-
-        const auto* editorID = form->GetFormEditorID();
-        if (!editorID || editorID[0] == '\0') {
-            REX::WARN("{}", "Set Global popup requested for form without editor ID");
-            return;
-        }
-
-        globalValuePopup.formID = formID;
-        globalValuePopup.editorID = editorID;
-        globalValuePopup.value = 0.0f;
-        globalValuePopup.openRequested = true;
-        globalValuePopup.visible = true;
-        REX::DEBUG("{}", "Opened Set Global popup for editor ID " + globalValuePopup.editorID);
+        globalValuePopup = { .formID = formID, .editorID = std::move(editorID), .session = session,
+            .revision = ++nextRevision, .openRequested = true, .visible = true };
+        closeGlobalRequested = false;
     }
 
-    void OpenHelpOverlay()
+    void MainWindowPopups::CloseConfirmation()
     {
-        helpOverlay.persistDismissal = true;
-        helpOverlay.openRequested = true;
-        helpOverlay.visible = true;
-        REX::DEBUG("{}", "Help overlay requested manually");
+        if (!confirmations.empty()) confirmations.pop_front();
+        closeConfirmationRequested = true;
     }
 
-    void OpenFirstRunHelpOverlay()
+    void MainWindowPopups::CloseGlobal()
     {
-        if (helpOverlay.visible || helpOverlay.openRequested || Config::Get().firstRunHelpDismissed) {
-            return;
-        }
-
-        helpOverlay.persistDismissal = true;
-        helpOverlay.openRequested = true;
-        helpOverlay.visible = true;
-        REX::DEBUG("{}", "Help overlay requested for first run");
+        globalValuePopup = {};
+        closeGlobalRequested = true;
     }
 
-    void HandleMenuVisibilityChanged(bool visible)
+    void MainWindowPopups::ResolveSubmit(std::uint64_t revision, ActionAdmission admission)
+    {
+        if (!confirmations.empty() && confirmations.front().pending && confirmations.front().submission.revision == revision) {
+            auto& current = confirmations.front();
+            current.pending = false;
+            current.admission = admission;
+            if (admission == ActionAdmission::Accepted) CloseConfirmation();
+        } else if (globalValuePopup.pending && globalValuePopup.revision == revision) {
+            globalValuePopup.pending = false;
+            globalValuePopup.admission = admission;
+            if (admission == ActionAdmission::Accepted) CloseGlobal();
+        }
+    }
+
+    void MainWindowPopups::OpenHelpOverlay()
+    {
+        helpOverlay = { true, true };
+    }
+
+    void MainWindowPopups::OpenFirstRunHelpOverlay(bool dismissed)
+    {
+        if (!dismissed && !helpOverlay.visible && !helpOverlay.openRequested) OpenHelpOverlay();
+    }
+
+    void MainWindowPopups::HandleMenuVisibilityChanged(bool visible)
     {
         if (!visible) {
-            if (confirmAction.visible) {
-                confirmAction.visible = false;
-                confirmAction.openRequested = false;
-                confirmAction.callback = {};
-                REX::DEBUG("{}", "Closed confirm action popup on menu hide");
-            }
-            if (globalValuePopup.visible) {
-                globalValuePopup.visible = false;
-                globalValuePopup.openRequested = false;
-                REX::DEBUG("{}", "Closed global value popup on menu hide");
-            }
+            confirmations.clear();
+            closeConfirmationRequested = true;
+            CloseGlobal();
         }
-
-        if (helpOverlay.visible) {
-            helpOverlay.openRequested = true;
-            REX::DEBUG("{}", "Reopening help overlay after menu visibility change");
-        }
+        if (helpOverlay.visible) helpOverlay.openRequested = true;
     }
 
-    void Draw(const LocalizeFn& localize)
+    void MainWindowPopups::Draw(const View& view, Requests& requests)
     {
-        RenderConfirmActionPopup(localize);
-        RenderGlobalValuePopup(localize);
-        RenderHelpOverlay(localize);
+        const auto stale = [&](const Confirmation& confirmation) {
+            return std::ranges::any_of(confirmation.submission.actions, [&](const ActionRequest& request) {
+                return !request.session || request.session != view.session;
+            });
+        };
+        if (!confirmations.empty() && stale(confirmations.front())) closeConfirmationRequested = true;
+        std::erase_if(confirmations, stale);
+        if (globalValuePopup.visible && globalValuePopup.session != view.session) CloseGlobal();
+
+        if (closeConfirmationRequested) {
+            ClosePopup("##ConfirmActionPopup");
+            closeConfirmationRequested = false;
+        } else RenderConfirmActionPopup(view, requests);
+        if (closeGlobalRequested) {
+            ClosePopup("##SetGlobalValuePopup");
+            closeGlobalRequested = false;
+        } else RenderGlobalValuePopup(view, requests);
+        RenderHelpOverlay(view, requests);
+    }
+
+    void MainWindowPopups::RenderConfirmActionPopup(const View& view, Requests& requests)
+    {
+        if (confirmations.empty()) return;
+        auto& current = confirmations.front();
+        if (current.openRequested) {
+            ImGui::OpenPopup("##ConfirmActionPopup");
+            current.openRequested = false;
+        }
+        const float popupScale = (std::clamp)(view.fontSize / 20.0f, 0.75f, 1.5f);
+        const ImVec2 initialSize(460.0f * popupScale, 180.0f * popupScale);
+        const ModalUtils::PopupSizing popupSizing(initialSize,
+            ImVec2(initialSize.x * 0.8f, initialSize.y * 0.8f),
+            ImVec2(initialSize.x * 1.8f, initialSize.y * 1.8f));
+        if (!ImGui::BeginPopupModal("##ConfirmActionPopup", &current.visible)) {
+            if (!current.visible) CloseConfirmation();
+            return;
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            CloseConfirmation();
+            ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+            return;
+        }
+        const auto L = [&](auto section, auto key, auto fallback) { return ResolveString(view.localize, section, key, fallback); };
+        ImGui::TextUnformatted(current.title.empty() ? L("General", "sConfirm", "Confirm") : current.title.c_str());
+        ImGui::Separator();
+        ImGui::TextWrapped("%s", current.message.c_str());
+        ImGui::Spacing();
+        ActionFeedback::Draw(current.admission, L);
+        if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+        const bool canApply = view.gameplayReady && !current.pending;
+        ImGui::BeginDisabled(!canApply);
+        const bool apply = ImGui::Button(L("General", "sConfirm", "Confirm"), ImVec2(110.0f, 0.0f));
+        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(view.gameplayReady,
+            L("General", "sGameplayActionsDisabledInMainMenu", "Gameplay actions are disabled while the main menu is open."));
+        ImGui::EndDisabled();
+        if (apply && canApply) {
+            current.submission.revision = ++nextRevision;
+            requests.submissions.push_back(current.submission);
+            current.pending = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(L("General", "sCancel", "Cancel"), ImVec2(110.0f, 0.0f))) {
+            CloseConfirmation();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    void MainWindowPopups::RenderGlobalValuePopup(const View& view, Requests& requests)
+    {
+        if (!globalValuePopup.visible && !globalValuePopup.openRequested) return;
+        if (globalValuePopup.openRequested) {
+            ImGui::OpenPopup("##SetGlobalValuePopup");
+            globalValuePopup.openRequested = false;
+        }
+        const float popupScale = (std::clamp)(view.fontSize / 20.0f, 0.75f, 1.5f);
+        const ImVec2 initialSize(430.0f * popupScale, 180.0f * popupScale);
+        const ModalUtils::PopupSizing popupSizing(initialSize,
+            ImVec2(initialSize.x * 0.8f, initialSize.y * 0.8f),
+            ImVec2(initialSize.x * 1.8f, initialSize.y * 1.8f));
+        if (!ImGui::BeginPopupModal("##SetGlobalValuePopup", &globalValuePopup.visible)) {
+            if (!globalValuePopup.visible) CloseGlobal();
+            return;
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            CloseGlobal();
+            ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+            return;
+        }
+        const auto L = [&](auto section, auto key, auto fallback) { return ResolveString(view.localize, section, key, fallback); };
+        ImGui::TextUnformatted(L("General", "sSetGlobal", "Set Global"));
+        ImGui::Separator();
+        ImGui::Text("%s: %s", L("General", "sEditorID", "EditorID"), globalValuePopup.editorID.c_str());
+        ImGui::SetNextItemWidth(-1.0f);
+        ImGui::InputFloat(L("General", "sValue", "Value"), &globalValuePopup.value, 1.0f, 10.0f, "%.3f");
+        ImGui::Spacing();
+        if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+        ActionFeedback::Draw(globalValuePopup.admission, L);
+        const bool canApply = view.gameplayReady && std::isfinite(globalValuePopup.value) && !globalValuePopup.pending;
+        ImGui::BeginDisabled(!canApply);
+        const bool apply = ImGui::Button(L("General", "sApply", "Apply"), ImVec2(100.0f, 0.0f));
+        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(view.gameplayReady,
+            L("General", "sGameplayActionsDisabledInMainMenu", "Gameplay actions are disabled while the main menu is open."));
+        ImGui::EndDisabled();
+        if (apply && canApply) {
+            requests.submissions.push_back({ globalValuePopup.revision = ++nextRevision, Origin::Global,
+                { { .kind = ActionKind::SetGlobal, .formID = globalValuePopup.formID,
+                    .session = globalValuePopup.session, .value = globalValuePopup.value } } });
+            globalValuePopup.pending = true;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(L("General", "sCancel", "Cancel"), ImVec2(100.0f, 0.0f))) {
+            CloseGlobal();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    void MainWindowPopups::RenderHelpOverlay(const View& view, Requests& requests)
+    {
+        if (!helpOverlay.visible && !helpOverlay.openRequested) return;
+        if (helpOverlay.openRequested) {
+            ImGui::OpenPopup("##HelpOverlayPopup");
+            helpOverlay.openRequested = false;
+        }
+
+        const float popupScale = (std::clamp)(view.fontSize / 20.0f, 0.75f, 1.5f);
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        const float maxWidth = (std::max)(420.0f, viewport->WorkSize.x - 48.0f);
+        const float maxHeight = (std::max)(320.0f, viewport->WorkSize.y - 48.0f);
+        const ImVec2 initialSize(
+            (std::min)(720.0f * popupScale, maxWidth),
+            (std::min)(640.0f * popupScale, maxHeight));
+        const ModalUtils::PopupSizing popupSizing(
+            initialSize,
+            ImVec2(initialSize.x, initialSize.y),
+            ImVec2(initialSize.x, initialSize.y));
+        if (!ImGui::BeginPopupModal("##HelpOverlayPopup", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar)) {
+            return;
+        }
+
+        const auto toggleKeyName = view.toggleKeyName;
+        const auto toggleHelp = ResolveString(view.localize, "Settings", "sToggleKey", "Toggle Key");
+        const auto helpTitle = ResolveString(view.localize, "General", "sHelpOverlayTitle", "Getting Started");
+        const auto closeLabel = ResolveString(view.localize, "General", "sCloseHelpOverlay", "Start Exploring");
+        ImGui::TextUnformatted(helpTitle);
+        ImGui::Separator();
+
+        const float buttonHeight = ImGui::GetFrameHeightWithSpacing();
+        const float contentHeight = (std::max)(120.0f, ImGui::GetContentRegionAvail().y - buttonHeight - ImGui::GetStyle().ItemSpacing.y * 2.0f);
+        if (ImGui::BeginChild("##HelpOverlayContent", ImVec2(0.0f, contentHeight), false, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x);
+            ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlayHotkeys", "Hotkeys"));
+            ImGuiWidgetUtils::DrawWrappedBullet(std::string(toggleHelp) + ": " + toggleKeyName);
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayFocusSearch", "Ctrl+F: Focus the active search field"));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayHotkeysBody", "Use the configured toggle key to open or close the menu at any time."));
+
+            ImGui::Spacing();
+            ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlayFilters", "Filters"));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayFiltersBody", "Plugin filters narrow the left tree, while record filters hide or include playable, unnamed, deleted, and unknown records."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlaySearchBody", "Global Search scans every loaded record. Turn it off when you want to stay inside the active plugin filter."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayRuntimeRecordsBody", "ESP Explorer AE reads records after Fallout 4 has loaded and resolved them at runtime. Some values may differ from raw plugin data in xEdit."));
+
+            ImGui::Spacing();
+            ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlayFavorites", "Favorites And Recent"));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayFavoritesBody", "Add favorites from record actions or context menus to pin important forms across sessions."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayRecentBody", "Recent Records tracks what you inspect most often, making it easy to jump back without searching again."));
+
+            ImGui::Spacing();
+            ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlayAdvancedFilters", "Advanced Filters"));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayAdvancedFiltersBody", "Advanced Record Filters let you define keyword-based rules to block or allow specific records globally. Access them from the filter toolbar or Settings."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayAdvancedFiltersExampleBody", "For example, you can hide all records containing 'SS2_Tag_' to declutter Sim Settlements content from your results."));
+
+            ImGui::Spacing();
+            ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlayInventory", "Inventory Tab"));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayInventoryBody", "The Inventory tab shows your current player inventory grouped by category. You can inspect, drop, or favorite items directly from it."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayInventoryComponentBody", "Components are automatically substituted to their usable scrap form when given, so they work for crafting. This can be toggled in Settings > Gameplay."));
+
+            ImGui::Spacing();
+            ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlaySafeActions", "Safe Actions"));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlaySafeActionsBody", "Viewing details, copying IDs, and filtering are safe. Give, spawn, and teleport actions are explicit and important actions ask for confirmation."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayMainMenuActionsBody", "Gameplay actions stay disabled in the main menu by default for stability. Only enable them if you understand the risks and want that behavior."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayHistoryBody", "Action History shows recent requests and their observed results. Automatic undo is unavailable."));
+            ImGui::PopTextWrapPos();
+        }
+        ImGui::EndChild();
+
+        ImGui::Spacing();
+        if (ImGui::Button(closeLabel, ImVec2(ImGui::GetContentRegionAvail().x, 0.0f))) {
+            requests.helpDismissed = true;
+            helpOverlay = {};
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
     }
 }

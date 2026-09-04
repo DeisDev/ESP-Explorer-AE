@@ -1,11 +1,9 @@
 #include "GUI/Widgets/ItemGrantPopup.h"
 
-#include "Config/Config.h"
 #include "GUI/Widgets/FormatUtils.h"
-#include "GUI/Widgets/FormActions.h"
+#include "GUI/Widgets/ActionFeedback.h"
 #include "GUI/Widgets/ImGuiWidgetUtils.h"
 #include "GUI/Widgets/ModalUtils.h"
-#include "Localization/Language.h"
 
 #include <imgui.h>
 
@@ -15,28 +13,25 @@
 
 namespace ESPExplorerAE
 {
-    ItemGrantPopup::State& ItemGrantPopup::GetState()
+    void ItemGrantPopup::Open(const FormEntry& entry, std::uint64_t session)
     {
-        static State state{};
-        return state;
-    }
-
-    void ItemGrantPopup::Open(const FormEntry& entry)
-    {
-        Open(std::vector<FormEntry>{ entry });
+        Open(std::vector<FormEntry>{ entry }, session);
     }
 
     void ItemGrantPopup::Close()
     {
-        auto& state = GetState();
-        state.openRequested = false;
-        state.visible = false;
+        ++state.revision;
+        state.openRequested = state.visible = state.pending = false;
+        state.closeRequested = true;
         state.items.clear();
     }
 
-    void ItemGrantPopup::Open(const std::vector<FormEntry>& entries)
+    void ItemGrantPopup::Open(const std::vector<FormEntry>& entries, std::uint64_t session)
     {
-        auto& state = GetState();
+        ++state.revision;
+        state.closeRequested = state.pending = false;
+        state.session = session;
+        state.admission = ActionAdmission::Accepted;
         state.items.clear();
         state.items.reserve(entries.size());
 
@@ -54,14 +49,13 @@ namespace ESPExplorerAE
             itemState.entry = entry;
             itemState.quantity = 1;
             itemState.ammoQuantity = 100;
-            itemState.ammoFormID = FormActions::GetWeaponAmmoFormID(entry.formID);
+            itemState.ammoFormID = entry.weaponAmmoID;
             itemState.includeAmmo = (entry.category == "Weapon" || entry.category == "Weapons" || entry.category == "WEAP") && itemState.ammoFormID != 0;
             state.items.push_back(std::move(itemState));
         }
 
         if (state.items.empty()) {
-            state.visible = false;
-            state.openRequested = false;
+            Close();
             return;
         }
 
@@ -69,27 +63,40 @@ namespace ESPExplorerAE
         state.visible = true;
     }
 
-    void ItemGrantPopup::Draw(const LocalizeFn& localize)
+    void ItemGrantPopup::ResolveSubmit(std::uint64_t revision, ActionAdmission admission)
     {
-        auto& state = GetState();
+        if (!state.pending || state.revision != revision) return;
+        state.pending = false;
+        state.admission = admission;
+        if (admission == ActionAdmission::Accepted) Close();
+    }
+
+    void ItemGrantPopup::Draw(const View& view, Requests& requests)
+    {
+        if (state.session != view.session && Visible()) Close();
+        if (state.closeRequested) {
+            if (ImGui::BeginPopupModal("###ItemGrantPopup")) {
+                ImGui::CloseCurrentPopup();
+                ImGui::EndPopup();
+            }
+            state.closeRequested = false;
+            return;
+        }
+        if (state.items.empty() || (!state.visible && !state.openRequested)) return;
 
         const auto L = [&](std::string_view section, std::string_view key, const char* fallback) -> const char* {
-            if (localize) {
-                return localize(section, key, fallback);
-            }
-            const auto value = Language::Get(section, key);
-            return value.empty() ? fallback : value.data();
+            return view.localize ? view.localize(section, key, fallback) : fallback;
         };
 
         const bool multipleItems = state.items.size() > 1;
-        const char* popupTitle = multipleItems ? L("Items", "sGivePopupTitleMulti", "Add Selected Items") : L("Items", "sGivePopupTitle", "Add Item");
+        const auto popupTitle = std::string(multipleItems ? L("Items", "sGivePopupTitleMulti", "Add Selected Items") : L("Items", "sGivePopupTitle", "Add Item")) + "###ItemGrantPopup";
 
         if (state.openRequested) {
-            ImGui::OpenPopup(popupTitle);
+            ImGui::OpenPopup(popupTitle.c_str());
             state.openRequested = false;
         }
 
-        const float popupScale = (std::clamp)(Config::Get().fontSize / 20.0f, 0.75f, 1.5f);
+        const float popupScale = (std::clamp)(view.fontSize / 20.0f, 0.75f, 1.5f);
         const float popupWidth = (std::clamp)(520.0f * popupScale, 420.0f, 900.0f);
         const bool singleItemHasAmmoControls = !multipleItems && !state.items.empty() && state.items.front().ammoFormID != 0 && state.items.front().includeAmmo;
         const float popupHeight = multipleItems ?
@@ -99,13 +106,14 @@ namespace ESPExplorerAE
             multipleItems ? (std::max)(440.0f, popupWidth * 0.80f) : (std::max)(420.0f, popupWidth * 0.80f),
             multipleItems ? (std::max)(480.0f, popupHeight * 0.80f) : (std::max)(400.0f, popupHeight * 0.80f));
         const ImVec2 maxSize(popupWidth * 1.60f, popupHeight * 1.60f);
-        ModalUtils::SetNextPopupWindowSizing(ImVec2(popupWidth, popupHeight), minSize, maxSize);
-        if (!ImGui::BeginPopupModal(popupTitle, &state.visible)) {
+        const ModalUtils::PopupSizing popupSizing(ImVec2(popupWidth, popupHeight), minSize, maxSize);
+        if (!ImGui::BeginPopupModal(popupTitle.c_str(), &state.visible)) {
+            if (!state.visible) Close();
             return;
         }
 
         if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-            state.visible = false;
+            Close();
             ImGui::CloseCurrentPopup();
             ImGui::EndPopup();
             return;
@@ -239,8 +247,9 @@ namespace ESPExplorerAE
         ImGui::Spacing();
 
         const char* giveLabel = L("Items", "sGiveToPlayer", "Give To Player");
+        ActionFeedback::Draw(state.admission, L);
         const char* cancelLabel = L("General", "sCancel", "Cancel");
-        const bool gameplayActionsAllowed = FormActions::AreGameplayActionsAllowed();
+        const bool gameplayActionsAllowed = view.gameplayReady;
         const char* disabledTooltip = L("General", "sGameplayActionsDisabledInMainMenu", "Gameplay actions are disabled while the main menu is open.");
         const float giveTextWidth = ImGui::CalcTextSize(giveLabel).x + style.FramePadding.x * 2.0f;
         const float cancelTextWidth = ImGui::CalcTextSize(cancelLabel).x + style.FramePadding.x * 2.0f;
@@ -257,38 +266,40 @@ namespace ESPExplorerAE
                 break;
             }
         }
-        canApply = canApply && gameplayActionsAllowed;
+        canApply = canApply && gameplayActionsAllowed && !state.pending;
         if (!canApply) {
             ImGui::BeginDisabled(true);
         }
-        const bool applyPressed = ImGui::Button(giveLabel, ImVec2(giveButtonWidth, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Enter);
+        const bool applyPressed = ImGui::Button(giveLabel, ImVec2(giveButtonWidth, 0.0f)) ||
+            (!ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() && ImGui::IsKeyPressed(ImGuiKey_Enter));
         ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
         if (!canApply) {
             ImGui::EndDisabled();
         }
         if (applyPressed && canApply) {
+            std::vector<ActionRequest> batch;
+            batch.reserve(state.items.size());
             for (const auto& item : state.items) {
                 if (item.quantity <= 0) {
                     continue;
                 }
 
                 if (item.includeAmmo && item.ammoFormID != 0 && item.ammoQuantity > 0) {
-                    FormActions::QueueGiveToPlayerWithAmmo(
-                        item.entry.formID,
-                        static_cast<std::uint32_t>(item.quantity),
-                        item.ammoFormID,
-                        static_cast<std::uint32_t>(item.ammoQuantity));
+                    batch.push_back({ .kind = ActionKind::GiveWithAmmo, .formID = item.entry.formID,
+                        .count = static_cast<std::uint32_t>(item.quantity), .ammoFormID = item.ammoFormID,
+                        .ammoCount = static_cast<std::uint32_t>(item.ammoQuantity), .session = state.session });
                 } else {
-                    FormActions::QueueGiveToPlayer(item.entry.formID, static_cast<std::uint32_t>(item.quantity));
+                    batch.push_back({ .kind = ActionKind::Give, .formID = item.entry.formID,
+                        .count = static_cast<std::uint32_t>(item.quantity), .session = state.session });
                 }
             }
-            state.visible = false;
-            ImGui::CloseCurrentPopup();
+            state.pending = true;
+            requests.submit = Submission{ ++state.revision, std::move(batch) };
         }
 
         ImGui::SameLine();
         if (ImGui::Button(cancelLabel, ImVec2(cancelButtonWidth, 0.0f))) {
-            state.visible = false;
+            Close();
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
