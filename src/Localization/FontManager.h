@@ -1,6 +1,8 @@
 #pragma once
 
-#include "pch.h"
+#include <filesystem>
+#include <string>
+#include "Core/FontSizes.h"
 
 struct ImFont;
 
@@ -9,11 +11,12 @@ namespace ESPExplorerAE
     class FontManager
     {
     public:
-        static constexpr float kPresetSizes[] = { 12.0f, 14.0f, 16.0f, 18.0f, 20.0f, 22.0f, 24.0f };
-        static constexpr int kPresetCount = 7;
+        static constexpr auto kPresetSizes = FontSizes;
+        static constexpr int kPresetCount = static_cast<int>(FontSizes.size());
         static constexpr int kDefaultSizeIndex = 4;
 
-        static bool BuildAll(std::string_view languageCode);
+        static void ResetAtlasState();
+        static bool BuildAll();
         static bool EnsureCurrentFontBuilt();
 
         static ImFont* GetFont(int sizeIndex);
@@ -22,7 +25,7 @@ namespace ESPExplorerAE
         static void SetCurrentSizeIndex(int index);
         static int FindClosestSizeIndex(float fontSize);
 
-        static void RequestLanguageRebuild(std::string_view languageCode);
+        static void RequestLanguageRebuild();
         static bool HasPendingRebuild();
         static bool ProcessPendingRebuild();
 
@@ -32,7 +35,5 @@ namespace ESPExplorerAE
         static inline ImFont* fonts[kPresetCount]{ nullptr };
         static inline int currentSizeIndex{ kDefaultSizeIndex };
         static inline bool pendingRebuild{ false };
-        static inline std::string pendingLanguageCode{};
-        static inline std::string currentLanguageCode{};
     };
 }

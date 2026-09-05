@@ -1,8 +1,8 @@
 #pragma once
 
-#include "pch.h"
-
+#include <cstddef>
 #include <cstdint>
+#include <string>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -15,16 +15,16 @@ namespace ESPExplorerAE
     class GamepadInput
     {
     public:
-        static void Poll();
+        static void Poll(bool allowInput = true);
         static bool WasMenuTogglePressed();
         static bool WasTabNextPressed();
         static bool WasTabPrevPressed();
         static bool IsGamepadConnected();
         static bool IsUsingGamepad();
-        static void ShowSteamKeyboard();
+        static bool ShowSteamKeyboard(std::uint32_t owner, const char* description, const char* existingText, std::size_t capacity);
         static void CloseSteamKeyboard();
         static bool IsSteamKeyboardOpen();
-        static void CheckSteamKeyboardResult(char* buffer, std::size_t bufferSize, std::string& value);
+        static bool CheckSteamKeyboardResult(std::uint32_t owner, char* buffer, std::size_t bufferSize, std::string& value);
 
     private:
         static void UpdateImGuiNavInputs(const XINPUT_STATE& state);
@@ -34,7 +34,6 @@ namespace ESPExplorerAE
         static inline bool menuTogglePressed{ false };
         static inline bool tabNextPressed{ false };
         static inline bool tabPrevPressed{ false };
-        static inline bool steamKeyboardOpen{ false };
 
         static inline bool prevRB{ false };
         static inline bool prevLB{ false };

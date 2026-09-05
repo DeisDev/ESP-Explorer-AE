@@ -4,6 +4,9 @@
 
 #include <d3d11.h>
 #include <dxgi.h>
+#include "Platform/RendererResources.h"
+
+struct ImGuiContext;
 
 namespace ESPExplorerAE
 {
@@ -15,12 +18,11 @@ namespace ESPExplorerAE
         static void EndFrame();
         static void Shutdown();
         static bool IsInitialized();
+        static ImGuiContext* GetContext() { return Resources().Context(); }
 
     private:
-        static inline bool initialized{ false };
-        static inline bool fontPushed{ false };
-        static inline ID3D11Device* device{ nullptr };
-        static inline ID3D11DeviceContext* context{ nullptr };
-        static inline IDXGISwapChain* swapChain{ nullptr };
+        static void ReleaseResources();
+        static RendererResources& Resources();
+        static inline bool fontPushed{};
     };
 }

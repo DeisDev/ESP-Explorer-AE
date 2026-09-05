@@ -1,20 +1,30 @@
+#include "Localization/Language.h"
 #include "Hooks/Hooks.h"
 
 #include "Config/Config.h"
+#include "App/ActionService.h"
+#include "App/Lifecycle.h"
+#include "App/Profiler.h"
+#include "Core/Profiling.h"
+#include "App/SettingsService.h"
+#include "App/OverlayController.h"
+#include "Core/ScopeExit.h"
+#include "Platform/SteamKeyboard.h"
+#include "Platform/HookTransaction.h"
 #include "GUI/ImGuiRenderer.h"
 #include "GUI/MainWindow.h"
-#include "GUI/Widgets/FormActions.h"
 #include "Input/GamepadInput.h"
 
 #include <RE/B/BSGraphics.h>
-#include <RE/C/ControlMap.h>
-#include <RE/M/Main.h>
 
 #include <imgui.h>
 #include <backends/imgui_impl_win32.h>
 
 #include <array>
 #include <cstdlib>
+#include <deque>
+#include <mutex>
+#include <chrono>
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -28,115 +38,32 @@ namespace ESPExplorerAE
     namespace
     {
         using ClipCursor_t = BOOL(WINAPI*)(const RECT*);
-        ClipCursor_t originalClipCursor{ nullptr };
+        std::mutex installationMutex;
+        std::mutex renderMutex;
+        HookTransaction hookTransaction;
+        IDXGISwapChain* hookedSwapChain{};
+        DWORD renderThread{};
+        std::atomic<bool> hooksReady{};
+        std::atomic<ClipCursor_t> originalClipCursor{};
 
+        std::mutex inputMutex;
+        std::deque<MSG> inputMessages;
+        bool inputResetRequested{};
+        std::atomic<std::uint32_t> toggleKey{ VK_INSERT };
+        constexpr ULONG_PTR kReleaseInputTag = 0x4553504145494E50;
         std::array<bool, 256> trackedKeys{};
         std::array<bool, 5> trackedMouseButtons{};
 
-        bool IsBlockingGameMenuOpen()
-        {
-            auto* ui = RE::UI::GetSingleton();
-            if (!ui) {
-                return false;
-            }
-
-            static const std::array<RE::BSFixedString, 11> blockingMenuNames{
-                RE::BSFixedString("BarterMenu"),
-                RE::BSFixedString("ContainerMenu"),
-                RE::BSFixedString("DialogueMenu"),
-                RE::BSFixedString("LevelUpMenu"),
-                RE::BSFixedString("LockpickingMenu"),
-                RE::BSFixedString("LooksMenu"),
-                RE::BSFixedString("PipboyMenu"),
-                RE::BSFixedString("PipboyWorkshopMenu"),
-                RE::BSFixedString("SleepWaitMenu"),
-                RE::BSFixedString("TerminalMenu"),
-                RE::BSFixedString("WorkshopMenu")
-            };
-
-            for (const auto& menuName : blockingMenuNames) {
-                if (ui->GetMenuOpen(menuName)) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        bool ShouldCaptureMenuInput()
-        {
-            return Hooks::IsMenuVisible() && !Hooks::IsModalDialogActive() && !IsBlockingGameMenuOpen();
-        }
-
-        bool ShouldRenderMenu()
-        {
-            return Hooks::IsMenuVisible() && !IsBlockingGameMenuOpen();
-        }
-
-        bool ShouldManageGameState()
-        {
-            return Hooks::IsMenuVisible() && !IsBlockingGameMenuOpen() && Hooks::HasGameWindowFocus();
-        }
+        bool ShouldCaptureMenuInput() { return !Lifecycle::Shutdown().Requested() && OverlayController::Decision().capture; }
 
         BOOL WINAPI HookedClipCursor(const RECT* rect)
         {
-            if (ShouldCaptureMenuInput()) {
-                return originalClipCursor(nullptr);
+            ClipCursor_t previous;
+            {
+                std::lock_guard lock(installationMutex);
+                previous = originalClipCursor;
             }
-
-            return originalClipCursor(rect);
-        }
-
-        void InstallCursorHooks()
-        {
-            HMODULE user32 = GetModuleHandleA("user32.dll");
-            if (!user32) {
-                return;
-            }
-
-            if (!originalClipCursor) {
-                originalClipCursor = reinterpret_cast<ClipCursor_t>(GetProcAddress(user32, "ClipCursor"));
-            }
-
-            if (!originalClipCursor) {
-                return;
-            }
-
-            auto* dosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(GetModuleHandle(nullptr));
-            if (!dosHeader) {
-                return;
-            }
-
-            auto* ntHeaders = reinterpret_cast<PIMAGE_NT_HEADERS>(reinterpret_cast<BYTE*>(dosHeader) + dosHeader->e_lfanew);
-            if (!ntHeaders) {
-                return;
-            }
-
-            auto* importDesc = reinterpret_cast<PIMAGE_IMPORT_DESCRIPTOR>(
-                reinterpret_cast<BYTE*>(dosHeader) + ntHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);
-
-            bool clipCursorHooked = false;
-
-            while (importDesc && importDesc->Name && !clipCursorHooked) {
-                const char* moduleName = reinterpret_cast<const char*>(reinterpret_cast<BYTE*>(dosHeader) + importDesc->Name);
-                if (_stricmp(moduleName, "user32.dll") == 0) {
-                    auto* thunk = reinterpret_cast<PIMAGE_THUNK_DATA>(reinterpret_cast<BYTE*>(dosHeader) + importDesc->FirstThunk);
-                    while (thunk && thunk->u1.Function) {
-                        DWORD oldProtect = 0;
-
-                        if (!clipCursorHooked && reinterpret_cast<void*>(thunk->u1.Function) == reinterpret_cast<void*>(originalClipCursor)) {
-                            VirtualProtect(&thunk->u1.Function, sizeof(thunk->u1.Function), PAGE_EXECUTE_READWRITE, &oldProtect);
-                            thunk->u1.Function = reinterpret_cast<ULONG_PTR>(&HookedClipCursor);
-                            VirtualProtect(&thunk->u1.Function, sizeof(thunk->u1.Function), oldProtect, &oldProtect);
-                            clipCursorHooked = true;
-                        }
-
-                        ++thunk;
-                    }
-                }
-
-                ++importDesc;
-            }
+            return previous ? previous(hooksReady && !Lifecycle::Shutdown().Requested() && ShouldCaptureMenuInput() ? nullptr : rect) : FALSE;
         }
 
         bool IsInputMessage(UINT msg)
@@ -158,45 +85,6 @@ namespace ESPExplorerAE
             case WM_XBUTTONDOWN:
             case WM_XBUTTONUP:
             case WM_XBUTTONDBLCLK:
-            case WM_KEYDOWN:
-            case WM_KEYUP:
-            case WM_SYSKEYDOWN:
-            case WM_SYSKEYUP:
-            case WM_CHAR:
-            case WM_SYSCHAR:
-                return true;
-            default:
-                return false;
-            }
-        }
-
-        bool IsMouseMessage(UINT msg)
-        {
-            switch (msg) {
-            case WM_MOUSEMOVE:
-            case WM_MOUSEWHEEL:
-            case WM_MOUSEHWHEEL:
-            case WM_LBUTTONDOWN:
-            case WM_LBUTTONUP:
-            case WM_LBUTTONDBLCLK:
-            case WM_RBUTTONDOWN:
-            case WM_RBUTTONUP:
-            case WM_RBUTTONDBLCLK:
-            case WM_MBUTTONDOWN:
-            case WM_MBUTTONUP:
-            case WM_MBUTTONDBLCLK:
-            case WM_XBUTTONDOWN:
-            case WM_XBUTTONUP:
-            case WM_XBUTTONDBLCLK:
-                return true;
-            default:
-                return false;
-            }
-        }
-
-        bool IsKeyboardMessage(UINT msg)
-        {
-            switch (msg) {
             case WM_KEYDOWN:
             case WM_KEYUP:
             case WM_SYSKEYDOWN:
@@ -277,6 +165,8 @@ namespace ESPExplorerAE
         {
             std::array<INPUT, 261> releaseInputs{};
             std::size_t releaseCount = 0;
+            {
+            std::lock_guard lock(inputMutex);
 
             for (std::size_t vk = 0; vk < trackedKeys.size(); ++vk) {
                 if (!trackedKeys[vk]) {
@@ -287,6 +177,7 @@ namespace ESPExplorerAE
                 input.type = INPUT_KEYBOARD;
                 input.ki.wVk = static_cast<WORD>(vk);
                 input.ki.dwFlags = KEYEVENTF_KEYUP;
+                input.ki.dwExtraInfo = kReleaseInputTag;
                 releaseInputs[releaseCount++] = input;
                 trackedKeys[vk] = false;
             }
@@ -315,10 +206,12 @@ namespace ESPExplorerAE
                 input.type = INPUT_MOUSE;
                 input.mi.dwFlags = mouseReleaseFlags[i];
                 input.mi.mouseData = mouseReleaseData[i];
+                input.mi.dwExtraInfo = kReleaseInputTag;
                 releaseInputs[releaseCount++] = input;
                 trackedMouseButtons[i] = false;
             }
 
+            }
             if (releaseCount > 0) {
                 SendInput(static_cast<UINT>(releaseCount), releaseInputs.data(), sizeof(INPUT));
             }
@@ -326,42 +219,16 @@ namespace ESPExplorerAE
 
         void ResetTrackedInputs()
         {
+            std::lock_guard lock(inputMutex);
             trackedKeys.fill(false);
             trackedMouseButtons.fill(false);
         }
 
-        bool IsTabKeyMessage(UINT msg, WPARAM wParam)
-        {
-            if (wParam != VK_TAB) {
-                return false;
-            }
-
-            switch (msg) {
-            case WM_KEYDOWN:
-            case WM_KEYUP:
-            case WM_SYSKEYDOWN:
-            case WM_SYSKEYUP:
-                return true;
-            default:
-                return false;
-            }
-        }
     }
 
     void Hooks::UpdateCursorState()
     {
         const bool shouldCapture = ShouldCaptureMenuInput();
-
-        auto* controlMap = RE::ControlMap::GetSingleton();
-        if (controlMap) {
-            if (shouldCapture && !ignoreInputManaged) {
-                controlMap->ignoreKeyboardMouse = true;
-                ignoreInputManaged = true;
-            } else if (!shouldCapture && ignoreInputManaged) {
-                controlMap->ignoreKeyboardMouse = false;
-                ignoreInputManaged = false;
-            }
-        }
 
         const bool wantCursor = shouldCapture && !GamepadInput::IsUsingGamepad();
         if (wantCursor && !cursorShowing) {
@@ -373,309 +240,266 @@ namespace ESPExplorerAE
         }
 
         if (shouldCapture && originalClipCursor) {
-            originalClipCursor(nullptr);
+            originalClipCursor.load()(nullptr);
         }
     }
 
     void Hooks::Install()
     {
-        if (originalPresent) {
-            return;
-        }
-
-        menuVisible = Config::Get().showOnStartup;
-
+        std::lock_guard lock(installationMutex);
+        if (Lifecycle::Shutdown().Requested() || hookTransaction.Ready()) return;
         auto* rendererWindow = RE::BSGraphics::GetCurrentRendererWindow();
-        if (!rendererWindow || !rendererWindow->swapChain) {
-            REX::WARN("Renderer window not ready for Present hook");
+        if (!rendererWindow || !rendererWindow->swapChain || !rendererWindow->hwnd) {
+            REX::DEBUG("Renderer window not ready for hooks");
             return;
         }
-
-        gameWindow = reinterpret_cast<HWND>(rendererWindow->hwnd);
-        if (gameWindow) {
-            AttachWindowHook(gameWindow);
-            InstallCursorHooks();
-        }
-
+        const auto window = reinterpret_cast<HWND>(rendererWindow->hwnd);
         auto* swapChain = reinterpret_cast<IDXGISwapChain*>(rendererWindow->swapChain);
         auto** vtable = *reinterpret_cast<void***>(swapChain);
-        originalPresent = reinterpret_cast<decltype(originalPresent)>(vtable[8]);
-
-        DWORD oldProtect = 0;
-        if (!VirtualProtect(&vtable[8], sizeof(void*), PAGE_EXECUTE_READWRITE, &oldProtect)) {
-            REX::Impl::Log(std::source_location::current(), REX::ELogLevel::Error, "Failed to change vtable memory protection");
-            originalPresent = nullptr;
+        auto** cursorSlot = FindImport(GetModuleHandleW(nullptr), "user32.dll", "ClipCursor");
+        const bool installed = hookTransaction.Install(window, WndProcHook, &vtable[8],
+            reinterpret_cast<void*>(&PresentHook), cursorSlot, reinterpret_cast<void*>(&HookedClipCursor));
+        // Publish all chain targets before any hooked callback passes the gate.
+        originalPresent = reinterpret_cast<PresentFunction>(hookTransaction.PreviousPresent());
+        originalWndProc = hookTransaction.PreviousWindow();
+        originalClipCursor = reinterpret_cast<ClipCursor_t>(hookTransaction.PreviousCursor());
+        hooksReady = installed;
+        if (!installed) {
+            REX::WARN("Hook installation failed; rollback attempted and pending restoration will be retried");
             return;
         }
-
-        vtable[8] = reinterpret_cast<void*>(&PresentHook);
-
-        DWORD restoreProtect = 0;
-        VirtualProtect(&vtable[8], sizeof(void*), oldProtect, &restoreProtect);
-
-        REX::INFO("Present hook installed");
+        gameWindow = window;
+        hookedSwapChain = swapChain;
+        OverlayController::SetVisible(Config::Get().showOnStartup);
+        OverlayController::SetFocused(GetForegroundWindow() == window);
+        REX::INFO("Hooks installed: install thread {}, window thread {}, optional cursor import {}",
+            GetCurrentThreadId(), GetWindowThreadProcessId(window, nullptr), cursorSlot != nullptr);
     }
 
     HRESULT __stdcall Hooks::PresentHook(IDXGISwapChain* swapChain, UINT syncInterval, UINT flags)
     {
-        if (swapChain && !ImGuiRenderer::IsInitialized()) {
-            DXGI_SWAP_CHAIN_DESC desc{};
-            if (SUCCEEDED(swapChain->GetDesc(&desc))) {
-                gameWindow = desc.OutputWindow;
-                if (gameWindow) {
-                    AttachWindowHook(gameWindow);
-                    ImGuiRenderer::Initialize(swapChain, gameWindow);
+        PresentFunction previous;
+        bool active;
+        {
+            std::lock_guard lock(installationMutex);
+            previous = originalPresent;
+            active = hooksReady && swapChain == hookedSwapChain;
+        }
+        const auto forward = [&] { return previous ? previous(swapChain, syncInterval, flags) : S_OK; };
+        static thread_local bool rendering{};
+        if (!active || rendering) return forward();
+        std::unique_lock renderLock(renderMutex, std::try_to_lock);
+        if (!renderLock.owns_lock()) return forward();
+        // The first target Present owns all ImGui and UI state. Another Present
+        // thread/swap chain always forwards without entering that state.
+        if (!renderThread) {
+            renderThread = GetCurrentThreadId();
+            REX::INFO("Overlay render context: thread {}", renderThread);
+        }
+        if (renderThread != GetCurrentThreadId()) return forward();
+        rendering = true;
+        ScopeExit clearRendering([] { rendering = false; });
+        auto* previousContext = ImGui::GetCurrentContext();
+        ScopeExit restoreContext([&] { ImGui::SetCurrentContext(previousContext); });
+        static std::chrono::steady_clock::time_point retryRenderer{};
+        try {
+            auto& shutdown = Lifecycle::Shutdown();
+            if (shutdown.Requested()) {
+                shutdown.PumpRender([&] {
+                    OverlayController::SetVisible(false);
+                    OverlayController::SetRendererState(false, false);
+                    GamepadInput::CloseSteamKeyboard();
+                    SteamKeyboard::Shutdown();
+                    MainWindow::Shutdown();
+                    ResetTrackedInputs();
+                    {
+                        std::lock_guard lock(inputMutex);
+                        inputMessages.clear();
+                        PerformanceProfile().Observe(ProfileGauge::InputQueue, 0);
+                        inputResetRequested = false;
+                    }
+                    UpdateCursorState();
+                    if (previousContext == ImGuiRenderer::GetContext()) previousContext = nullptr;
+                    ImGuiRenderer::Shutdown(); // Attempts the pending save immediately, once.
+                    Profiler::Stop();
+                }, [] {
+                    Config::FlushPendingSaveIfDue(); // Failed writes retain their normal retry schedule.
+                    return !Config::HasPendingSave();
+                });
+                ImGui::SetCurrentContext(previousContext);
+                restoreContext.Release();
+                return forward();
+            }
+            Profiler::Configure(Config::Get().profilePerformance);
+            {
+                const ProfileScope profileScope(IsMenuVisible() ? ProfileMetric::OverlayFrame : ProfileMetric::OverlayHiddenFrame);
+                const Language::Frame languageFrame;
+                SettingsService::PumpRender();
+                Config::FlushPendingSaveIfDue();
+                const auto& settings = Config::Get();
+                toggleKey = settings.toggleKey;
+                ActionService::UpdatePolicy(settings.componentSubstitution, settings.allowGameplayActionsInMainMenu);
+                OverlayController::Configure({ settings.pauseGameWhenMenuOpen, settings.hidePlayerHUDWhenMenuOpen, settings.godModeWhenMenuOpen });
+                if (swapChain && !ImGuiRenderer::IsInitialized() && std::chrono::steady_clock::now() >= retryRenderer) {
+                    retryRenderer = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+                    DXGI_SWAP_CHAIN_DESC desc{};
+                    if (SUCCEEDED(swapChain->GetDesc(&desc))) {
+                        if (desc.OutputWindow == gameWindow.load()) ImGuiRenderer::Initialize(swapChain, gameWindow);
+                    }
+                }
+                const bool ready = ImGuiRenderer::IsInitialized();
+                OverlayController::SetRendererState(ready, SteamKeyboard::IsWaiting());
+                if (ready) {
+                    ImGui::SetCurrentContext(ImGuiRenderer::GetContext());
+                    const auto facts = OverlayController::Facts();
+                    GamepadInput::Poll(facts.focused && !facts.modal && !facts.keyboardDialog);
+                    if (!shutdown.Requested() && GamepadInput::WasMenuTogglePressed()) OverlayController::Toggle();
+
+                    static bool lastVisible{};
+                    const bool visible = IsMenuVisible();
+                    if (visible != lastVisible) {
+                        lastVisible = visible;
+                        MainWindow::HandleMenuVisibilityChanged(visible);
+                        if (visible) ReleaseTrackedInputs();
+                        else {
+                            GamepadInput::CloseSteamKeyboard();
+                            ResetTrackedInputs();
+                            Config::FlushPendingSave();
+                        }
+                    }
+                    std::deque<MSG> messages;
+                    bool reset;
+                    {
+                        std::lock_guard lock(inputMutex);
+                        messages.swap(inputMessages);
+                        PerformanceProfile().Observe(ProfileGauge::InputQueue, inputMessages.size());
+                        reset = inputResetRequested;
+                        inputResetRequested = false;
+                    }
+                    const auto decision = shutdown.Requested() ? OverlayDecision{} : OverlayController::Decision();
+                    if (reset || !decision.capture) {
+                        ImGui::GetIO().ClearInputKeys();
+                        ImGui::GetIO().ClearEventsQueue();
+                    }
+                    if (decision.capture) {
+                        for (const auto& message : messages) {
+                            ImGui_ImplWin32_WndProcHandler(message.hwnd, message.message, message.wParam, message.lParam);
+                        }
+                    }
+                    UpdateCursorState();
+                    if (decision.render) {
+                        ImGuiRenderer::BeginFrame();
+                        MainWindow::Draw();
+                        ImGuiRenderer::EndFrame();
+                    }
+                    Profiler::SampleImGui();
                 }
             }
-        }
-
-        if (ImGuiRenderer::IsInitialized()) {
-            GamepadInput::Poll();
-
-            if (GamepadInput::WasMenuTogglePressed()) {
-                REX::DEBUG("{}", "Menu toggle requested via gamepad");
-                SetMenuVisible(!menuVisible);
-            }
-
+            Profiler::Pump(); // Report I/O is excluded from the plugin frame sample.
+        } catch (const std::exception& error) {
+            REX::WARN("Overlay frame failed: {}", error.what());
+            OverlayController::SetVisible(false);
+            OverlayController::SetRendererState(false, SteamKeyboard::IsWaiting());
+            if (previousContext == ImGuiRenderer::GetContext()) previousContext = nullptr;
+            ImGuiRenderer::Shutdown();
             UpdateCursorState();
-            UpdateGamePause();
-            UpdateMenuGodMode();
-            UpdateHUDVisibility();
-
-            if (ShouldRenderMenu()) {
-                ImGuiRenderer::BeginFrame();
-                MainWindow::Draw();
-                ImGuiRenderer::EndFrame();
-            }
+        } catch (...) {
+            REX::WARN("Overlay frame failed with an unknown exception");
+            OverlayController::SetVisible(false);
+            OverlayController::SetRendererState(false, SteamKeyboard::IsWaiting());
+            if (previousContext == ImGuiRenderer::GetContext()) previousContext = nullptr;
+            ImGuiRenderer::Shutdown();
+            UpdateCursorState();
         }
-
-        HRESULT result = S_OK;
-        if (originalPresent) {
-            result = originalPresent(swapChain, syncInterval, flags);
-        }
-
-        return result;
+        ImGui::SetCurrentContext(previousContext);
+        restoreContext.Release();
+        return forward();
     }
 
-    bool Hooks::IsMenuVisible()
+    bool Hooks::RestoreForShutdown()
     {
-        return menuVisible;
+        std::lock_guard lock(installationMutex);
+        hooksReady = false;
+        // Previous targets stay published: a later hook can still chain through
+        // these callbacks, and F4SE's permanent task cannot be unregistered.
+        return hookTransaction.Restore();
     }
 
-    void Hooks::SetMenuVisible(bool visible)
-    {
-        if (menuVisible == visible) {
-            return;
-        }
-
-        menuVisible = visible;
-        if (menuVisible) {
-            ReleaseTrackedInputs();
-            MainWindow::HandleMenuVisibilityChanged(true);
-        } else {
-            MainWindow::HandleMenuVisibilityChanged(false);
-            ResetTrackedInputs();
-        }
-
-        REX::DEBUG("{}", std::string("Menu visibility changed: ") + (menuVisible ? "visible" : "hidden"));
-        if (menuVisible && IsBlockingGameMenuOpen()) {
-            REX::DEBUG("{}", "Menu rendering suppressed because a blocking game menu is open");
-        }
-        UpdateCursorState();
-        UpdateGamePause();
-        UpdateMenuGodMode();
-        UpdateHUDVisibility();
-    }
-
-    bool Hooks::HasGameWindowFocus()
-    {
-        return gameWindowHasFocus;
-    }
-
-    HWND Hooks::GetGameWindow()
-    {
-        return gameWindow;
-    }
-
-    void Hooks::SetModalDialogActive(bool active)
-    {
-        modalDialogActive = active;
-    }
-
-    bool Hooks::IsModalDialogActive()
-    {
-        return modalDialogActive;
-    }
-
-    void Hooks::UpdateGamePause()
-    {
-        auto* main = RE::Main::GetSingleton();
-        if (!main) {
-            return;
-        }
-
-        const bool shouldPause = Config::Get().pauseGameWhenMenuOpen && ShouldManageGameState();
-        if (shouldPause) {
-            if (!pauseStateManaged) {
-                freezeTimeWasEnabledBeforeMenu = main->freezeTime;
-                pauseStateManaged = true;
-            }
-
-            main->freezeTime = true;
-            return;
-        }
-
-        if (!pauseStateManaged) {
-            return;
-        }
-
-        main->freezeTime = freezeTimeWasEnabledBeforeMenu;
-        freezeTimeWasEnabledBeforeMenu = false;
-        pauseStateManaged = false;
-    }
-
-    void Hooks::UpdateHUDVisibility()
-    {
-        const bool shouldHideHUD = menuVisible && Config::Get().hidePlayerHUDWhenMenuOpen;
-        auto* queue = RE::UIMessageQueue::GetSingleton();
-
-        if (shouldHideHUD) {
-            if (hudVisibilityManaged || !queue) {
-                return;
-            }
-
-            auto* ui = RE::UI::GetSingleton();
-            if (!ui) {
-                return;
-            }
-
-            static const RE::BSFixedString powerArmorHUDMenuName("PowerArmorHUDMenu");
-            if (ui->GetMenuOpen(powerArmorHUDMenuName)) {
-                return;
-            }
-
-            hudWasVisibleBeforeHide = ui->GetMenuOpen(RE::HUDMenu::MENU_NAME);
-            if (hudWasVisibleBeforeHide) {
-                queue->AddMessage(RE::HUDMenu::MENU_NAME, RE::UI_MESSAGE_TYPE::kHide);
-            }
-            hudVisibilityManaged = true;
-            return;
-        }
-
-        if (!hudVisibilityManaged || !queue) {
-            return;
-        }
-
-        if (hudWasVisibleBeforeHide) {
-            queue->AddMessage(RE::HUDMenu::MENU_NAME, RE::UI_MESSAGE_TYPE::kShow);
-        }
-
-        hudVisibilityManaged = false;
-        hudWasVisibleBeforeHide = false;
-    }
-
-    void Hooks::UpdateMenuGodMode()
-    {
-        const bool shouldEnableGodMode = menuVisible && !IsBlockingGameMenuOpen() && Config::Get().godModeWhenMenuOpen;
-
-        if (shouldEnableGodMode) {
-            if (!godModeStateManaged) {
-                godModeWasEnabledBeforeMenu = FormActions::IsPlayerGodModeEnabled();
-                godModeStateManaged = true;
-            }
-
-            if (!FormActions::IsPlayerGodModeEnabled()) {
-                FormActions::SetPlayerGodModeEnabled(true);
-            }
-            return;
-        }
-
-        if (!godModeStateManaged) {
-            return;
-        }
-
-        if (!godModeWasEnabledBeforeMenu) {
-            FormActions::SetPlayerGodModeEnabled(false);
-        }
-
-        godModeWasEnabledBeforeMenu = false;
-        godModeStateManaged = false;
-    }
+    bool Hooks::IsMenuVisible() { return OverlayController::Facts().visible; }
+    void Hooks::SetMenuVisible(bool visible) { if (!visible || !Lifecycle::Shutdown().Requested()) OverlayController::SetVisible(visible); }
+    bool Hooks::HasGameWindowFocus() { return OverlayController::Facts().focused; }
+    HWND Hooks::GetGameWindow() { return gameWindow; }
+    void Hooks::SetModalDialogActive(bool active) { OverlayController::SetModal(active); }
+    bool Hooks::IsModalDialogActive() { return OverlayController::Facts().modal; }
 
     LRESULT CALLBACK Hooks::WndProcHook(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
-    {
-        UpdateTrackedKeyboardState(msg, wParam);
-        UpdateTrackedMouseState(msg, wParam);
-
-        if (msg == WM_ACTIVATEAPP) {
-            gameWindowHasFocus = wParam != 0;
-            UpdateGamePause();
-        } else if (msg == WM_ACTIVATE) {
-            gameWindowHasFocus = LOWORD(wParam) != WA_INACTIVE;
-            UpdateGamePause();
-        } else if (msg == WM_SETFOCUS) {
-            gameWindowHasFocus = true;
-            UpdateGamePause();
-        } else if (msg == WM_KILLFOCUS) {
-            gameWindowHasFocus = false;
-            UpdateGamePause();
-            ResetTrackedInputs();
+    try {
+        WNDPROC previous;
+        bool active;
+        {
+            std::lock_guard lock(installationMutex);
+            previous = originalWndProc;
+            active = hooksReady && !Lifecycle::Shutdown().Requested() && hwnd == gameWindow.load();
         }
-
-        if (msg == WM_KEYUP) {
-            const auto& settings = Config::Get();
-            if (wParam == settings.toggleKey) {
-                REX::DEBUG("{}", "Menu toggle requested via keyboard");
-                SetMenuVisible(!menuVisible);
-                return 1;
-            }
+        const auto forward = [&] { return previous ? CallWindowProcW(previous, hwnd, msg, wParam, lParam) : DefWindowProcW(hwnd, msg, wParam, lParam); };
+        if (!active) return forward();
+        // These releases belong to inputs the game saw before capture started.
+        // Let them reach the prior procedure, without toggling or re-queueing.
+        if (IsInputMessage(msg) && static_cast<ULONG_PTR>(GetMessageExtraInfo()) == kReleaseInputTag) return forward();
+        {
+            std::lock_guard lock(inputMutex);
+            UpdateTrackedKeyboardState(msg, wParam);
+            UpdateTrackedMouseState(msg, wParam);
         }
-
-        if (modalDialogActive) {
-            if (originalWndProc) {
-                return CallWindowProc(originalWndProc, hwnd, msg, wParam, lParam);
-            }
-            return DefWindowProc(hwnd, msg, wParam, lParam);
+        if (msg == WM_ACTIVATEAPP) OverlayController::SetFocused(wParam != 0);
+        else if (msg == WM_ACTIVATE) OverlayController::SetFocused(LOWORD(wParam) != WA_INACTIVE);
+        else if (msg == WM_SETFOCUS) OverlayController::SetFocused(true);
+        else if (msg == WM_KILLFOCUS) OverlayController::SetFocused(false);
+        const auto facts = OverlayController::Facts();
+        if (!facts.focused) {
+            std::lock_guard lock(inputMutex);
+            trackedKeys.fill(false);
+            trackedMouseButtons.fill(false);
+            inputMessages.clear();
+            inputResetRequested = true;
         }
-
-        if (ShouldCaptureMenuInput() && ImGuiRenderer::IsInitialized()) {
-            if (IsMouseMessage(msg) && originalClipCursor) {
-                originalClipCursor(nullptr);
-            }
-
-            if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam)) {
-                return 1;
-            }
-
-            if (IsInputMessage(msg)) {
-                return 1;
-            }
+        if (msg == WM_KEYUP && wParam == toggleKey && facts.focused && !facts.modal && !facts.keyboardDialog &&
+            static_cast<ULONG_PTR>(GetMessageExtraInfo()) != kReleaseInputTag) {
+            OverlayController::Toggle();
+            return 1;
         }
-
-        if (originalWndProc) {
-            return CallWindowProc(originalWndProc, hwnd, msg, wParam, lParam);
+        if (msg == WM_CLOSE || msg == WM_DESTROY || msg == WM_ENDSESSION) {
+            OverlayController::SetVisible(false);
+            Config::FlushPendingSave();
         }
-
-        return DefWindowProc(hwnd, msg, wParam, lParam);
+        if (ShouldCaptureMenuInput() && IsInputMessage(msg)) {
+            // WM_INPUT contains a transient OS handle; ImGui uses the detached
+            // Win32 mouse/key messages, so never retain that handle for later.
+            if (msg != WM_INPUT) {
+                std::lock_guard lock(inputMutex);
+                if (inputMessages.size() >= 512) {
+                    inputMessages.clear();
+                    inputResetRequested = true;
+                }
+                if (msg == WM_MOUSEMOVE && !inputMessages.empty() && inputMessages.back().message == WM_MOUSEMOVE) {
+                    inputMessages.back() = MSG{ hwnd, msg, wParam, lParam };
+                } else {
+                    inputMessages.push_back(MSG{ hwnd, msg, wParam, lParam });
+                }
+                PerformanceProfile().Observe(ProfileGauge::InputQueue, inputMessages.size());
+            } else {
+                // DefWindowProc performs required raw-input cleanup.
+                DefWindowProc(hwnd, msg, wParam, lParam);
+            }
+            return 1;
+        }
+        return forward();
+    }
+    catch (...) {
+        OverlayController::SetVisible(false);
+        WNDPROC previous;
+        { std::lock_guard lock(installationMutex); previous = originalWndProc; }
+        return previous ? CallWindowProcW(previous, hwnd, msg, wParam, lParam) : DefWindowProcW(hwnd, msg, wParam, lParam);
     }
 
-    void Hooks::AttachWindowHook(HWND hwnd)
-    {
-        if (!hwnd || originalWndProc) {
-            return;
-        }
-
-        SetLastError(0);
-        const auto previousWndProc = SetWindowLongPtr(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(WndProcHook));
-        if (previousWndProc == 0) {
-            const DWORD error = GetLastError();
-            if (error != 0) {
-                REX::Impl::Log(std::source_location::current(), REX::ELogLevel::Error, "Failed to attach window procedure hook");
-                return;
-            }
-        }
-
-        originalWndProc = reinterpret_cast<WNDPROC>(previousWndProc);
-        REX::INFO("{}", "Window procedure hook installed");
-    }
 }

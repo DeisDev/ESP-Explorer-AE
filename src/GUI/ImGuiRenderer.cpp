@@ -1,8 +1,8 @@
 #include "GUI/ImGuiRenderer.h"
 
 #include "Config/Config.h"
+#include "Core/ScopeExit.h"
 #include "Localization/FontManager.h"
-#include "Localization/Language.h"
 
 #include <imgui.h>
 #include <backends/imgui_impl_dx11.h>
@@ -184,67 +184,34 @@ namespace ESPExplorerAE
 
     bool ImGuiRenderer::Initialize(IDXGISwapChain* a_swapChain, HWND hwnd)
     {
-        if (initialized) {
-            return true;
-        }
-
-        if (!a_swapChain || !hwnd) {
+        try {
+            return Resources().Initialize(a_swapChain, hwnd, [] {
+                ImGui::StyleColorsDark();
+                const auto& settings = Config::Get();
+                if (settings.enableGamepadNav) ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+                ApplyTheme(settings);
+                FontManager::SetCurrentSizeIndex(FontManager::FindClosestSizeIndex(settings.fontSize));
+                if (!FontManager::BuildAll()) {
+                    REX::WARN("Initial font atlas build failed");
+                    return false;
+                }
+                return true;
+            }, &FontManager::ResetAtlasState);
+        } catch (const std::exception& error) {
+            REX::WARN("Renderer initialization rolled back: {}", error.what());
             return false;
         }
-
-        if (FAILED(a_swapChain->GetDevice(__uuidof(ID3D11Device), reinterpret_cast<void**>(&device)))) {
-            return false;
-        }
-
-        device->GetImmediateContext(&context);
-        swapChain = a_swapChain;
-
-        IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-        ImGui::StyleColorsDark();
-
-        const auto& settings = Config::Get();
-
-        ImGuiIO& io = ImGui::GetIO();
-        if (settings.enableGamepadNav) {
-            io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-        }
-
-        ApplyTheme(settings);
-
-        const int sizeIndex = FontManager::FindClosestSizeIndex(settings.fontSize);
-        FontManager::SetCurrentSizeIndex(sizeIndex);
-        if (!FontManager::BuildAll(Language::GetCurrentLanguageCode())) {
-            REX::WARN("{}", "Initial font atlas build failed");
-        } else {
-            REX::INFO("{}", "Initial font atlas built for language " + Language::GetCurrentLanguageCode());
-        }
-
-        if (!ImGui_ImplWin32_Init(hwnd)) {
-            REX::Impl::Log(std::source_location::current(), REX::ELogLevel::Error, "ImGui Win32 initialization failed");
-            return false;
-        }
-
-        if (!ImGui_ImplDX11_Init(device, context)) {
-            REX::Impl::Log(std::source_location::current(), REX::ELogLevel::Error, "ImGui DX11 initialization failed");
-            return false;
-        }
-
-        initialized = true;
-        REX::INFO("{}", "ImGui renderer initialized");
-        return true;
     }
 
     void ImGuiRenderer::BeginFrame()
     {
-        if (!initialized) {
+        if (!Resources().Ready()) {
             return;
         }
 
         static bool themeInitialized = false;
         static ThemeState lastTheme{};
 
-        Config::FlushPendingSaveIfDue();
         FontManager::EnsureCurrentFontBuilt();
 
         if (FontManager::HasPendingRebuild()) {
@@ -277,7 +244,7 @@ namespace ESPExplorerAE
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
 
-        if (swapChain) {
+        if (auto* swapChain = Resources().SwapChain()) {
             DXGI_SWAP_CHAIN_DESC scDesc{};
             if (SUCCEEDED(swapChain->GetDesc(&scDesc))) {
                 ImGuiIO& ioRef = ImGui::GetIO();
@@ -299,7 +266,7 @@ namespace ESPExplorerAE
 
     void ImGuiRenderer::EndFrame()
     {
-        if (!initialized) {
+        if (!Resources().Ready()) {
             return;
         }
 
@@ -312,34 +279,29 @@ namespace ESPExplorerAE
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
     }
 
+    RendererResources& ImGuiRenderer::Resources()
+    {
+        // Explicit render-owner release is the only teardown path. If the host
+        // terminates without another Present, leave references to process exit;
+        // COM/ImGui teardown under the loader lock is not a safe fallback.
+        static auto* resources = new RendererResources;
+        return *resources;
+    }
+
+    void ImGuiRenderer::ReleaseResources()
+    {
+        Resources().Release();
+        fontPushed = false;
+    }
+
     void ImGuiRenderer::Shutdown()
     {
-        if (!initialized) {
-            return;
-        }
-
         Config::FlushPendingSave();
-
-        ImGui_ImplDX11_Shutdown();
-        ImGui_ImplWin32_Shutdown();
-        ImGui::DestroyContext();
-
-        if (context) {
-            context->Release();
-            context = nullptr;
-        }
-
-        if (device) {
-            device->Release();
-            device = nullptr;
-        }
-
-        swapChain = nullptr;
-        initialized = false;
+        ReleaseResources();
     }
 
     bool ImGuiRenderer::IsInitialized()
     {
-        return initialized;
+        return Resources().Ready();
     }
 }

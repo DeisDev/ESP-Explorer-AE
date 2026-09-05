@@ -1,3 +1,4 @@
+#include "Core/Profiling.h"
 #include "Localization/FontManager.h"
 
 #include "Localization/Language.h"
@@ -98,16 +99,16 @@ namespace ESPExplorerAE
 
         ImVector<ImWchar> persistedGlyphRanges{};
 
-        void RebuildGlyphRanges(ImFontAtlas* atlas)
+        void RebuildGlyphRanges(ImFontAtlas* atlas, const LanguageSnapshot& language)
         {
             ImFontGlyphRangesBuilder builder;
             builder.AddRanges(atlas->GetGlyphRangesDefault());
 
-            for (const auto& configuredRange : Language::GetActiveGlyphRanges()) {
+            for (const auto& configuredRange : language.GlyphRanges()) {
                 AddConfiguredRange(builder, atlas, configuredRange);
             }
 
-            for (const auto sample : Language::GetActiveGlyphSamples()) {
+            for (const auto sample : language.GlyphSamples()) {
                 builder.AddText(sample.data());
             }
 
@@ -118,14 +119,15 @@ namespace ESPExplorerAE
         ImFont* BuildOneSize(
             ImFontAtlas* atlas,
             float fontSize,
-            const std::filesystem::path& fontsDir)
+            const std::filesystem::path& fontsDir,
+            const LanguageSnapshot& language)
         {
-            std::vector<std::string> fontFiles = Language::GetActiveFontFiles();
+            std::vector<std::string> fontFiles = language.FontFiles();
             for (const auto& defaultFont : GetDefaultFontFiles()) {
                 AppendUniqueFontFile(fontFiles, defaultFont);
             }
 
-            RebuildGlyphRanges(atlas);
+            RebuildGlyphRanges(atlas, language);
 
             ImFont* font = nullptr;
 
@@ -156,15 +158,21 @@ namespace ESPExplorerAE
         return std::filesystem::path("dist/fonts");
     }
 
-    bool FontManager::BuildAll(std::string_view languageCode)
+    void FontManager::ResetAtlasState()
     {
+        for (auto& font : fonts) font = nullptr;
+        pendingRebuild = false;
+    }
+
+    bool FontManager::BuildAll()
+    {
+        const ProfileScope profileScope(ProfileMetric::FontBuild);
         auto& io = ImGui::GetIO();
         if (!io.Fonts || io.Fonts->Locked) {
-            REX::WARN("{}", "Skipped font build because the atlas is unavailable or locked");
             return false;
         }
 
-        currentLanguageCode = std::string(languageCode);
+        const auto language = Language::Read();
 
         io.Fonts->Clear();
         for (int i = 0; i < kPresetCount; ++i) {
@@ -172,12 +180,8 @@ namespace ESPExplorerAE
         }
 
         const auto fontsDir = ResolveFontsDirectory();
-        fonts[currentSizeIndex] = BuildOneSize(io.Fonts, kPresetSizes[currentSizeIndex], fontsDir);
-        if (fonts[currentSizeIndex]) {
-            REX::INFO("{}", "Built font atlas size index " + std::to_string(currentSizeIndex) + " for language " + currentLanguageCode);
-        } else {
-            REX::WARN("{}", "Failed to build font atlas for language " + currentLanguageCode);
-        }
+        fonts[currentSizeIndex] = BuildOneSize(io.Fonts, kPresetSizes[currentSizeIndex], fontsDir, *language);
+        if (fonts[currentSizeIndex]) pendingRebuild = false;
         return fonts[currentSizeIndex] != nullptr;
     }
 
@@ -187,10 +191,6 @@ namespace ESPExplorerAE
             return false;
         }
 
-        pendingLanguageCode = currentLanguageCode.empty() ? pendingLanguageCode : currentLanguageCode;
-        if (pendingLanguageCode.empty()) {
-            pendingLanguageCode = "en";
-        }
         pendingRebuild = true;
         return true;
     }
@@ -216,33 +216,16 @@ namespace ESPExplorerAE
     void FontManager::SetCurrentSizeIndex(int index)
     {
         if (index >= 0 && index < kPresetCount) {
-            if (currentSizeIndex != index) {
-                REX::DEBUG("{}", "Font size index changed to " + std::to_string(index));
-            }
             currentSizeIndex = index;
             EnsureCurrentFontBuilt();
         }
     }
 
-    int FontManager::FindClosestSizeIndex(float fontSize)
-    {
-        int best = kDefaultSizeIndex;
-        float bestDiff = std::abs(fontSize - kPresetSizes[kDefaultSizeIndex]);
-        for (int i = 0; i < kPresetCount; ++i) {
-            const float diff = std::abs(fontSize - kPresetSizes[i]);
-            if (diff < bestDiff) {
-                bestDiff = diff;
-                best = i;
-            }
-        }
-        return best;
-    }
+    int FontManager::FindClosestSizeIndex(float fontSize) { return ClosestFontSizeIndex(fontSize); }
 
-    void FontManager::RequestLanguageRebuild(std::string_view languageCode)
+    void FontManager::RequestLanguageRebuild()
     {
-        pendingLanguageCode = std::string(languageCode);
         pendingRebuild = true;
-        REX::INFO("{}", "Requested font rebuild for language " + pendingLanguageCode);
     }
 
     bool FontManager::HasPendingRebuild()
@@ -256,7 +239,7 @@ namespace ESPExplorerAE
             return false;
         }
 
-        pendingRebuild = false;
-        return BuildAll(pendingLanguageCode);
+        // Keep the request eligible for the next unlocked frame after failure.
+        return BuildAll();
     }
 }

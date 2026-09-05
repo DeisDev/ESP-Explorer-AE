@@ -1,4 +1,5 @@
 #include "Input/GamepadInput.h"
+#include "Platform/SteamKeyboard.h"
 
 
 #include <imgui.h>
@@ -46,110 +47,23 @@ namespace ESPExplorerAE
             return 0.0f;
         }
 
-        struct SteamOverlayFuncs
-        {
-            using ShowGamepadTextInput_t = bool (*)(int inputMode, int lineInputMode, const char* description, unsigned int charMax, const char* existingText);
-            using GetEnteredGamepadTextLength_t = unsigned int (*)();
-            using GetEnteredGamepadTextInput_t = bool (*)(char* text, unsigned int maxLength);
-            using IsOverlayEnabled_t = bool (*)();
-
-            ShowGamepadTextInput_t ShowGamepadTextInput{ nullptr };
-            GetEnteredGamepadTextLength_t GetEnteredGamepadTextLength{ nullptr };
-            GetEnteredGamepadTextInput_t GetEnteredGamepadTextInput{ nullptr };
-            IsOverlayEnabled_t IsOverlayEnabled{ nullptr };
-            bool loaded{ false };
-            bool available{ false };
-        };
-
-        SteamOverlayFuncs& GetSteamFuncs()
-        {
-            static SteamOverlayFuncs funcs;
-            if (!funcs.loaded) {
-                funcs.loaded = true;
-                HMODULE steamModule = GetModuleHandleA("steam_api64.dll");
-                if (!steamModule) {
-                    steamModule = GetModuleHandleA("steam_api.dll");
-                }
-
-                if (steamModule) {
-                    using SteamUtils_t = void* (*)();
-                    auto pSteamUtils = reinterpret_cast<SteamUtils_t>(GetProcAddress(steamModule, "SteamAPI_SteamUtils_v010"));
-                    if (!pSteamUtils) {
-                        pSteamUtils = reinterpret_cast<SteamUtils_t>(GetProcAddress(steamModule, "SteamAPI_SteamUtils_v009"));
-                    }
-
-                    if (pSteamUtils) {
-                        void* utils = pSteamUtils();
-                        if (utils) {
-                            using ShowGPI_t = bool(__thiscall*)(void*, int, int, const char*, unsigned int, const char*);
-                            using GetGPTLength_t = unsigned int(__thiscall*)(void*);
-                            using GetGPTInput_t = bool(__thiscall*)(void*, char*, unsigned int);
-                            using IsOverlay_t = bool(__thiscall*)(void*);
-
-                            static void* s_utils = utils;
-
-                            funcs.ShowGamepadTextInput = [](int inputMode, int lineInputMode, const char* desc, unsigned int charMax, const char* existing) -> bool {
-                                auto** vt = *reinterpret_cast<void***>(s_utils);
-                                auto fn = reinterpret_cast<ShowGPI_t>(vt[34]);
-                                return fn(s_utils, inputMode, lineInputMode, desc, charMax, existing);
-                            };
-
-                            funcs.GetEnteredGamepadTextLength = []() -> unsigned int {
-                                auto** vt = *reinterpret_cast<void***>(s_utils);
-                                auto fn = reinterpret_cast<GetGPTLength_t>(vt[35]);
-                                return fn(s_utils);
-                            };
-
-                            funcs.GetEnteredGamepadTextInput = [](char* text, unsigned int maxLen) -> bool {
-                                auto** vt = *reinterpret_cast<void***>(s_utils);
-                                auto fn = reinterpret_cast<GetGPTInput_t>(vt[36]);
-                                return fn(s_utils, text, maxLen);
-                            };
-
-                            funcs.available = true;
-                            REX::INFO("{}", "Steam overlay keyboard functions loaded");
-                        }
-                    }
-
-                    if (!funcs.available) {
-                        using SteamUtilsFlat_ShowGPI = bool(*)(int, int, const char*, unsigned int, const char*);
-                        using SteamUtilsFlat_GetGPTLen = unsigned int(*)();
-                        using SteamUtilsFlat_GetGPTInput = bool(*)(char*, unsigned int);
-
-                        auto showGPI = reinterpret_cast<SteamUtilsFlat_ShowGPI>(GetProcAddress(steamModule, "SteamAPI_ISteamUtils_ShowGamepadTextInput"));
-                        auto getGPTLen = reinterpret_cast<SteamUtilsFlat_GetGPTLen>(GetProcAddress(steamModule, "SteamAPI_ISteamUtils_GetEnteredGamepadTextLength"));
-                        auto getGPTInput = reinterpret_cast<SteamUtilsFlat_GetGPTInput>(GetProcAddress(steamModule, "SteamAPI_ISteamUtils_GetEnteredGamepadTextInput"));
-
-                        if (showGPI && getGPTLen && getGPTInput) {
-                            funcs.ShowGamepadTextInput = showGPI;
-                            funcs.GetEnteredGamepadTextLength = getGPTLen;
-                            funcs.GetEnteredGamepadTextInput = getGPTInput;
-                            funcs.available = true;
-                            REX::INFO("{}", "Steam overlay keyboard (flat API) loaded");
-                        }
-                    }
-                }
-
-                if (!funcs.available) {
-                    REX::WARN("{}", "Steam overlay keyboard not available");
-                }
-            }
-            return funcs;
-        }
     }
 
-    void GamepadInput::Poll()
+    void GamepadInput::Poll(bool allowInput)
     {
         EnsureXInputLoaded();
 
         static bool loggedConnectedState = false;
         static bool loggedUsingGamepadState = false;
 
+        static bool waitForRelease{};
         menuTogglePressed = false;
         tabNextPressed = false;
         tabPrevPressed = false;
 
         if (!pXInputGetState) {
+            UpdateImGuiNavInputs({});
+            waitForRelease = true;
             if (gamepadConnected) {
                 REX::DEBUG("{}", "Gamepad disconnected");
             }
@@ -164,6 +78,8 @@ namespace ESPExplorerAE
         DWORD result = pXInputGetState(0, &state);
 
         if (result != ERROR_SUCCESS) {
+            UpdateImGuiNavInputs({});
+            waitForRelease = true;
             if (gamepadConnected) {
                 REX::DEBUG("{}", "Gamepad disconnected");
             }
@@ -187,6 +103,15 @@ namespace ESPExplorerAE
         ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_HasGamepad;
 
         const WORD buttons = state.Gamepad.wButtons;
+        if (!allowInput || waitForRelease) {
+            UpdateImGuiNavInputs({});
+            prevRB = false;
+            prevLB = false;
+            prevX = false;
+            comboTriggered = false;
+            waitForRelease = !allowInput || buttons != 0;
+            return;
+        }
         const bool anyButton = buttons != 0 ||
             state.Gamepad.bLeftTrigger > 30 ||
             state.Gamepad.bRightTrigger > 30 ||
@@ -301,57 +226,28 @@ namespace ESPExplorerAE
         return usingGamepad;
     }
 
-    void GamepadInput::ShowSteamKeyboard()
+    bool GamepadInput::ShowSteamKeyboard(std::uint32_t owner, const char* description, const char* existingText, std::size_t capacity)
     {
-        auto& funcs = GetSteamFuncs();
-        if (!funcs.available || !funcs.ShowGamepadTextInput) {
-            REX::DEBUG("{}", "Steam keyboard not available");
-            return;
-        }
-
-        if (steamKeyboardOpen) {
-            return;
-        }
-
-        if (funcs.ShowGamepadTextInput(0, 0, "Search", 256, "")) {
-            steamKeyboardOpen = true;
-            REX::DEBUG("{}", "Steam keyboard opened");
-        }
+        return SteamKeyboard::Show(owner, description, existingText, capacity);
     }
 
     void GamepadInput::CloseSteamKeyboard()
     {
-        steamKeyboardOpen = false;
-        REX::DEBUG("{}", "Steam keyboard closed");
+        SteamKeyboard::Abandon();
     }
 
     bool GamepadInput::IsSteamKeyboardOpen()
     {
-        return steamKeyboardOpen;
+        return SteamKeyboard::IsOpen();
     }
 
-    void GamepadInput::CheckSteamKeyboardResult(char* buffer, std::size_t bufferSize, std::string& value)
+    bool GamepadInput::CheckSteamKeyboardResult(std::uint32_t owner, char* buffer, std::size_t bufferSize, std::string& value)
     {
-        if (!steamKeyboardOpen) {
-            return;
-        }
-
-        auto& funcs = GetSteamFuncs();
-        if (!funcs.available) {
-            steamKeyboardOpen = false;
-            return;
-        }
-
-        unsigned int length = funcs.GetEnteredGamepadTextLength();
-        if (length > 0 && length < static_cast<unsigned int>(bufferSize)) {
-            char tempBuf[512]{};
-            if (funcs.GetEnteredGamepadTextInput(tempBuf, sizeof(tempBuf))) {
-                strncpy_s(buffer, bufferSize, tempBuf, _TRUNCATE);
-                value = buffer;
-                REX::DEBUG("{}", "Steam keyboard submitted text");
-            }
-        }
-
-        steamKeyboardOpen = false;
+        const auto result = SteamKeyboard::Take(owner);
+        if (!result || !buffer || result->size() >= bufferSize) return false;
+        // Reject oversized UTF-8 input in full instead of splitting a code point.
+        std::memcpy(buffer, result->c_str(), result->size() + 1);
+        value = *result;
+        return true;
     }
 }
