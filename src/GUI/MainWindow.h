@@ -6,6 +6,7 @@ namespace ESPExplorerAE
     {
     public:
         static void Draw();
+        static void Shutdown();
         static void ResetStateFromConfig();
         static void HandleMenuVisibilityChanged(bool visible);
     };
