@@ -1,0 +1,3 @@
+# Font manifest hashes refer to exact bytes, independent of core.autocrlf.
+dist/fonts/** -text
+dist/licenses/** -text

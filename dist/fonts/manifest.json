@@ -1,0 +1,52 @@
+{
+  "acquisition": "Vendored exact workspace baseline binaries. Restore with the repository checkout; no download or conversion step.",
+  "files": {
+    "NotoSans-Regular.ttf": {
+      "bytes": 629024,
+      "license": "OFL-1.1",
+      "notice": "licenses/NotoSans-OFL.txt",
+      "sha256": "fe8c022f48d8dd29f17b744d16f9346f4357e16f7d4f7be58b000ae7c291b614",
+      "upstreamProject": "https://github.com/notofonts/latin-greek-cyrillic",
+      "version": "2.015"
+    },
+    "NotoSansJP-Regular.ttf": {
+      "bytes": 5472784,
+      "license": "OFL-1.1",
+      "notice": "licenses/NotoSansCJK-OFL.txt",
+      "sha256": "d930d5d52d15231c283089760f84584272ad5e37e14607ba0d19c798e7a9caec",
+      "upstreamProject": "https://github.com/notofonts/noto-cjk/tree/Sans2.004",
+      "version": "2.004-H2"
+    },
+    "NotoSansKR-Regular.ttf": {
+      "bytes": 6185868,
+      "license": "OFL-1.1",
+      "notice": "licenses/NotoSansCJK-OFL.txt",
+      "sha256": "8cbc9b353bb9ce848fd69bb6a507319dfacc659cf5fd643db5d88f3c4970e1dd",
+      "upstreamProject": "https://github.com/notofonts/noto-cjk/tree/Sans2.004",
+      "version": "2.004-H2"
+    },
+    "NotoSansSC-Regular.ttf": {
+      "bytes": 10559284,
+      "license": "OFL-1.1",
+      "notice": "licenses/NotoSansCJK-OFL.txt",
+      "sha256": "d45f67f0a7c0ca3f256950777ce6a61cc7ce5f9696d02900cbbaac25f8aa7d16",
+      "upstreamProject": "https://github.com/notofonts/noto-cjk/tree/Sans2.004",
+      "version": "2.004-H2"
+    },
+    "ShareTechMono-Regular.ttf": {
+      "bytes": 42756,
+      "license": "OFL-1.1",
+      "notice": "licenses/ShareTechMono-OFL.txt",
+      "sha256": "911a85f56c44e8a712458513e6972a3e296ee9a84e70754462d03de3f3609c2b",
+      "upstreamProject": "https://github.com/google/fonts/tree/main/ofl/sharetechmono",
+      "version": "1.003"
+    }
+  },
+  "notices": {
+    "licenses/NotoSans-OFL.txt": "cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a",
+    "licenses/NotoSansCJK-OFL.txt": "00b4ece91d2439c5800f8e52fce64cc042b1e5ccab8952255dfed01b64e4a04b",
+    "licenses/ShareTechMono-OFL.txt": "9d96f445b6e9c701428811d0177f894874f8d6f07ecc30d568c506542368f3ff"
+  },
+  "provenance": "Versions and copyright statements read from the baseline font name tables. Upstream project links identify the font families; original download URLs and conversion commands are not known. No claim of byte identity with current upstream downloads.",
+  "schema": 1
+}

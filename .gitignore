@@ -11,3 +11,14 @@ compile_commands.json
 /reference
 *.bin
 /.venv
+
+# Preserve the licensed baseline font binaries and notices for clean checkouts.
+!dist/
+dist/*
+!dist/fonts/
+!dist/fonts/**
+
+# Python interpreter caches.
+__pycache__/
+*.py[cod]
+
