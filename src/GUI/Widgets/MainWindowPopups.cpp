@@ -276,7 +276,7 @@ namespace ESPExplorerAE
             ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlaySafeActions", "Safe Actions"));
             ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlaySafeActionsBody", "Viewing details, copying IDs, and filtering are safe. Give, spawn, and teleport actions are explicit and important actions ask for confirmation."));
             ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayMainMenuActionsBody", "Gameplay actions stay disabled in the main menu by default for stability. Only enable them if you understand the risks and want that behavior."));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayHistoryBody", "Action History shows recent requests and their observed results. Automatic undo is unavailable."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayHistoryBody", "Action History shows recent requests and their observed results."));
             ImGui::PopTextWrapPos();
         }
         ImGui::EndChild();

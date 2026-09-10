@@ -39,6 +39,8 @@ Target version: **1.6.0**.
 
 ### Fixed
 
+- Prevented inventory capture from dereferencing absent item-modification buffers
+  and corrected weapon/armor instance casts to use the game's type information.
 - Restored Default Green for new installations and theme resets. Modern Charcoal
   now loads from its own editable theme INI; existing saved colors are preserved.
 - Language files, fonts, and themes load from the installed mod directories;
@@ -48,5 +50,10 @@ Target version: **1.6.0**.
   requests after game-session changes. Inventory actions revalidate stack targets.
 - Preserved pending settings after write failures and added rollback of partial
   hook/renderer initialization plus coordinated shutdown cleanup.
-- Distinguished dispatched actions from verified changes and disabled speculative
-  undo. Runtime diagnostics retain unknown override counts when evidence is absent.
+- Distinguished dispatched actions from verified changes. Runtime diagnostics
+  retain unknown override counts when evidence is absent.
+
+### Removed
+
+- Removed the remaining disabled Undo control from Action History and its help
+  text and translations. History entries use the full available width.

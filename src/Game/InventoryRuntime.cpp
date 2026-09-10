@@ -187,9 +187,11 @@ namespace ESPExplorerAE
             result.instanceIdentityKnown = !instance || identity.ownedInstance.get() == instance || item.object->GetBaseInstanceData() == instance;
             result.weight = RE::TESWeightForm::GetFormWeight(item.object, instance);
             result.value = static_cast<std::int32_t>(RE::TESValueForm::GetFormValue(item.object, instance));
-            if (const auto* data = instance ? dynamic_cast<const RE::TESObjectWEAP::InstanceData*>(instance) : nullptr) result.damage = data->attackDamage;
+            // Engine objects use the game's RTTI descriptors, not the DLL's
+            // compiler-generated type information for the RE declarations.
+            if (const auto* data = instance ? RE::fallout_cast<const RE::TESObjectWEAP::InstanceData*>(instance) : nullptr) result.damage = data->attackDamage;
             else if (const auto* weapon = item.object->As<RE::TESObjectWEAP>()) result.damage = weapon->weaponData.attackDamage;
-            if (const auto* data = instance ? dynamic_cast<const RE::TESObjectARMO::InstanceData*>(instance) : nullptr) result.armorRating = data->rating;
+            if (const auto* data = instance ? RE::fallout_cast<const RE::TESObjectARMO::InstanceData*>(instance) : nullptr) result.armorRating = data->rating;
             else if (const auto* armor = item.object->As<RE::TESObjectARMO>()) result.armorRating = armor->armorData.rating;
             if (auto* extra = identity.extra.get()) {
                 result.isFavorited = extra->IsFavorite();
@@ -203,7 +205,9 @@ namespace ESPExplorerAE
                     result.legendaryFormID = legendary->GetFormID();
                     result.legendaryName = ResolveFormLabel(legendary);
                 }
-                if (auto* objectInstance = extra->GetByType<RE::BGSObjectInstanceExtra>()) {
+                // BGSObjectInstanceExtra may have no values buffer. The pinned
+                // GetIndexData implementation dereferences it unconditionally.
+                if (auto* objectInstance = extra->GetByType<RE::BGSObjectInstanceExtra>(); objectInstance && objectInstance->values) {
                     result.modCount = objectInstance->GetNumMods(false);
                     for (const auto& modData : objectInstance->GetIndexData()) {
                         InventoryMod mod;

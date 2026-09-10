@@ -216,7 +216,6 @@ namespace ESPExplorerAE
 
             const float listHeight = (std::max)(280.0f, ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing());
             if (ImGui::BeginChild("##ActionHistoryList", ImVec2(0.0f, listHeight), ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
-                const float undoButtonWidth = 112.0f;
                 const float minCardHeight = ImGui::GetFrameHeightWithSpacing() * 3.0f;
                 ImVec4 evenCardBg = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
                 evenCardBg.x *= 0.82f;
@@ -239,7 +238,7 @@ namespace ESPExplorerAE
                     ImGui::PushID(static_cast<int>(entry.id));
 
                     const float availableWidth = ImGui::GetContentRegionAvail().x;
-                    const float wrapWidth = (std::max)(160.0f, availableWidth - undoButtonWidth - style.ItemSpacing.x * 3.0f - style.WindowPadding.x * 2.0f);
+                    const float wrapWidth = (std::max)(160.0f, availableWidth - style.WindowPadding.x * 2.0f);
                     const ImVec2 descriptionSize = ImGui::CalcTextSize(entry.description.c_str(), nullptr, false, wrapWidth);
                     const float cardHeight = (std::max)(minCardHeight, descriptionSize.y + style.WindowPadding.y * 2.0f + ImGui::GetTextLineHeightWithSpacing() + style.ItemSpacing.y * 2.0f);
 
@@ -257,16 +256,8 @@ namespace ESPExplorerAE
                         ImGui::SetTooltip("%s", entry.details.c_str());
                     }
 
-                    const float buttonX = ImGui::GetWindowContentRegionMax().x - undoButtonWidth;
-                    ImGui::SetCursorPos(ImVec2(buttonX, style.WindowPadding.y));
-                    // No inverse is offered without a verified restoration
-                    // contract. Preserve the existing disabled history control.
-                    ImGui::BeginDisabled(true);
-                    ImGui::Button(L("General", "sNoUndoAvailable", "No Undo"), ImVec2(undoButtonWidth, 0.0f));
-                    ImGui::EndDisabled();
-
                     ImGui::SetCursorPos(ImVec2(style.WindowPadding.x, style.WindowPadding.y + ImGui::GetTextLineHeightWithSpacing() + style.ItemSpacing.y * 0.5f));
-                    ImGui::PushTextWrapPos(buttonX - style.ItemSpacing.x);
+                    ImGui::PushTextWrapPos(ImGui::GetWindowContentRegionMax().x);
                     ImGui::TextUnformatted(entry.description.c_str());
                     ImGui::PopTextWrapPos();
 
