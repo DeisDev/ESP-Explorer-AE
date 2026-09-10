@@ -22,3 +22,6 @@ dist/*
 __pycache__/
 *.py[cod]
 
+# Dependency notices are shipped with the plugin.
+!dist/licenses/
+!dist/licenses/**

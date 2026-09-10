@@ -1,0 +1,81 @@
+{
+  "components": [
+    {
+      "license": "MIT",
+      "name": "Dear ImGui",
+      "notice": "imgui-MIT.txt",
+      "sha256": "173506a2d6f7fb67990d257fb2507f188690eca39060c39469ae7bef43aae2a3",
+      "source": "https://raw.githubusercontent.com/ocornut/imgui/v1.92.7/LICENSE.txt",
+      "version": "1.92.7"
+    },
+    {
+      "license": "MIT",
+      "name": "SimpleIni",
+      "notice": "simpleini-MIT.txt",
+      "sha256": "1f8d19cba3d929f45f74b8e7cdf84b2fee5b96be69d08d0084ed728316f9f2c2",
+      "source": "https://raw.githubusercontent.com/brofield/simpleini/v4.25/LICENCE.txt",
+      "version": "4.25"
+    },
+    {
+      "license": "MIT",
+      "name": "spdlog",
+      "notice": "spdlog-MIT.txt",
+      "sha256": "4ccecab18d1ff0b61174fe3d6c430541625d3ddb865b0d5887db296f883c76e7",
+      "source": "https://raw.githubusercontent.com/gabime/spdlog/v1.16.0/LICENSE",
+      "version": "1.16.0"
+    },
+    {
+      "license": "GPL-3.0",
+      "name": "ESPExplorerAE",
+      "notice": "ESPExplorerAE-GPL-3.0.txt",
+      "sha256": "b6545fbb3788a50fb3f725701418aa8307c510e03f8e9500974d11b1d3677be1",
+      "source": "LICENSE",
+      "version": "1.6.0"
+    },
+    {
+      "license": "GPL-3.0",
+      "name": "CommonLibF4",
+      "notice": "CommonLibF4-GPL-3.0.txt",
+      "sha256": "230184f60bae2feaf244f10a8bac053c8ff33a183bcc365b4d8b876d2b7f4809",
+      "source": "lib/commonlibf4/LICENSE",
+      "version": "33010af041e11615ca342fd1cff4e6db318a3971"
+    },
+    {
+      "license": "GPL-3.0",
+      "name": "commonlib-shared",
+      "notice": "commonlib-shared-GPL-3.0.txt",
+      "sha256": "230184f60bae2feaf244f10a8bac053c8ff33a183bcc365b4d8b876d2b7f4809",
+      "source": "lib/commonlibf4/lib/commonlib-shared/LICENSE",
+      "version": "29fbdb0e2dc548c9ab22f6964981d75090dc9094"
+    },
+    {
+      "license": "MIT OR Unlicense",
+      "name": "imstb_rectpack",
+      "notice": "imstb_rectpack-LICENSE.txt",
+      "sha256": "9407f57d550d1d36974de15c7aad3dbf21e59c4b3312fc762157f05fdea6ff41",
+      "source": "https://github.com/ocornut/imgui/blob/v1.92.7/imstb_rectpack.h",
+      "version": "Dear ImGui 1.92.7 bundled copy"
+    },
+    {
+      "license": "MIT OR Unlicense",
+      "name": "imstb_textedit",
+      "notice": "imstb_textedit-LICENSE.txt",
+      "sha256": "9407f57d550d1d36974de15c7aad3dbf21e59c4b3312fc762157f05fdea6ff41",
+      "source": "https://github.com/ocornut/imgui/blob/v1.92.7/imstb_textedit.h",
+      "version": "Dear ImGui 1.92.7 bundled copy"
+    },
+    {
+      "license": "MIT OR Unlicense",
+      "name": "imstb_truetype",
+      "notice": "imstb_truetype-LICENSE.txt",
+      "sha256": "9407f57d550d1d36974de15c7aad3dbf21e59c4b3312fc762157f05fdea6ff41",
+      "source": "https://github.com/ocornut/imgui/blob/v1.92.7/imstb_truetype.h",
+      "version": "Dear ImGui 1.92.7 bundled copy"
+    }
+  ],
+  "notes": [
+    "spdlog is compiled with SPDLOG_USE_STD_FORMAT; the bundled fmt implementation is not used.",
+    "Font licenses and checksums are recorded separately in fonts/manifest.json."
+  ],
+  "schema": 1
+}
