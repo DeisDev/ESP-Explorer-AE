@@ -17,8 +17,7 @@ in-game ImGui explorer for plugins, forms, player actions, diagnostics, logs,
 themes, and localization.
 
 > [!NOTE]
-> This repository is primarily for development. End-user downloads, screenshots,
-> and release notes belong on the Nexus Mods page.
+> Downloads, screenshots, and release notes are available on the Nexus Mods page.
 
 ## Repository Layout
 
@@ -38,21 +37,6 @@ themes, and localization.
 - `dist/themes/` - shipped theme `.ini` files.
 - `nexus/` - Nexus page assets and description text.
 - `lib/commonlibf4/` - CommonLibF4 dependency.
-
-## Runtime Startup
-
-Initialization order matters because UI text, fonts, hooks, and cached game data
-depend on earlier systems being ready.
-
-1. `src/main.cpp` loads config.
-2. Logging is initialized from config.
-3. Localization is loaded for the configured language.
-4. F4SE messaging is registered.
-5. Hooks are installed.
-6. `CatalogService` coalesces lifecycle refreshes; its game-task pump captures data through `CatalogReader`.
-
-Features that depend on localized strings or font coverage should assume config
-and language setup have completed before the UI is first drawn.
 
 ## Build
 
@@ -92,7 +76,7 @@ configure `XSE_FO4_GAME_PATH` or `XSE_FO4_MODS_PATH`, then run `xmake install`.
 
 ## Packaging
 
-Package the current build with the shipped runtime assets:
+Package the current build with its language files, fonts, and themes:
 
 ```powershell
 xmake package
@@ -104,38 +88,9 @@ The archive `build/packages/ESPExplorerAE-<version>.zip` contains the DLL under
 included in the repository; no font download or conversion step is needed.
 
 Keep the matching `ESPExplorerAE.pdb` from the build output for diagnostics.
-In-game acceptance on Fallout 4 Steam runtime 1.11.240 remains pending.
 
-## Runtime Assets
-
-At runtime, the plugin loads user/game-install assets first and falls back to
-the development `dist` folders.
-
-- Languages: `Data/Interface/ESPExplorerAE/lang`, then `dist/lang`.
-- Fonts: `Data/Interface/ESPExplorerAE/fonts`, then `dist/fonts`.
-- Themes: `Data/Interface/ESPExplorerAE/themes`, then `dist/themes`.
-
-This lets packaged installs use the normal Fallout 4 `Data` layout while local
-development can run from the repository assets.
-
-## Core Modules
-
-`Game/CatalogReader` owns engine enumeration from `RE::TESDataHandler` and
-`RE::TESForm::GetAllForms()`. `App/CatalogService` coalesces refresh requests and
-publishes immutable snapshots with canonical records and indexes. UI code retains
-a snapshot while drawing; it does not hold data locks or enumerate the game.
-
-`MainWindow` owns top-level UI state, tab orchestration, modal popups, and the
-status bar. Most feature work lands in the relevant tab under `src/GUI/Tabs/`
-or in shared widgets under `src/GUI/Widgets/`.
-
-`ImGuiRenderer` owns ImGui context setup, theme application, and font rebuild
-processing. Language or font changes should preserve the existing sequence used
-by `SettingsTab`: save config, reload `Language`, then request a font rebuild
-through `FontManager`.
-
-`Config` persists favorites, filters, window state, theme settings, input
-settings, and other plugin options.
+Packaging copies these files from `dist` into the game's `Data` layout. The
+plugin loads them from `Data/Interface/ESPExplorerAE/{lang,fonts,themes}`.
 
 ## Localization
 
@@ -163,8 +118,8 @@ sFontFiles = NotoSans-Regular.ttf, MyPolishFont.ttf
 sGlyphRanges = default, cyrillic
 ```
 
-`sFontFiles` is resolved from `Data/Interface/ESPExplorerAE/fonts` first, then
-`dist/fonts`. `sGlyphRanges` can include ImGui preset ranges such as `default`,
+Relative `sFontFiles` entries resolve inside `Data/Interface/ESPExplorerAE/fonts`.
+`sGlyphRanges` can include ImGui preset ranges such as `default`,
 `cyrillic`, `japanese`, `chinese`, `chinese-full`, `korean`, `thai`, or
 `vietnamese`.
 
@@ -180,27 +135,6 @@ When adding or changing a theme:
 - use readable foreground, accent, disabled, and background colors;
 - test dense tables, disabled text, popups, and different font sizes;
 - run `xmake package` so the packaged layout includes the theme.
-
-## Profiling
-
-Optional bounded capture is controlled by `[Debug] bProfilePerformance` in the
-INI. Reports include operation percentiles, available allocation counters, queue
-depths and snapshot storage estimates. Game measurements and baseline-derived
-budgets are still pending.
-
-## Validation
-
-In-game validation is still required.
-
-Use the available checks:
-
-- run `xmake` for compile verification;
-- run `xmake package` for packaging changes;
-- test in-game for UI, input, hook, player-action, or rendering changes;
-- inspect all shipped language files for UI text changes.
-
-High-risk areas include hook installation, input interception, font atlas rebuild
-timing, save-affecting player actions, and `CatalogService::RequestRefresh()` and game-task capture behavior.
 
 ## Contributors
 
@@ -224,15 +158,6 @@ Short version:
 
 AI-assisted code is allowed, but contributors are responsible for understanding,
 testing, and explaining their changes.
-
-## Developer Notes
-
-The current refactor is under development. In-game acceptance remains pending.
-
-- This project is data-driven where practical. Before hardcoding game data,
-  check whether Fallout 4, F4SE, or CommonLibF4 exposes the data already.
-- Nexus page copy lives in `nexus/description.bbcode` and should stay separate
-  from developer documentation.
 
 ## Credits
 
