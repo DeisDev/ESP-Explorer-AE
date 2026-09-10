@@ -1,7 +1,11 @@
 #include "pch.h"
 
 #include "Config/Config.h"
-#include "Data/DataManager.h"
+#include "App/ActionService.h"
+#include "App/Lifecycle.h"
+#include "App/Profiler.h"
+#include "Platform/SteamKeyboard.h"
+#include "App/CatalogService.h"
 #include "Hooks/Hooks.h"
 #include "Localization/Language.h"
 
@@ -22,19 +26,44 @@ namespace
 
     void MessageHandler(F4SE::MessagingInterface::Message* message)
     {
-        if (!message) {
+        if (!message || ESPExplorerAE::Lifecycle::Shutdown().Requested()) {
             return;
         }
 
         REX::DEBUG("Received F4SE message type {}", message->type);
 
         switch (message->type) {
+        case F4SE::MessagingInterface::kPreLoadGame:
+            ESPExplorerAE::CatalogService::SetAvailable(false);
+            ESPExplorerAE::ActionService::BeginSession(false);
+            ESPExplorerAE::SteamKeyboard::Abandon();
+            ESPExplorerAE::Config::FlushPendingSave();
+            break;
+        case F4SE::MessagingInterface::kPostLoadGame:
+            ESPExplorerAE::ActionService::BeginSession(message->data != nullptr);
+            ESPExplorerAE::CatalogService::SetAvailable(message->data != nullptr);
+            break;
+        case F4SE::MessagingInterface::kNewGame:
+            ESPExplorerAE::CatalogService::SetAvailable(false);
+            ESPExplorerAE::CatalogService::SetAvailable(true, true);
+            ESPExplorerAE::ActionService::BeginSession(true);
+            ESPExplorerAE::SteamKeyboard::Abandon();
+            break;
+        case F4SE::MessagingInterface::kGameDataReady:
+            if (!message->data) {
+                ESPExplorerAE::CatalogService::SetAvailable(false);
+                ESPExplorerAE::ActionService::BeginSession(false);
+            } else {
+                ESPExplorerAE::CatalogService::SetAvailable(true);
+            }
+            ESPExplorerAE::Hooks::Install();
+            break;
         case F4SE::MessagingInterface::kPostPostLoad:
         case F4SE::MessagingInterface::kGameLoaded:
-        case F4SE::MessagingInterface::kPostLoadGame:
-        case F4SE::MessagingInterface::kGameDataReady:
-            ESPExplorerAE::DataManager::Refresh();
             ESPExplorerAE::Hooks::Install();
+            break;
+        case F4SE::MessagingInterface::kPreSaveGame:
+            ESPExplorerAE::Config::FlushPendingSave();
             break;
         default:
             break;
@@ -59,9 +88,10 @@ F4SE_PLUGIN_LOAD(const F4SE::LoadInterface* a_f4se)
 
     const auto& settings = ESPExplorerAE::Config::Get();
     SetLogLevel(settings.debugLogging);
+    ESPExplorerAE::Profiler::Configure(settings.profilePerformance);
     REX::INFO("Plugin load started");
 
-    if (!ESPExplorerAE::Language::Load(settings.language)) {
+    if (!ESPExplorerAE::Language::Load(settings.language, [](std::string message) { REX::WARN("{}", message); })) {
         REX::WARN("Failed to load language file");
     }
 
@@ -71,8 +101,10 @@ F4SE_PLUGIN_LOAD(const F4SE::LoadInterface* a_f4se)
         }
     }
 
+    if (!ESPExplorerAE::ActionService::Initialize()) {
+        REX::WARN("Game action dispatcher unavailable; gameplay actions disabled");
+    }
     ESPExplorerAE::Hooks::Install();
-    ESPExplorerAE::DataManager::Refresh();
 
     REX::INFO("ESPExplorerAE initialized");
     return true;
