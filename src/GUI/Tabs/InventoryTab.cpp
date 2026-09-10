@@ -822,10 +822,10 @@ namespace ESPExplorerAE
 
                 DrawQuickActions(context);
                 SearchBar::Draw(L(context, "Inventory", "sSearch", "Search Inventory..."), state.inventorySearchBuffer.data(), state.inventorySearchBuffer.size(), state.inventorySearch, &state.focusPending, "InventorySearch", L(context, "General", "sClearSearchButton", "X"));
-                ImGui::SameLine();
                 ImGui::Checkbox(L(context, "Inventory", "sEquipped", "Equipped"), &state.showEquippedOnly);
-                ImGui::SameLine();
-                if (ImGui::Button(L(context, "Inventory", "sRefreshInventory", "Refresh"))) {
+                const auto* refreshLabel = L(context, "Inventory", "sRefreshInventory", "Refresh");
+                ImGuiWidgetUtils::DrawWrappedSameLine(refreshLabel);
+                if (ImGui::Button(refreshLabel)) {
                     MarkRefreshNeeded();
                     RefreshPlayerInventory(context);
                 }

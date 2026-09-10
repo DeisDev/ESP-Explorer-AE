@@ -13,6 +13,9 @@ Target version: **1.6.0**.
 
 ### Added
 
+- Bulk quantity increments, clear controls, and item/ammo totals in Add Item.
+- Saved options for including weapon ammo and its default quantity in Add Item.
+- Log search with matching-line copying and a jump-to-latest button.
 - A project changelog and Semantic Versioning policy, including compatibility
   criteria and release checks for plugin metadata and packaged artifacts.
 - Optional bounded performance profiling for data capture, UI interactions, and
@@ -22,6 +25,10 @@ Target version: **1.6.0**.
 
 ### Changed
 
+- Add Item quantities start at zero, and quantity shortcuts add to the current
+  amount. Pressing +100 twice selects 200; zero-quantity entries are skipped.
+- Simplified the Nexus description and corrected outdated feature and
+  compatibility claims.
 - Menu navigation, header, and close controls use bundled Lucide icons that scale
   with the interface and follow the selected theme.
 - The runtime check accepts Steam Fallout 4 1.11.191, 1.11.221, and 1.11.240,
@@ -39,6 +46,11 @@ Target version: **1.6.0**.
 
 ### Fixed
 
+- Search clearing keeps the field ready for typing, and Plugin Browser uses the
+  same Steam keyboard integration as other browsers.
+- Inventory search no longer pushes the equipped filter and refresh control
+  beyond the available width. Add Item keeps its totals and buttons below a
+  scrollable list.
 - Prevented inventory capture from dereferencing absent item-modification buffers
   and corrected weapon/armor instance casts to use the game's type information.
 - Restored Default Green for new installations and theme resets. Modern Charcoal

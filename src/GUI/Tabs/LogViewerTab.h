@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Logs.h"
+#include <array>
 #include <functional>
 #include <string_view>
 #include <unordered_set>
@@ -9,6 +10,10 @@ namespace ESPExplorerAE
 {
     struct LogViewerState
     {
+        std::array<char, 256> searchBuffer{};
+        std::string search;
+        std::vector<std::size_t> visibleLineIndexes;
+        bool focusPending{}, scrollToLatest{};
         std::unordered_set<std::size_t> selectedLineIndexes;
         std::size_t lastClickedIndex{};
         std::uint64_t selectionRevision{};

@@ -35,6 +35,8 @@ namespace ESPExplorerAE
         MultiCopyFormat multiCopyFormat{ MultiCopyFormat::Lines };
         bool allowGameplayActionsInMainMenu{ false };
         bool componentSubstitution{ true };
+        bool includeAmmoWithWeapons{ true };
+        int defaultAmmoQuantity{ 100 };
         bool pluginAdvancedDetailsView{ false };
         int recentRecordsLimit{ 25 };
         bool enableGamepadNav{ true };

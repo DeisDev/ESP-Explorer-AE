@@ -23,8 +23,8 @@ namespace ESPExplorerAE
         struct Submission { std::uint64_t revision{}; std::vector<ActionRequest> actions; };
         struct Requests { std::optional<Submission> submit; };
 
-        void Open(const FormEntry& entry, std::uint64_t session);
-        void Open(const std::vector<FormEntry>& entries, std::uint64_t session);
+        void Open(const FormEntry& entry, std::uint64_t session, bool includeAmmo = true, int ammoQuantity = 100);
+        void Open(const std::vector<FormEntry>& entries, std::uint64_t session, bool includeAmmo = true, int ammoQuantity = 100);
         void Close();
         void Draw(const View& view, Requests& requests);
         void ResolveSubmit(std::uint64_t revision, ActionAdmission admission);
@@ -36,7 +36,7 @@ namespace ESPExplorerAE
             struct ItemState
             {
                 FormEntry entry{};
-                int quantity{ 1 };
+                int quantity{};
                 int ammoQuantity{ 100 };
                 std::uint32_t ammoFormID{ 0 };
                 bool includeAmmo{ false };

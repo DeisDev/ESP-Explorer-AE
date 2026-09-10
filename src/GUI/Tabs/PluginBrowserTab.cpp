@@ -2,7 +2,8 @@
 #include "GUI/Tabs/PluginBrowserHelpers.h"
 #include "GUI/Tabs/PluginBrowserPanels.h"
 
-#include "Input/GamepadInput.h"
+#include "GUI/Widgets/SearchBar.h"
+#include "GUI/Widgets/ImGuiWidgetUtils.h"
 
 #include "GUI/Widgets/RecordFiltersWidget.h"
 #include "GUI/Widgets/ActionFeedback.h"
@@ -25,28 +26,11 @@ namespace ESPExplorerAE
         bool listFilterSettingsChanged = false;
 
         const auto* clearLabel = view.records.localize("General", "sClearSearchButton", "X");
-        const float clearBtnWidth = ImGui::CalcTextSize(clearLabel).x + ImGui::GetStyle().FramePadding.x * 2.0f;
-        const float searchFieldWidth = ImGui::GetContentRegionAvail().x * 0.55f - clearBtnWidth - ImGui::GetStyle().ItemSpacing.x;
-        ImGui::SetNextItemWidth(searchFieldWidth);
-        if (context.state.focusPending && !ImGui::IsAnyItemActive() && !GamepadInput::IsUsingGamepad()) {
-            ImGui::SetKeyboardFocusHere();
-            context.state.focusPending = false;
-        }
-        if (ImGui::InputTextWithHint("##PluginSearchInput", context.view.records.localize("PluginBrowser", "sSearch", "Plugin Search"), context.state.searchBuffer.data(), context.state.searchBuffer.size())) {
-            context.state.search = context.state.searchBuffer.data();
-        }
-        if (ImGui::IsItemActive() && ImGui::IsKeyPressed(ImGuiKey_Escape, false) && context.state.searchBuffer[0] != '\0') {
-            context.state.searchBuffer[0] = '\0';
-            context.state.search.clear();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button((std::string(clearLabel) + "###PluginSearchClear").c_str())) {
-            context.state.searchBuffer[0] = '\0';
-            context.state.search.clear();
-        }
-        ImGui::SameLine();
-
-        if (ImGui::Button(context.view.records.localize("PluginBrowser", "sClearFilter", "Clear Plugin Filter"))) {
+        SearchBar::Draw(view.records.localize("PluginBrowser", "sSearch", "Plugin Search"), state.searchBuffer.data(), state.searchBuffer.size(),
+            state.search, &state.focusPending, "PluginSearchInput", clearLabel, ImGui::GetContentRegionAvail().x * 0.55f);
+        const auto* clearFilter = view.records.localize("PluginBrowser", "sClearFilter", "Clear Plugin Filter");
+        ImGuiWidgetUtils::DrawWrappedSameLine(clearFilter);
+        if (ImGui::Button(clearFilter)) {
             context.requests.pluginFilter = std::string{};
         }
 

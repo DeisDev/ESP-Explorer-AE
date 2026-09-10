@@ -21,7 +21,8 @@ namespace ESPExplorerAE::BrowserWidgets
             ++filters.advancedRecordFilterRevision;
             requests.filtersChanged = true;
         }
-        SearchBar::Draw(view.localize(section, "sSearch", searchFallback), state.searchBuffer.data(), state.searchBuffer.size(), state.search, &state.focusPending, id);
+        SearchBar::Draw(view.localize(section, "sSearch", searchFallback), state.searchBuffer.data(), state.searchBuffer.size(), state.search, &state.focusPending, id,
+            view.localize("General", "sClearSearchButton", "X"));
         if (view.drawPluginFilterStatus) view.drawPluginFilterStatus();
         ActionFeedback::Draw(state.admission, view.localize);
         ImGui::Separator();

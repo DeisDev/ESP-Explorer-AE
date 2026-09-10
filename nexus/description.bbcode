@@ -2,44 +2,30 @@
 
 [center][img]https://i.imgur.com/QaWstlC.png[/img][/center]
 
-ESP Explorer AE is an in-game explorer and utility menu for Fallout 4 Anniversary Edition.
+ESP Explorer AE is an in-game explorer and utility menu for Fallout 4 on Steam.
 
-Browse your load order, inspect records, find items, spawn NPCs, add spells or perks, manage inventory, and teleport to cells without leaving the game. It is built for players who want fast access to the data inside their mod list without opening the console or alt-tabbing.
-
-[list]
-[*]Search plugins, records, forms, inventory, NPCs, cells, objects, spells, and perks.[/*]
-[*]Right-click records for actions that make sense for that record type.[/*]
-[*]Favorite useful records and jump back to recently viewed entries.[/*]
-[*]Use advanced filters when a large load order needs more than a simple search box.[/*]
-[*]View plugin diagnostics, record details, action history, and logs from inside the menu.[/*]
-[*]Customize the look with themes, font sizing, language files, and optional Pip-Boy color sync.[/*]
-[/list]
+Browse your loaded plugins, find items, manage your inventory, or spawn an NPC without leaving the game. Search and filters help you find what you need, while favorites keep useful records close at hand.
 
 [center][img]https://i.imgur.com/QaWstlC.png[/img][/center]
 
 [center][b][img]https://i.imgur.com/KRjnKOf.png[/img][/b][/center]
 
 [list]
-[*]In-game plugin browser for ESP, ESM, and ESL files.[/*]
-[*]Dedicated tabs for inventory, items, NPCs, cells, objects, spells, and perks.[/*]
-[*]Global search across plugins and records.[/*]
-[*]Inventory browser with category tabs, equipped filtering, stack details, and quick actions.[/*]
-[*]Give, spawn, drop, remove, equip, unequip, duplicate, use, and teleport actions where supported.[/*]
-[*]Weapon and armor mod inspection with attach and detach support from the inventory tab.[/*]
-[*]Context-aware menus, clipboard copy tools, favorites, and recent records.[/*]
-[*]Rule-based filters with saved rules, regex support, hidden plugin management, and global plugin search.[/*]
-[*]Action History with request statuses and observed results.[/*]
-[*]Optional component substitution so crafting components can be given as usable scrap items.[/*]
-[*]Built-in log viewer with copy and export support.[/*]
-[*]Data-driven themes and multi-language support.[/*]
-[*]Basic controller support with optional gamepad navigation.[/*]
+[*]Browse ESP, ESM, and ESL plugins, with dedicated browsers for items, NPCs, cells, objects, spells, and perks.[/*]
+[*]Add items, spawn NPCs, teleport to cells, and add or remove spells and perks.[/*]
+[*]Manage your inventory and inspect equipment, item stacks, and attached weapon or armor mods.[/*]
+[*]Search across plugins and records, with advanced filters for larger mod lists.[/*]
+[*]Save favorites, revisit recent records, and copy names or IDs from the menu.[/*]
+[*]View record details, plugin diagnostics, action history, and searchable logs.[/*]
+[*]Customize the interface with themes, font sizes, languages, and optional Pip-Boy color sync.[/*]
+[*]Keyboard, mouse, and optional gamepad navigation.[/*]
 [/list]
 
-[center][size=2]Themes are data-driven. Add or edit .ini theme files in Data/Interface/ESPExplorerAE/themes to customize the menu without rebuilding the plugin.[/size][/center]
+Settings also let you rebind the menu key, choose a startup tab, and adjust how the menu behaves while you play.
 
 [center][size=2]Some shipped translations were created with LLM assistance and may contain mistakes. English is the reference language.[/size][/center]
 
-[center][size=2]Want to make your own translation? Copy en.ini into Data/Interface/ESPExplorerAE/lang, rename it to your language code, translate the values, and optionally add sName, sFontFiles, and sGlyphRanges in the Language section if your language needs custom display text or font coverage.[/size][/center]
+[center][size=2]Custom themes and translations can be added through the files in Data/Interface/ESPExplorerAE.[/size][/center]
 
 
 [center][img]https://i.imgur.com/QaWstlC.png[/img][/center]
@@ -47,48 +33,42 @@ Browse your load order, inspect records, find items, spawn NPCs, add spells or p
 [center][img]https://i.imgur.com/4xgIdrp.png[/img][/center]
 
 [list=1]
-[*]Install the requirements: F4SE and Address Library.[/*]
-[*]Install this mod with your mod manager, or drop the files into your Fallout 4 game folder.[/*]
+[*]Install [url=https://f4se.silverlock.org/]F4SE[/url] and [url=https://www.nexusmods.com/fallout4/mods/47327]Address Library for F4SE Plugins[/url] for your exact Fallout4.exe version.[/*]
+[*]Install the mod with your mod manager, or merge the archive's Data folder into your Fallout 4 game folder.[/*]
 [*]Launch the game through F4SE.[/*]
 [/list]
 
-The default toggle key is INSERT. You can rebind it at any time. The config file is created automatically next to the plugin in the F4SE\Plugins folder.
+Load a save or start a game, then press INSERT to open the menu. You can change the key in Settings.
+
+Your preferences and favorites are saved in Data/F4SE/Plugins/ESPExplorerAE.ini. Keep this file when updating.
 
 [center][img]https://i.imgur.com/QaWstlC.png[/img][/center]
 
 [center][img]https://i.imgur.com/vCq3zR1.png[/img][/center]
 
 [list]
-[*]Fallout 4 Steam 1.11.240 with F4SE 0.7.9, 1.11.221 with F4SE 0.7.8, or 1.11.191 with F4SE 0.7.7.[/*]
-[*]Requires the Address Library file matching your exact game executable.[/*]
-[*]Supports all plugin types.[/*]
-[*]Works with or without the official DLCs.[/*]
-[*]Designed to be safe to install or uninstall mid-save.[/*]
+[*]Steam Fallout 4 1.11.240 with F4SE 0.7.9.[/*]
+[*]Steam Fallout 4 1.11.221 with F4SE 0.7.8.[/*]
+[*]Steam Fallout 4 1.11.191 with F4SE 0.7.7.[/*]
 [/list]
 
-[center][size=3]This mod may conflict with other in-game explorer, item menu, or input-hook mods. The following mods may work for some setups, but have been reported to cause issues:[/size][/center]
-
-[center][size=3][color=#ff0000]
-[url=https://www.nexusmods.com/fallout4/mods/56922]P71 In Game Shop Mod Explorer[/url]
-[url=https://www.nexusmods.com/fallout4/mods/99301]Fast AddItem Menu[/url][/color][/size]
-[/center]
+Each version requires its matching Address Library file. Other game versions, GOG, and VR are not supported.
 
 [center][img]https://i.imgur.com/QaWstlC.png[/img][/center]
 
 [center][img]https://i.imgur.com/BbRvQ3C.png[/img][/center]
 
-If something breaks, keep the report short and useful.
+If you run into a problem, please include:
 
 [list]
 [*]What happened.[/*]
 [*]How to reproduce it.[/*]
-[*]Your mod list or anything unusual that might matter.[/*]
-[*]A screenshot or log if you have one.[/*]
+[*]ESP Explorer AE, Fallout4.exe, and F4SE versions, plus the Address Library file you installed.[/*]
+[*]Any relevant mods or settings.[/*]
+[*]A screenshot and ESPExplorerAE.log from Documents/My Games/Fallout4/F4SE if available.[/*]
 [/list]
 
-Bug reports with clear steps are much easier to fix than reports that only say it does not work.
-
-You can report bugs in two places: 
+Report bugs here:
 [list]
 [*][url=https://github.com/DeisDev/ESP-Explorer-AE/issues]Github[/url][/*]
 [*][url=https://www.nexusmods.com/fallout4/mods/102223?tab=bugs]Nexus Bug Tracker[/url][/*]
@@ -101,8 +81,9 @@ You can report bugs in two places: 
 [list]
 [*]F4SE team.[/*]
 [*]CommonLibF4 / libxse contributors.[/*]
-[*]ImGUI contributors.[/*]
-[*]SimpleINI contributors.[/*]
+[*]Dear ImGui contributors.[/*]
+[*]SimpleIni contributors.[/*]
+[*]Lucide and Feather icon contributors, and the bundled font authors; redistribution notices are included with the mod.[/*]
 [*]ESP Explorer AE contributors. [/*]
 [/list]
 

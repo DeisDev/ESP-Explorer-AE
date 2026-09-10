@@ -428,7 +428,8 @@ namespace ESPExplorerAE
                 return;
             }
 
-            itemGrantPopup.Open(entry, ActionService::Session());
+            const auto& settings = Config::Get();
+            itemGrantPopup.Open(entry, ActionService::Session(), settings.includeAmmoWithWeapons, settings.defaultAmmoQuantity);
         }
 
 
@@ -442,7 +443,8 @@ namespace ESPExplorerAE
                 std::vector<FormEntry> entries;
                 for (std::size_t row = 0; row < selected->order.size(); ++row) entries.push_back(selected->At(row));
                 admission = ActionAdmission::Accepted;
-                itemGrantPopup.Open(entries, grant.session);
+                const auto& settings = Config::Get();
+                itemGrantPopup.Open(entries, grant.session, settings.includeAmmoWithWeapons, settings.defaultAmmoQuantity);
             }
             for (const auto& global : requests.globalValues) {
                 if (global.session != ActionService::Session()) { admission = ActionAdmission::StaleSession; continue; }
@@ -920,6 +922,10 @@ namespace ESPExplorerAE
 
                     if (settings.showLogsTab) {
                         if (activeMainTab == "Logs") {
+                            if (tabSearchFocusPending) {
+                                logViewer.focusPending = true;
+                                tabSearchFocusPending = false;
+                            }
                             const auto logs = LogService::Read();
                             LogRequests requests;
                             LogViewerTab::Draw(logViewer, *logs, requests, L);

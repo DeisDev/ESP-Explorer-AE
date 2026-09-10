@@ -66,6 +66,8 @@ namespace ESPExplorerAE
         bounded(value.themePanelA, defaults.themePanelA, 0, 1, "Theme.fPanelA");
         const auto recent = (std::clamp)(value.recentRecordsLimit, 5, 100);
         if (recent != value.recentRecordsLimit) { value.recentRecordsLimit = recent; adjusted.emplace_back("UI.iRecentRecordsLimit"); }
+        const auto ammo = (std::clamp)(value.defaultAmmoQuantity, 0, 50000);
+        if (ammo != value.defaultAmmoQuantity) { value.defaultAmmoQuantity = ammo; adjusted.emplace_back("General.iDefaultAmmoQuantity"); }
         const auto copy = ValidatedCopyFormat(static_cast<long>(value.multiCopyFormat));
         if (copy != value.multiCopyFormat) { value.multiCopyFormat = copy; adjusted.emplace_back("UI.iMultiCopyFormat"); }
         const auto tab = [&](std::string& field, const std::string& fallback, bool allowLast, const char* name) {

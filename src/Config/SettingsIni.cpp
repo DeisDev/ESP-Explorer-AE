@@ -78,6 +78,8 @@ namespace ESPExplorerAE
 
         settings.allowGameplayActionsInMainMenu = ini.GetBoolValue("Debug", "bAllowGameplayActionsInMainMenu", false);
         settings.componentSubstitution = ini.GetBoolValue("General", "bComponentSubstitution", true);
+        settings.includeAmmoWithWeapons = ini.GetBoolValue("General", "bIncludeAmmoWithWeapons", true);
+        settings.defaultAmmoQuantity = static_cast<int>(ini.GetLongValue("General", "iDefaultAmmoQuantity", 100));
 
         settings.enableGamepadNav = ini.GetBoolValue("Controller", "bEnableGamepadNav", true);
         settings.showLogsTab = ini.GetBoolValue("Logging", "bShowLogsTab", true);
@@ -152,6 +154,8 @@ namespace ESPExplorerAE
         ini.SetBoolValue("Debug", "bAllowGameplayActionsInMainMenu", settingsSnapshot.allowGameplayActionsInMainMenu);
         ini.SetBoolValue("Debug", "bProfilePerformance", settingsSnapshot.profilePerformance);
         ini.SetBoolValue("General", "bComponentSubstitution", settingsSnapshot.componentSubstitution);
+        ini.SetBoolValue("General", "bIncludeAmmoWithWeapons", settingsSnapshot.includeAmmoWithWeapons);
+        ini.SetLongValue("General", "iDefaultAmmoQuantity", settingsSnapshot.defaultAmmoQuantity);
 
         ini.SetBoolValue("Controller", "bEnableGamepadNav", settingsSnapshot.enableGamepadNav);
 

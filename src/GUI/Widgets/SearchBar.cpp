@@ -3,10 +3,11 @@
 #include "Input/GamepadInput.h"
 
 #include <imgui.h>
+#include <algorithm>
 
 namespace ESPExplorerAE
 {
-    bool SearchBar::Draw(const char* label, char* buffer, std::size_t bufferSize, std::string& value, bool* shouldFocus, const char* stableId, const char* clearText)
+    bool SearchBar::Draw(const char* label, char* buffer, std::size_t bufferSize, std::string& value, bool* shouldFocus, const char* stableId, const char* clearText, float width)
     {
         if (!label || !buffer || bufferSize == 0) {
             return false;
@@ -19,13 +20,9 @@ namespace ESPExplorerAE
             *shouldFocus = false;
         }
 
-        ImGui::SetNextItemWidth(-ImGui::CalcTextSize(clearText).x - ImGui::GetStyle().FramePadding.x * 2.0f - ImGui::GetStyle().ItemSpacing.x);
-        if (ImGui::InputTextWithHint((std::string("##") + (stableId ? stableId : label)).c_str(), label, buffer, bufferSize)) {
-            changed = true;
-        }
-        if (ImGui::IsItemActive() && ImGui::IsKeyPressed(ImGuiKey_Escape, false) && buffer[0] != '\0') {
-            buffer[0] = '\0';
-            value.clear();
+        const float available = width > 0 ? width : ImGui::GetContentRegionAvail().x;
+        ImGui::SetNextItemWidth((std::max)(1.0f, available - ImGui::CalcTextSize(clearText).x - ImGui::GetStyle().FramePadding.x * 2.0f - ImGui::GetStyle().ItemSpacing.x));
+        if (ImGui::InputTextWithHint((std::string("##") + (stableId ? stableId : label)).c_str(), label, buffer, bufferSize, ImGuiInputTextFlags_EscapeClearsAll)) {
             changed = true;
         }
 
@@ -43,6 +40,7 @@ namespace ESPExplorerAE
             buffer[0] = '\0';
             value.clear();
             changed = true;
+            if (shouldFocus) *shouldFocus = true;
         }
 
         if (changed) {

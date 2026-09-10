@@ -390,6 +390,15 @@ namespace ESPExplorerAE
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("%s", L("Settings", "sComponentSubstitutionTooltip", "When enabled, giving or spawning a component (CMPO) automatically substitutes the usable scrap item (MISC) so it works for crafting. Disable if you want to give the raw component form."));
             }
+            blockSpacing();
+            changed = ImGui::Checkbox(L("Settings", "sIncludeAmmoWithWeapons", "Include Ammo With Weapons By Default"), &settings.includeAmmoWithWeapons) || changed;
+            fieldLabel(L("Settings", "sDefaultAmmoQuantity", "Default Extra Ammo Quantity"));
+            ImGui::SetNextItemWidth(fullWidth());
+            if (ImGui::InputInt("##DefaultAmmoQuantity", &settings.defaultAmmoQuantity, 50, 100)) {
+                settings.defaultAmmoQuantity = (std::clamp)(settings.defaultAmmoQuantity, 0, 50000);
+                changed = true;
+            }
+            ImGui::TextWrapped("%s", L("Settings", "sAmmoDefaultsHelp", "Used when opening Add Item for a weapon. Extra ammo is added once per weapon entry, not per copy. You can change it in the popup."));
             sectionSpacing();
             ImGui::TreePop();
         }
