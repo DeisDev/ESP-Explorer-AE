@@ -18,6 +18,10 @@ dist/*
 !dist/fonts/
 !dist/fonts/**
 
+# Keep shipped theme presets, including the original green palette.
+!dist/themes/
+!dist/themes/**
+
 # Python interpreter caches.
 __pycache__/
 *.py[cod]

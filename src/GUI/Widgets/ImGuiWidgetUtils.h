@@ -16,5 +16,6 @@ namespace ESPExplorerAE::ImGuiWidgetUtils
     bool DrawWrappedButton(const char* label, bool& firstInRow);
     bool DrawFixedGridButton(const char* label, bool& firstInRow, FixedGridButtonRow& row, int buttonsPerRow = 3, float minButtonWidth = 96.0f);
     void DrawWrappedSameLine(const char* label);
+    void SameLineIfFits(float width);
     void ShowGameplayDisabledTooltip(bool gameplayActionsAllowed, const char* tooltip);
 }

@@ -53,24 +53,11 @@ namespace ESPExplorerAE
         const ImVec2 min = ImGui::GetItemRectMin();
         const ImVec2 max = ImGui::GetItemRectMax();
 
-        ImVec4 fill = ImGui::GetStyleColorVec4(active ? ImGuiCol_HeaderActive : (hovered ? ImGuiCol_HeaderHovered : ImGuiCol_FrameBg));
-        fill.w = active ? 0.22f : (hovered ? 0.14f : 0.06f);
-
-        ImVec4 border = ImGui::GetStyleColorVec4(ImGuiCol_Border);
-        border.w = active ? 1.0f : (hovered ? 0.80f : 0.62f);
-
-        ImVec4 accent = ImGui::GetStyleColorVec4(ImGuiCol_Text);
-        accent.w = active ? 1.0f : 0.72f;
-
-        const ImU32 fillColor = ImGui::ColorConvertFloat4ToU32(fill);
-        const ImU32 borderColor = ImGui::ColorConvertFloat4ToU32(border);
-        const ImU32 accentColor = ImGui::ColorConvertFloat4ToU32(accent);
-
-        drawList->AddRectFilled(ImVec2(min.x + 1.0f, min.y + 1.0f), ImVec2(max.x - 1.0f, max.y - 1.0f), fillColor);
-        drawList->AddRect(min, max, borderColor, 0.0f, 0, active ? 2.0f : 1.0f);
+        if (!active && !hovered) return;
+        const ImU32 accentColor = ImGui::GetColorU32(active ? ImGuiCol_CheckMark : ImGuiCol_Border);
 
         if (accentTop) {
-            drawList->AddLine(ImVec2(min.x + 1.0f, min.y + 1.0f), ImVec2(max.x - 1.0f, min.y + 1.0f), accentColor, active ? 2.5f : 1.5f);
+            drawList->AddLine(ImVec2(min.x + 5.0f, max.y - 1.0f), ImVec2(max.x - 5.0f, max.y - 1.0f), accentColor, active ? 2.0f : 1.0f);
         }
 
         if (accentLeft) {
@@ -92,19 +79,10 @@ namespace ESPExplorerAE
         const ImVec2 max = ImVec2(start.x + width, start.y + height);
         const ImVec2 textSize = ImGui::CalcTextSize(label);
 
-        ImVec4 fill = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
-        fill.w = 0.10f;
-        ImVec4 border = ImGui::GetStyleColorVec4(ImGuiCol_Border);
-        border.w = 0.88f;
-        ImVec4 accent = ImGui::GetStyleColorVec4(ImGuiCol_Text);
-        accent.w = 0.96f;
-
-        drawList->AddRectFilled(min, max, ImGui::ColorConvertFloat4ToU32(fill));
-        drawList->AddRect(min, max, ImGui::ColorConvertFloat4ToU32(border), 0.0f, 0, 1.0f);
-        drawList->AddLine(ImVec2(min.x + 1.0f, min.y + 1.0f), ImVec2(min.x + 1.0f, max.y - 1.0f), ImGui::ColorConvertFloat4ToU32(accent), 2.5f);
+        drawList->AddLine(ImVec2(min.x, max.y), max, ImGui::GetColorU32(ImGuiCol_Separator));
 
         const ImVec2 textPos = ImVec2(
-            min.x + style.FramePadding.x + 8.0f,
+            min.x + style.FramePadding.x,
             min.y + (height - textSize.y) * 0.5f);
         drawList->AddText(textPos, ImGui::GetColorU32(ImGuiCol_Text), label);
     }

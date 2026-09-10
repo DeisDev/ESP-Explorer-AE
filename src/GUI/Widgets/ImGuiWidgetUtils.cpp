@@ -20,14 +20,11 @@ namespace ESPExplorerAE::ImGuiWidgetUtils
         const float desiredWidth = ImGui::CalcTextSize(label, nullptr, true).x + style.FramePadding.x * 2.0f;
 
         if (!firstInRow) {
-            const float needed = style.ItemSpacing.x + desiredWidth;
-            if (ImGui::GetContentRegionAvail().x >= needed) {
-                ImGui::SameLine();
-            }
+            SameLineIfFits(desiredWidth);
         }
 
         const float availableWidth = ImGui::GetContentRegionAvail().x;
-        const float clampedWidth = (std::min)(desiredWidth, availableWidth);
+        const float clampedWidth = (std::max)(1.0f, (std::min)(desiredWidth, availableWidth));
         const bool pressed = ImGui::Button(label, ImVec2(clampedWidth, 0.0f));
         firstInRow = false;
         return pressed;
@@ -67,8 +64,13 @@ namespace ESPExplorerAE::ImGuiWidgetUtils
     {
         const auto& style = ImGui::GetStyle();
         const float nextWidth = ImGui::CalcTextSize(label).x + style.FramePadding.x * 2.0f;
-        const float needed = style.ItemSpacing.x + nextWidth;
-        if (ImGui::GetContentRegionAvail().x >= needed) {
+        SameLineIfFits(nextWidth + ImGui::GetFrameHeight());
+    }
+
+    void SameLineIfFits(float width)
+    {
+        const float right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+        if (right - ImGui::GetItemRectMax().x - ImGui::GetStyle().ItemSpacing.x >= width) {
             ImGui::SameLine();
         }
     }

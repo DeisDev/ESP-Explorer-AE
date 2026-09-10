@@ -22,6 +22,16 @@ Target version: **1.6.0**.
 
 ### Changed
 
+- Menu navigation, header, and close controls use bundled Lucide icons that scale
+  with the interface and follow the selected theme.
+- The runtime check accepts Steam Fallout 4 1.11.191, 1.11.221, and 1.11.240,
+  with F4SE 0.7.7, 0.7.8, and 0.7.9 respectively and the matching Address Library.
+  Other executable versions remain excluded.
+- Redesigned the menu with sidebar navigation, a custom header, restrained
+  accents, softer controls, and a Modern Charcoal default theme. Existing saved
+  colors and the original green preset remain available.
+- Separated status information from footer actions and removed the inactive
+  footer undo button; action results remain available in Action History.
 - Separated engine readers, application services, and UI presentation. Catalog,
   details, inventory, and player status use detached owning data; browser and
   popup state have explicit owners, and redundant caches were removed.

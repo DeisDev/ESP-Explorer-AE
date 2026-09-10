@@ -1,6 +1,17 @@
 {
   "acquisition": "Vendored exact workspace baseline binaries. Restore with the repository checkout; no download or conversion step.",
   "files": {
+    "Lucide.ttf": {
+      "archiveIntegrity": "sha512-u1PAHVq1Ka06FDcXFY8r8fLtS5efVHaawXEETW5tmfnMbd9NU6sPK3GAvZgrbJzY5JmbjHoTTQDcoQOBmW1RKg==",
+      "archiveMember": "package/font/lucide.ttf",
+      "bytes": 885628,
+      "license": "ISC AND MIT",
+      "notice": "licenses/Lucide-ISC-MIT.txt",
+      "sha256": "43c743ff5e47ef4356da4034d39bd3e61a571ba703576578da357c92c075ff11",
+      "source": "https://registry.npmjs.org/lucide-static/-/lucide-static-1.44.0.tgz",
+      "upstreamProject": "https://github.com/lucide-icons/lucide",
+      "version": "1.44.0"
+    },
     "NotoSans-Regular.ttf": {
       "bytes": 629024,
       "license": "OFL-1.1",
@@ -43,10 +54,11 @@
     }
   },
   "notices": {
+    "licenses/Lucide-ISC-MIT.txt": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57",
     "licenses/NotoSans-OFL.txt": "cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a",
     "licenses/NotoSansCJK-OFL.txt": "00b4ece91d2439c5800f8e52fce64cc042b1e5ccab8952255dfed01b64e4a04b",
     "licenses/ShareTechMono-OFL.txt": "9d96f445b6e9c701428811d0177f894874f8d6f07ecc30d568c506542368f3ff"
   },
-  "provenance": "Versions and copyright statements read from the baseline font name tables. Upstream project links identify the font families; original download URLs and conversion commands are not known. No claim of byte identity with current upstream downloads.",
+  "provenance": "Versions and copyright statements read from the baseline font name tables. Upstream project links identify the font families; original download URLs and conversion commands are not known. No claim of byte identity with current upstream downloads. Lucide.ttf is the unmodified font from the pinned official lucide-static npm archive; its package version, source member, and archive integrity are recorded in its entry.",
   "schema": 1
 }

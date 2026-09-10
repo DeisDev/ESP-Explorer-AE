@@ -21,6 +21,7 @@ namespace ESPExplorerAE
 
         static ImFont* GetFont(int sizeIndex);
         static ImFont* GetCurrentFont();
+        static ImFont* GetIconFont();
         static int GetCurrentSizeIndex();
         static void SetCurrentSizeIndex(int index);
         static int FindClosestSizeIndex(float fontSize);
@@ -33,6 +34,7 @@ namespace ESPExplorerAE
         static std::filesystem::path ResolveFontsDirectory();
 
         static inline ImFont* fonts[kPresetCount]{ nullptr };
+        static inline ImFont* iconFont{ nullptr };
         static inline int currentSizeIndex{ kDefaultSizeIndex };
         static inline bool pendingRebuild{ false };
     };

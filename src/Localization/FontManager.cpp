@@ -156,6 +156,7 @@ namespace ESPExplorerAE
     void FontManager::ResetAtlasState()
     {
         for (auto& font : fonts) font = nullptr;
+        iconFont = nullptr;
         pendingRebuild = false;
     }
 
@@ -169,6 +170,7 @@ namespace ESPExplorerAE
 
         const auto language = Language::Read();
 
+        iconFont = nullptr;
         io.Fonts->Clear();
         for (int i = 0; i < kPresetCount; ++i) {
             fonts[i] = nullptr;
@@ -176,6 +178,9 @@ namespace ESPExplorerAE
 
         const auto fontsDir = ResolveFontsDirectory();
         fonts[currentSizeIndex] = BuildOneSize(io.Fonts, kPresetSizes[currentSizeIndex], fontsDir, *language);
+        // Keep icon codepoints separate from language fonts and custom glyphs.
+        static constexpr ImWchar iconRanges[]{ 0xE000, 0xF8FF, 0 };
+        iconFont = AddFont(io.Fonts, fontsDir / "Lucide.ttf", kPresetSizes[currentSizeIndex], iconRanges, false);
         if (fonts[currentSizeIndex]) pendingRebuild = false;
         return fonts[currentSizeIndex] != nullptr;
     }
@@ -201,6 +206,11 @@ namespace ESPExplorerAE
     ImFont* FontManager::GetCurrentFont()
     {
         return GetFont(currentSizeIndex);
+    }
+
+    ImFont* FontManager::GetIconFont()
+    {
+        return iconFont;
     }
 
     int FontManager::GetCurrentSizeIndex()

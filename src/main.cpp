@@ -4,6 +4,7 @@
 #include "App/ActionService.h"
 #include "App/Lifecycle.h"
 #include "App/Profiler.h"
+#include "Core/RuntimeCompatibility.h"
 #include "Platform/SteamKeyboard.h"
 #include "App/CatalogService.h"
 #include "Hooks/Hooks.h"
@@ -73,11 +74,15 @@ namespace
 
 F4SE_PLUGIN_LOAD(const F4SE::LoadInterface* a_f4se)
 {
-    // Address Library/layout flags can bypass F4SE's compatible-version list.
-    // Reject other runtimes before CommonLib initialization or any game access.
-    if (!a_f4se || a_f4se->RuntimeVersion() != F4SE::RUNTIME_1_11_240) {
+    // F4SE recognizes the shared 1.11-series address/layout flags. Bound that
+    // family to the requested executables before initializing any game bindings.
+    if (!a_f4se) {
         return false;
     }
+    const auto parts = [](REL::Version version) -> ESPExplorerAE::ExecutableVersion {
+        return { version[0], version[1], version[2], version[3] };
+    };
+    if (!ESPExplorerAE::MeetsRuntimeRequirement(parts(a_f4se->RuntimeVersion()), parts(a_f4se->F4SEVersion()))) return false;
 
     F4SE::Init(a_f4se);
 

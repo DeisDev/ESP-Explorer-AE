@@ -12,12 +12,24 @@
   <a href="https://www.nexusmods.com/fallout4/mods/102223?tab=description"><img src="https://nexus-mods.github.io/NexusMods.App/Nexus/Images/Nexus-Icon.png" alt="ESP Explorer AE on Nexus Mods" width="48"></a>
 </p>
 
-ESP Explorer AE is an F4SE plugin for Fallout 4 Steam runtime 1.11.240. It renders an
+ESP Explorer AE is an F4SE plugin for Fallout 4 Steam. It renders an
 in-game ImGui explorer for plugins, forms, player actions, diagnostics, logs,
 themes, and localization.
 
 > [!NOTE]
 > Downloads, screenshots, and release notes are available on the Nexus Mods page.
+
+Use the F4SE build and Address Library file matching your executable:
+
+| Fallout 4 Steam runtime | F4SE | Address Library file |
+| --- | --- | --- |
+| 1.11.240 | 0.7.9 | `version-1-11-240-0.bin` |
+| 1.11.221 | 0.7.8 | `version-1-11-221-0.bin` |
+| 1.11.191 | 0.7.7 | `version-1-11-191-0.bin` |
+
+The plugin accepts these three executable versions. Earlier runtimes, GOG, VR,
+and unknown future updates are outside this compatibility list. Do not rename
+an Address Library file from another executable version.
 
 ## Repository Layout
 
@@ -87,6 +99,9 @@ The archive `build/packages/ESPExplorerAE-<version>.zip` contains the DLL under
 `Data/Interface/ESPExplorerAE`. Font binaries and redistribution notices are
 included in the repository; no font download or conversion step is needed.
 
+Menu icons use the bundled [Lucide](https://lucide.dev/) icon font through ImGui.
+Its ISC and Feather MIT notices are included under `fonts/licenses`.
+
 Keep the matching `ESPExplorerAE.pdb` from the build output for diagnostics.
 
 Packaging copies these files from `dist` into the game's `Data` layout. The
@@ -127,6 +142,10 @@ Relative `sFontFiles` entries resolve inside `Data/Interface/ESPExplorerAE/fonts
 
 Themes are data-driven `.ini` files. Shipped themes live in `dist/themes` and
 are packaged to `Data/Interface/ESPExplorerAE/themes`.
+
+New installations use Modern Charcoal. Existing configurations keep their saved
+colors; select Modern Charcoal in Settings to use the new palette. Default Green
+remains available alongside the other presets.
 
 When adding or changing a theme:
 

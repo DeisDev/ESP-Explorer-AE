@@ -18,7 +18,7 @@ target("ESPExplorerAE")
         name = "ESPExplorerAE",
         author = "DeisDev",
         description = "In-game ESP/ESL/ESM Archive Explorer",
-        xse_minimum = "0.7.9"
+        xse_minimum = "0.7.7"
     })
 
     -- Deploy explicitly with xmake install after validating the build.

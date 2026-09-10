@@ -173,7 +173,7 @@ namespace ESPExplorerAE
                 }
             }
             ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
-            ImGui::SameLine();
+            ImGuiWidgetUtils::SameLineIfFits(140.0f);
             ImVec4 bulkFrameBg = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
             ImVec4 bulkFrameBgHovered = ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered);
             ImVec4 bulkFrameBgActive = ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive);
@@ -220,8 +220,8 @@ namespace ESPExplorerAE
         ImGui::Separator();
         ImGui::Spacing();
 
-        const auto availableHeight = ImGui::GetContentRegionAvail().y - 8.0f;
-        const auto tableHeight = availableHeight > 220.0f ? availableHeight : 220.0f;
+        const auto availableHeight = ImGui::GetContentRegionAvail().y - ImGui::GetTextLineHeightWithSpacing() - ImGui::GetStyle().ItemSpacing.y;
+        const auto tableHeight = (std::max)(ImGui::GetFrameHeight() * 2.0f, availableHeight);
         const ImVec4 headerBase = ImGui::GetStyleColorVec4(ImGuiCol_TableHeaderBg);
         const ImVec4 borderBase = ImGui::GetStyleColorVec4(ImGuiCol_Border);
         const ImVec4 accentBase = ImGui::GetStyleColorVec4(ImGuiCol_Text);
@@ -229,7 +229,7 @@ namespace ESPExplorerAE
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(borderBase.x, borderBase.y, borderBase.z, 0.14f));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(accentBase.x, accentBase.y, accentBase.z, 0.18f));
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(accentBase.x, accentBase.y, accentBase.z, 0.24f));
-        if (!ImGui::BeginTable(config.tableId, 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY, ImVec2(0.0f, tableHeight))) {
+        if (!ImGui::BeginTable(config.tableId, 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY, ImVec2(0.0f, tableHeight))) {
             ImGui::PopStyleColor(4);
             ImGui::PopID();
             return;

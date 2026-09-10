@@ -1,4 +1,6 @@
 #include "GUI/MainWindow.h"
+#include "GUI/Widgets/MenuChrome.h"
+#include "GUI/Icons.h"
 
 #include "Core/CatalogCounts.h"
 #include "Core/RecordActions.h"
@@ -66,6 +68,11 @@ namespace ESPExplorerAE
             "Settings",
             "Logs"
         };
+        constexpr std::array kMainTabIcons{
+            Icons::Puzzle, Icons::Backpack, Icons::Package, Icons::UsersRound,
+            Icons::MapPin, Icons::Boxes, Icons::Zap, Icons::SlidersHorizontal, Icons::ScrollText
+        };
+        static_assert(kMainTabIcons.size() == kMainTabOrder.size());
 
         std::string selectedPluginFilter{};
 
@@ -317,25 +324,9 @@ namespace ESPExplorerAE
             std::string languageCode;
             CatalogQuery query;
             std::uint64_t filterRevision{};
-            std::string pluginLabel;
-            std::string inventoryLabel;
-            std::string itemLabel;
-            std::string npcLabel;
-            std::string cellLabel;
-            std::string objectLabel;
-            std::string spellPerkLabel;
-            std::string settingsLabel;
-            std::string logsLabel;
+            std::array<std::string, 9> labels;
+            std::array<std::string, 9> counts;
         };
-
-        void FormatTabLabel(char* buf, std::size_t bufSize, const char* label, std::size_t filtered, std::size_t total, const char* stableId)
-        {
-            if (filtered < total) {
-                std::snprintf(buf, bufSize, "%s (%zu / %zu)###%s", label, filtered, total, stableId);
-            } else {
-                std::snprintf(buf, bufSize, "%s (%zu)###%s", label, total, stableId);
-            }
-        }
 
         const MainTabLabelsCache& GetMainTabLabels(const CatalogSnapshot& catalog)
         {
@@ -355,20 +346,17 @@ namespace ESPExplorerAE
             cache.query = query;
             cache.filterRevision = browserFilters.advancedRecordFilterRevision;
             const auto counts = CountCatalog(catalog, query, PreparedFilters());
-            const auto label = [&](const char* text, RecordCount count, const char* id) {
-                char buffer[120]{};
-                FormatTabLabel(buffer, sizeof(buffer), text, count.filtered, count.total, id);
-                return std::string(buffer);
+            const auto count = [](RecordCount value) {
+                return value.filtered < value.total ? std::to_string(value.filtered) + " / " + std::to_string(value.total) : std::to_string(value.total);
             };
-            cache.pluginLabel = L("PluginBrowser", "sBrowserTab", "Plugin Browser");
-            cache.inventoryLabel = L("Inventory", "sTabName", "Inventory");
-            cache.itemLabel = label(L("Items", "sBrowserTab", "Item Browser"), counts.For({"WEAP", "ARMO", "AMMO", "MISC", "KEYM", "NOTE", "BOOK", "ALCH", "CMPO"}), "MainTabItem");
-            cache.npcLabel = label(L("NPCs", "sBrowserTab", "NPC Browser"), counts.For({"NPC_"}), "MainTabNPC");
-            cache.cellLabel = label(L("Cells", "sBrowserTab", "Cell Browser"), counts.For({"CELL"}), "MainTabCell");
-            cache.objectLabel = label(L("Objects", "sBrowserTab", "Object Browser"), counts.For({"ACTI", "CONT", "STAT", "FURN"}), "MainTabObject");
-            cache.spellPerkLabel = label(L("Spells", "sBrowserTab", "Spells & Perks"), counts.For({"SPEL", "PERK"}), "MainTabSpells");
-            cache.settingsLabel = L("Settings", "sTabName", "Settings");
-            cache.logsLabel = L("Logs", "sTabName", "Logs");
+            cache.labels = { L("PluginBrowser", "sBrowserTab", "Plugin Browser"), L("Inventory", "sTabName", "Inventory"),
+                L("Items", "sBrowserTab", "Item Browser"), L("NPCs", "sBrowserTab", "NPC Browser"), L("Cells", "sBrowserTab", "Cell Browser"),
+                L("Objects", "sBrowserTab", "Object Browser"), L("Spells", "sBrowserTab", "Spells & Perks"),
+                L("Settings", "sTabName", "Settings"), L("Logs", "sTabName", "Logs") };
+            cache.counts = { std::to_string(catalog.plugins.size()), "",
+                count(counts.For({"WEAP", "ARMO", "AMMO", "MISC", "KEYM", "NOTE", "BOOK", "ALCH", "CMPO"})),
+                count(counts.For({"NPC_"})), count(counts.For({"CELL"})), count(counts.For({"ACTI", "CONT", "STAT", "FURN"})),
+                count(counts.For({"SPEL", "PERK"})), "", "" };
             return cache;
         }
 
@@ -794,7 +782,8 @@ namespace ESPExplorerAE
         const auto* windowTitle = title.empty() ? "ESP Explorer AE" : title.data();
 
         bool windowOpen = true;
-        if (ImGui::Begin(windowTitle, &windowOpen)) {
+        if (ImGui::Begin(windowTitle, &windowOpen, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse)) {
+            if (MenuChrome::Header(windowTitle, L("General", "sWorkspaceCaption", "Load order workspace"), L("General", "sCloseMenu", "Close menu"))) windowOpen = false;
             bool settingsDirty{ false };
             const ImVec2 menuWindowSize = ImGui::GetWindowSize();
 
@@ -834,49 +823,47 @@ namespace ESPExplorerAE
             }
 
             const auto& style = ImGui::GetStyle();
-            const float footerTextRows = settings.showMenuResolutionInStatus ? 2.0f : 1.0f;
+            const float footerTextRows = settings.showPlayerStatsInStatus ? 2.0f : 1.0f;
             const float rawFooterHeight = ImGui::GetTextLineHeightWithSpacing() * footerTextRows + ImGui::GetFrameHeightWithSpacing() + style.ItemSpacing.y + style.WindowPadding.y + 10.0f;
             const float footerHeight = (std::min)(rawFooterHeight, (std::max)(0.0f, ImGui::GetContentRegionAvail().y - 1.0f));
             if (ImGui::BeginChild("MainContentRegion", ImVec2(0.0f, -footerHeight), ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
-                if (ImGui::BeginTabBar("MainTabs")) {
-                    const auto visibleTabCount = GetVisibleTabCount(settings.showLogsTab);
-                    if (!settings.showLogsTab && requestedMainTab == "Logs") {
-                        requestedMainTab.clear();
+                const auto visibleTabCount = GetVisibleTabCount(settings.showLogsTab);
+                if (!settings.showLogsTab && requestedMainTab == "Logs") requestedMainTab.clear();
+                if (settings.enableGamepadNav && (GamepadInput::WasTabNextPressed() || GamepadInput::WasTabPrevPressed())) {
+                    std::size_t currentIndex{};
+                    for (std::size_t i = 0; i < visibleTabCount; ++i) if (activeMainTab == kMainTabOrder[i]) currentIndex = i;
+                    currentIndex = GamepadInput::WasTabNextPressed() ? (currentIndex + 1) % visibleTabCount : (currentIndex + visibleTabCount - 1) % visibleTabCount;
+                    requestedMainTab = kMainTabOrder[currentIndex];
+                }
+                if (!requestedMainTab.empty()) {
+                    if (std::ranges::find(kMainTabOrder, requestedMainTab) != kMainTabOrder.end()) activeMainTab = requestedMainTab;
+                    requestedMainTab.clear();
+                }
+
+                const float sidebarWidth = (std::min)(ImGui::GetFontSize() * 12.2f, ImGui::GetContentRegionAvail().x * 0.25f);
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(style.ItemSpacing.x, 4.0f));
+                ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetStyleColorVec4(ImGuiCol_WindowBg));
+                if (ImGui::BeginChild("MainNavigation", ImVec2(sidebarWidth, 0.0f), ImGuiChildFlags_NavFlattened)) {
+                    MenuChrome::Section(L("General", "sNavigationBrowse", "Browse"));
+                    for (std::size_t i = 0; i < visibleTabCount; ++i) {
+                        if (i == 7) {
+                            ImGui::Spacing();
+                            ImGui::Separator();
+                            MenuChrome::Section(L("General", "sNavigationTools", "Tools"));
+                        }
+                        if (MenuChrome::NavigationItem(kMainTabOrder[i].data(), tabLabels.labels[i].c_str(), tabLabels.counts[i].c_str(), kMainTabIcons[i], activeMainTab == kMainTabOrder[i]))
+                            activeMainTab = kMainTabOrder[i];
                     }
-
-                    if (Config::Get().enableGamepadNav && (GamepadInput::WasTabNextPressed() || GamepadInput::WasTabPrevPressed())) {
-                        std::size_t currentIndex = 0;
-                        for (std::size_t i = 0; i < visibleTabCount; ++i) {
-                            if (activeMainTab == kMainTabOrder[i]) {
-                                currentIndex = i;
-                                break;
-                            }
-                        }
-
-                        if (GamepadInput::WasTabNextPressed()) {
-                            currentIndex = (currentIndex + 1) % visibleTabCount;
-                        } else {
-                            currentIndex = (currentIndex + visibleTabCount - 1) % visibleTabCount;
-                        }
-                        requestedMainTab = std::string(kMainTabOrder[currentIndex]);
+                }
+                ImGui::EndChild();
+                ImGui::PopStyleColor();
+                ImGui::PopStyleVar();
+                ImGui::SameLine();
+                if (ImGui::BeginChild("MainWorkspace", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened)) {
+                    for (std::size_t i = 0; i < visibleTabCount; ++i) {
+                        if (activeMainTab == kMainTabOrder[i]) MenuChrome::PageHeading(tabLabels.labels[i].c_str(), tabLabels.counts[i].c_str());
                     }
-
-                    auto tabFlags = [&](const char* tabName) -> ImGuiTabItemFlags {
-                        return requestedMainTab == tabName ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
-                    };
-                    auto focusTabIfRequested = [&](const char* tabName) {
-                        if (requestedMainTab == tabName) {
-                            ImGui::SetKeyboardFocusHere(-1);
-                            requestedMainTab.clear();
-                        }
-                    };
-
-                    const bool pluginTabOpen = ImGui::BeginTabItem(tabLabels.pluginLabel.c_str(), nullptr,
-                        tabFlags("Plugin Browser"));
-                    SharedUtils::DrawCurrentItemChrome(pluginTabOpen, ImGui::IsItemHovered(), true, false);
-                    if (pluginTabOpen) {
-                        activeMainTab = "Plugin Browser";
-                        focusTabIfRequested("Plugin Browser");
+                    if (activeMainTab == "Plugin Browser") {
 
                         if (refreshDataInProgress) {
                             ImGui::BeginDisabled(true);
@@ -900,77 +887,35 @@ namespace ESPExplorerAE
                         DrawPluginFilterStatus();
 
                         DrawPluginBrowser(catalog);
-                        ImGui::EndTabItem();
                     }
 
-                    const bool playerTabOpen = ImGui::BeginTabItem(tabLabels.inventoryLabel.c_str(), nullptr,
-                        tabFlags("Inventory"));
-                    SharedUtils::DrawCurrentItemChrome(playerTabOpen, ImGui::IsItemHovered(), true, false);
-                    if (playerTabOpen) {
-                        activeMainTab = "Inventory";
-                        focusTabIfRequested("Inventory");
+                    if (activeMainTab == "Inventory") {
                         DrawInventoryTab(catalog);
-                        ImGui::EndTabItem();
                     }
 
-                    const bool itemTabOpen = ImGui::BeginTabItem(tabLabels.itemLabel.c_str(), nullptr,
-                        tabFlags("Item Browser"));
-                    SharedUtils::DrawCurrentItemChrome(itemTabOpen, ImGui::IsItemHovered(), true, false);
-                    if (itemTabOpen) {
-                        activeMainTab = "Item Browser";
-                        focusTabIfRequested("Item Browser");
+                    if (activeMainTab == "Item Browser") {
                         DrawCatalogBrowser(itemBrowser, catalog, ItemBrowserTab::Draw);
-                        ImGui::EndTabItem();
                     }
 
-                    const bool npcTabOpen = ImGui::BeginTabItem(tabLabels.npcLabel.c_str(), nullptr,
-                        tabFlags("NPC Browser"));
-                    SharedUtils::DrawCurrentItemChrome(npcTabOpen, ImGui::IsItemHovered(), true, false);
-                    if (npcTabOpen) {
-                        activeMainTab = "NPC Browser";
-                        focusTabIfRequested("NPC Browser");
+                    if (activeMainTab == "NPC Browser") {
                         DrawCatalogBrowser(npcBrowser.browser, catalog, [](BrowserState&, const BrowserView& view, BrowserRequests& requests) {
                             NPCBrowserTab::Draw(npcBrowser, view, requests);
                         });
-                        ImGui::EndTabItem();
                     }
 
-                    const bool cellTabOpen = ImGui::BeginTabItem(tabLabels.cellLabel.c_str(), nullptr,
-                        tabFlags("Cell Browser"));
-                    SharedUtils::DrawCurrentItemChrome(cellTabOpen, ImGui::IsItemHovered(), true, false);
-                    if (cellTabOpen) {
-                        activeMainTab = "Cell Browser";
-                        focusTabIfRequested("Cell Browser");
+                    if (activeMainTab == "Cell Browser") {
                         DrawCatalogBrowser(cellBrowser, catalog, CellBrowserTab::Draw);
-                        ImGui::EndTabItem();
                     }
 
-                    const bool objectTabOpen = ImGui::BeginTabItem(tabLabels.objectLabel.c_str(), nullptr,
-                        tabFlags("Object Browser"));
-                    SharedUtils::DrawCurrentItemChrome(objectTabOpen, ImGui::IsItemHovered(), true, false);
-                    if (objectTabOpen) {
-                        activeMainTab = "Object Browser";
-                        focusTabIfRequested("Object Browser");
+                    if (activeMainTab == "Object Browser") {
                         DrawCatalogBrowser(objectBrowser, catalog, ObjectBrowserTab::Draw);
-                        ImGui::EndTabItem();
                     }
 
-                    const bool spellPerkTabOpen = ImGui::BeginTabItem(tabLabels.spellPerkLabel.c_str(), nullptr,
-                        tabFlags("Spells & Perks"));
-                    SharedUtils::DrawCurrentItemChrome(spellPerkTabOpen, ImGui::IsItemHovered(), true, false);
-                    if (spellPerkTabOpen) {
-                        activeMainTab = "Spells & Perks";
-                        focusTabIfRequested("Spells & Perks");
+                    if (activeMainTab == "Spells & Perks") {
                         DrawCatalogBrowser(spellPerkBrowser, catalog, SpellPerkBrowserTab::Draw);
-                        ImGui::EndTabItem();
                     }
 
-                    const bool settingsTabOpen = ImGui::BeginTabItem(tabLabels.settingsLabel.c_str(), nullptr,
-                        tabFlags("Settings"));
-                    SharedUtils::DrawCurrentItemChrome(settingsTabOpen, ImGui::IsItemHovered(), true, false);
-                    if (settingsTabOpen) {
-                        activeMainTab = "Settings";
-                        focusTabIfRequested("Settings");
+                    if (activeMainTab == "Settings") {
                         SettingsTabRequests requests;
                         const auto favoriteReview = FavoriteService::Review();
                         const auto resources = SettingsService::Read();
@@ -980,21 +925,14 @@ namespace ESPExplorerAE
                         if (!requests.resetAll && !requests.favorites.accepted.empty() && !FavoriteService::AcceptLegacy(requests.favorites.review, requests.favorites.accepted)) settingsTab.favorites.stale = true;
                         if (requests.page) SettingsService::OpenPage(*requests.page);
                         if (requests.showHelp) mainWindowPopups.OpenHelpOverlay();
-                        ImGui::EndTabItem();
                     }
 
                     if (settings.showLogsTab) {
-                        const bool logsTabOpen = ImGui::BeginTabItem(tabLabels.logsLabel.c_str(), nullptr,
-                            tabFlags("Logs"));
-                        SharedUtils::DrawCurrentItemChrome(logsTabOpen, ImGui::IsItemHovered(), true, false);
-                        if (logsTabOpen) {
-                            activeMainTab = "Logs";
-                            focusTabIfRequested("Logs");
+                        if (activeMainTab == "Logs") {
                             const auto logs = LogService::Read();
                             LogRequests requests;
                             LogViewerTab::Draw(logViewer, *logs, requests, L);
                             LogService::Apply(requests, L("Logs", "sLogFiles", "Log Files"), L("Logs", "sAllFiles", "All Files"));
-                            ImGui::EndTabItem();
                         }
                     }
 
@@ -1015,16 +953,14 @@ namespace ESPExplorerAE
                         SettingsService::Apply(std::move(updated), false);
                     }
 
-                    ImGui::EndTabBar();
                 }
+                ImGui::EndChild();
             }
             ImGui::EndChild();
 
             if (ImGui::BeginChild("StatusBarRegion", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
                 const float fps = io.Framerate;
                 const float frameTime = fps > 0.0f ? (1000.0f / fps) : 0.0f;
-                const float statusStartY = ImGui::GetCursorPosY();
-                const float statusRowHeight = ImGui::GetTextLineHeightWithSpacing();
 
                 if (settings.showFPSInStatus) {
                     ImGui::Text("%s: %zu  %s: %zu  %s: %zu  |  %.0f %s  %.1fms",
@@ -1055,10 +991,6 @@ namespace ESPExplorerAE
                 if (settings.showPlayerStatsInStatus) {
                     const auto player = PlayerStatusService::Request(session);
 
-                    ImGui::SameLine();
-                    ImGui::TextDisabled("|");
-                    ImGui::SameLine();
-
                     if (player.ready && player.session == session) {
                         ImGui::TextDisabled("%s %d  %s %lld  %s %.0f  %s %.0f", L("General", "sLevelShort", ""), player.level, L("Inventory", "sCaps", ""), player.caps, L("Inventory", "sHealthShort", ""), player.health, L("Inventory", "sActionPointsShort", ""), player.actionPoints);
                     } else {
@@ -1066,13 +998,13 @@ namespace ESPExplorerAE
                     }
                 }
 
-                const float resetWidth = CalcButtonWidth(L("General", "sResetFilters", "Reset Filters"));
-                const float historyWidth = CalcButtonWidth(L("General", "sActionHistory", "Action History"));
-                const float undoWidth = CalcButtonWidth(L("General", "sUndoLastAction", "Undo Last Action"));
-                const float actionsWidth = resetWidth + style.ItemSpacing.x + historyWidth + style.ItemSpacing.x + undoWidth;
-                const float actionStartX = ImGui::GetWindowContentRegionMax().x - actionsWidth;
-                ImGui::SetCursorPos(ImVec2((std::max)(actionStartX, ImGui::GetCursorPosX()), statusStartY));
-
+                const float actionsY = ImGui::GetCursorPosY();
+                const float actionsWidth = CalcButtonWidth(L("General", "sResetFilters", "Reset Filters")) + style.ItemSpacing.x + CalcButtonWidth(L("General", "sActionHistory", "Action History"));
+                if (settings.showMenuResolutionInStatus) {
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextDisabled("%s: %dx%d", L("Settings", "sResolutionShort", "Res"), static_cast<int>(menuWindowSize.x), static_cast<int>(menuWindowSize.y));
+                }
+                ImGui::SetCursorPos(ImVec2((std::max)(style.WindowPadding.x, ImGui::GetWindowContentRegionMax().x - actionsWidth), actionsY));
                 if (ImGui::Button(L("General", "sResetFilters", "Reset Filters"))) {
                     ResetQuickFilters();
                 }
@@ -1081,15 +1013,6 @@ namespace ESPExplorerAE
                     ImGui::OpenPopup("##ActionHistoryPopup");
                 }
                 DrawActionHistoryPopup();
-                ImGui::SameLine();
-                ImGui::BeginDisabled(true);
-                ImGui::Button(L("General", "sUndoLastAction", "Undo Last Action"));
-                ImGui::EndDisabled();
-
-                if (settings.showMenuResolutionInStatus) {
-                    ImGui::SetCursorPosY(statusStartY + statusRowHeight + 2.0f);
-                    ImGui::TextDisabled("%s: %dx%d", L("Settings", "sResolutionShort", "Res"), static_cast<int>(menuWindowSize.x), static_cast<int>(menuWindowSize.y));
-                }
             }
             ImGui::EndChild();
 
