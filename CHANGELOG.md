@@ -13,6 +13,8 @@ Target version: **1.6.0**.
 
 ### Added
 
+- An All tab in Object Browser combining activators, containers, statics, and
+  furniture with the existing search, filters, favorites, and placement controls.
 - Bulk quantity increments, clear controls, and item/ammo totals in Add Item.
 - Saved options for including weapon ammo and its default quantity in Add Item.
 - Log search with matching-line copying and a jump-to-latest button.

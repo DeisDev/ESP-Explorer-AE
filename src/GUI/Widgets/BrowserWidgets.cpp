@@ -38,10 +38,12 @@ namespace ESPExplorerAE::BrowserWidgets
     }
 
     void DrawCategory(BrowserState& state, const BrowserView& view, BrowserRequests& requests,
-        const char* type, const FormTableConfig& config, ActionKind primary, std::optional<ActionKind> secondary)
+        const char* category, const FormTableConfig& config, ActionKind primary, std::optional<ActionKind> secondary,
+        std::span<const std::string> types)
     {
-        auto& rows = state.categories[type];
-        const auto query = MakeQuery(state, view, rows, type);
+        auto& rows = state.categories[category];
+        auto query = MakeQuery(state, view, rows, types.empty() ? category : "");
+        query.types.assign(types.begin(), types.end());
         const auto& result = rows.query.Update(view.catalog, query, view.filters.advancedRecordFilters, view.filters.advancedRecordFilterRevision);
         FormTableActions actions{
             .primary = [&](const FormEntry& entry) { Emit(requests, view, entry, primary); },

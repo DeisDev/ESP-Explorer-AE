@@ -13,6 +13,7 @@ namespace ESPExplorerAE::BrowserWidgets
     void DrawContext(const FormEntry& entry, ContextScope scope, std::unordered_map<std::uint32_t, int>& quantities,
         const BrowserView& view, BrowserRequests& requests);
     void DrawCategory(BrowserState& state, const BrowserView& view, BrowserRequests& requests,
-        const char* type, const FormTableConfig& config, ActionKind primary, std::optional<ActionKind> secondary = {});
+        const char* category, const FormTableConfig& config, ActionKind primary, std::optional<ActionKind> secondary = {},
+        std::span<const std::string> types = {});
     void ActivateCategory(BrowserState& state, const BrowserView& view, const char* type);
 }
