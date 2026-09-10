@@ -12,7 +12,7 @@
   <a href="https://www.nexusmods.com/fallout4/mods/102223?tab=description"><img src="https://nexus-mods.github.io/NexusMods.App/Nexus/Images/Nexus-Icon.png" alt="ESP Explorer AE on Nexus Mods" width="48"></a>
 </p>
 
-ESP Explorer AE is an F4SE plugin for Fallout 4 AE / Next-Gen. It renders an
+ESP Explorer AE is an F4SE plugin for Fallout 4 Steam runtime 1.11.240. It renders an
 in-game ImGui explorer for plugins, forms, player actions, diagnostics, logs,
 themes, and localization.
 
@@ -26,7 +26,9 @@ themes, and localization.
 - `src/main.cpp` - F4SE entry point and startup sequence.
 - `src/Hooks/` - D3D11 Present hook, WndProc hook, cursor/input state, and menu visibility.
 - `src/GUI/` - ImGui renderer, main window, tabs, popups, shared widgets, and themes.
-- `src/Data/` - load-order, plugin, form, and category cache building.
+- `src/Core/` - detached catalog/inventory models, queries, selections and action contracts.
+- `src/App/` - lifecycle, publication, settings and action services.
+- `src/Game/` - engine readers and game-task action execution.
 - `src/Config/` - INI-backed settings.
 - `src/Localization/` - language loading, fallback behavior, and font atlas support.
 - `src/Input/` - gamepad polling and overlay keyboard integration.
@@ -35,7 +37,6 @@ themes, and localization.
 - `dist/fonts/` - shipped runtime fonts.
 - `dist/themes/` - shipped theme `.ini` files.
 - `nexus/` - Nexus page assets and description text.
-- `Scripts/` - local helper scripts.
 - `lib/commonlibf4/` - CommonLibF4 dependency.
 
 ## Runtime Startup
@@ -48,14 +49,15 @@ depend on earlier systems being ready.
 3. Localization is loaded for the configured language.
 4. F4SE messaging is registered.
 5. Hooks are installed.
-6. `DataManager` refreshes cached game data.
+6. `CatalogService` coalesces lifecycle refreshes; its game-task pump captures data through `CatalogReader`.
 
 Features that depend on localized strings or font coverage should assume config
 and language setup have completed before the UI is first drawn.
 
 ## Build
 
-Build from the repository root with xmake:
+Use a recursive repository checkout, xmake 3.0 or newer, and the MSVC C++
+toolchain. Build from the repository root with xmake:
 
 ```powershell
 xmake f -m release -a x64
@@ -68,7 +70,9 @@ The release DLL is written to:
 build/windows/x64/release/ESPExplorerAE.dll
 ```
 
-For a debug-friendly release build:
+Release builds remain optimized and produce a matching `ESPExplorerAE.pdb`.
+Warnings in the plugin target are treated as build errors. The existing
+`releasedbg` configuration is also supported:
 
 ```powershell
 xmake f -m releasedbg -a x64
@@ -83,6 +87,9 @@ xmake f -m release -a x64
 xmake
 ```
 
+Builds do not automatically install into the game. To deploy a validated build,
+configure `XSE_FO4_GAME_PATH` or `XSE_FO4_MODS_PATH`, then run `xmake install`.
+
 ## Packaging
 
 Package the current build with the shipped runtime assets:
@@ -91,15 +98,13 @@ Package the current build with the shipped runtime assets:
 xmake package
 ```
 
-The package is written under `build/packages/` and includes:
+The archive `build/packages/ESPExplorerAE-<version>.zip` contains the DLL under
+`Data/F4SE/Plugins` and the language, font, theme, and license files under
+`Data/Interface/ESPExplorerAE`. Font binaries and redistribution notices are
+included in the repository; no font download or conversion step is needed.
 
-- the built DLL;
-- `dist/lang/*.ini` under `Data/Interface/ESPExplorerAE/lang`;
-- `dist/fonts/*.ttf` under `Data/Interface/ESPExplorerAE/fonts`;
-- `dist/themes/*.ini` under `Data/Interface/ESPExplorerAE/themes`.
-
-Run packaging after changes to install layout, shipped languages, fonts, themes,
-or release metadata.
+Keep the matching `ESPExplorerAE.pdb` from the build output for diagnostics.
+In-game acceptance on Fallout 4 Steam runtime 1.11.240 remains pending.
 
 ## Runtime Assets
 
@@ -115,9 +120,10 @@ development can run from the repository assets.
 
 ## Core Modules
 
-`DataManager` owns heavy game-data enumeration. It builds cached plugin, form,
-and category views from `RE::TESDataHandler` and `RE::TESForm::GetAllForms()`.
-UI code should read cached data rather than casually forcing refreshes.
+`Game/CatalogReader` owns engine enumeration from `RE::TESDataHandler` and
+`RE::TESForm::GetAllForms()`. `App/CatalogService` coalesces refresh requests and
+publishes immutable snapshots with canonical records and indexes. UI code retains
+a snapshot while drawing; it does not hold data locks or enumerate the game.
 
 `MainWindow` owns top-level UI state, tab orchestration, modal popups, and the
 status bar. Most feature work lands in the relevant tab under `src/GUI/Tabs/`
@@ -175,9 +181,16 @@ When adding or changing a theme:
 - test dense tables, disabled text, popups, and different font sizes;
 - run `xmake package` so the packaged layout includes the theme.
 
+## Profiling
+
+Optional bounded capture is controlled by `[Debug] bProfilePerformance` in the
+INI. Reports include operation percentiles, available allocation counters, queue
+depths and snapshot storage estimates. Game measurements and baseline-derived
+budgets are still pending.
+
 ## Validation
 
-There is no dedicated automated test suite in this repository.
+In-game validation is still required.
 
 Use the available checks:
 
@@ -187,7 +200,7 @@ Use the available checks:
 - inspect all shipped language files for UI text changes.
 
 High-risk areas include hook installation, input interception, font atlas rebuild
-timing, save-affecting player actions, and `DataManager::Refresh()` behavior.
+timing, save-affecting player actions, and `CatalogService::RequestRefresh()` and game-task capture behavior.
 
 ## Contributors
 
@@ -213,6 +226,8 @@ AI-assisted code is allowed, but contributors are responsible for understanding,
 testing, and explaining their changes.
 
 ## Developer Notes
+
+The current refactor is under development. In-game acceptance remains pending.
 
 - This project is data-driven where practical. Before hardcoding game data,
   check whether Fallout 4, F4SE, or CommonLibF4 exposes the data already.
