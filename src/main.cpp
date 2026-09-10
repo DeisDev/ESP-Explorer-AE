@@ -7,6 +7,10 @@
 
 #include <spdlog/spdlog.h>
 
+// CommonLibF4 generates the loader's compatible-runtime list from RUNTIME_LATEST.
+// A dependency update must not silently advertise support for an untested runtime.
+static_assert(F4SE::RUNTIME_LATEST == F4SE::RUNTIME_1_11_240);
+
 namespace
 {
     void SetLogLevel(bool debug)
@@ -40,6 +44,12 @@ namespace
 
 F4SE_PLUGIN_LOAD(const F4SE::LoadInterface* a_f4se)
 {
+    // Address Library/layout flags can bypass F4SE's compatible-version list.
+    // Reject other runtimes before CommonLib initialization or any game access.
+    if (!a_f4se || a_f4se->RuntimeVersion() != F4SE::RUNTIME_1_11_240) {
+        return false;
+    }
+
     F4SE::Init(a_f4se);
 
     if (!ESPExplorerAE::Config::Load()) {

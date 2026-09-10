@@ -1,7 +1,7 @@
 includes("lib/commonlibf4")
 
 set_project("ESPExplorerAE")
-set_version("1.5.2")
+set_version("1.5.3")
 set_license("GPL-3.0")
 set_languages("c++23")
 set_warnings("allextra")
@@ -16,8 +16,12 @@ target("ESPExplorerAE")
     add_rules("commonlibf4.plugin", {
         name = "ESPExplorerAE",
         author = "DeisDev",
-        description = "In-game ESP/ESL/ESM Archive Explorer"
+        description = "In-game ESP/ESL/ESM Archive Explorer",
+        xse_minimum = "0.7.9"
     })
+
+    -- Deploy explicitly with xmake install after validating the build.
+    set_values("commonlib.plugin.install", false)
 
     add_files("src/**.cpp")
     add_headerfiles("src/**.h")
