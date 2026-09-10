@@ -46,6 +46,8 @@ Target version: **1.6.0**.
 
 ### Fixed
 
+- Restored the player HUD after closing the explorer or turning off Hide Player
+  HUD When Menu Open, including when hiding the HUD removes its menu object.
 - Search clearing keeps the field ready for typing, and Plugin Browser uses the
   same Steam keyboard integration as other browsers.
 - Inventory search no longer pushes the equipped filter and refresh control

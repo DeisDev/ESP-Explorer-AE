@@ -44,16 +44,16 @@ namespace ESPExplorerAE
                 });
             }
             if (auto* ui = RE::UI::GetSingleton()) {
-                if (const auto hud = ui->GetMenu<RE::HUDMenu>()) {
-                    const bool shown = hud->hudShowMenuState.get() == RE::HUDMenu::ShowMenuState::kShown;
-                    hideHUD.Update(decision.hideHUD && !restoringHUD, shown, [&](bool value) {
-                        auto* queue = RE::UIMessageQueue::GetSingleton();
-                        if (!queue) return false;
-                        queue->AddMessage(RE::HUDMenu::MENU_NAME, value ? RE::UI_MESSAGE_TYPE::kShow : RE::UI_MESSAGE_TYPE::kHide);
-                        return true;
-                    });
-                    if (!hideHUD.Engaged()) restoringHUD = false;
-                }
+                // Observe the menu stack affected by kShow/kHide. A hidden HUD
+                // may have no menu object; restoration must still run then.
+                const bool shown = ui->GetMenuOpen<RE::HUDMenu>();
+                hideHUD.Update(decision.hideHUD && !restoringHUD, shown, [&](bool value) {
+                    auto* queue = RE::UIMessageQueue::GetSingleton();
+                    if (!queue) return false;
+                    queue->AddMessage(RE::HUDMenu::MENU_NAME, value ? RE::UI_MESSAGE_TYPE::kShow : RE::UI_MESSAGE_TYPE::kHide);
+                    return true;
+                });
+                if (!hideHUD.Engaged()) restoringHUD = false;
             }
             if (auto* player = RE::PlayerCharacter::GetSingleton()) {
                 godMode.Update(decision.godMode, player->IsGodMode(), [&](bool value) {
