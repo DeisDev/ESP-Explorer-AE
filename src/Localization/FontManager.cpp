@@ -150,12 +150,7 @@ namespace ESPExplorerAE
 
     std::filesystem::path FontManager::ResolveFontsDirectory()
     {
-        const auto runtimePath = std::filesystem::path("Data/Interface/ESPExplorerAE/fonts");
-        if (std::filesystem::exists(runtimePath)) {
-            return runtimePath;
-        }
-
-        return std::filesystem::path("dist/fonts");
+        return std::filesystem::path("Data/Interface/ESPExplorerAE/fonts");
     }
 
     void FontManager::ResetAtlasState()

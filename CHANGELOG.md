@@ -9,7 +9,7 @@ not yet been reconstructed from verified release records.
 
 ## [Unreleased]
 
-Target version: **1.6.0**. In-game validation remains pending.
+Target version: **1.6.0**.
 
 ### Added
 
@@ -30,6 +30,8 @@ Target version: **1.6.0**. In-game validation remains pending.
 
 ### Fixed
 
+- Language files, fonts, and themes load from the installed mod directories;
+  missing files no longer cause a search in the source checkout's `dist` folder.
 - Corrected stale catalog/filter results and range selection across clipped rows.
 - Bound Steam keyboard results to the requesting field and rejected stale action
   requests after game-session changes. Inventory actions revalidate stack targets.

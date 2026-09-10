@@ -25,13 +25,7 @@ namespace ESPExplorerAE
 
         std::filesystem::path ResolveLanguageDirectory()
         {
-            const auto runtimePath = std::filesystem::path("Data/Interface/ESPExplorerAE/lang");
-            std::error_code error;
-            if (std::filesystem::exists(runtimePath, error) || error) {
-                return runtimePath;
-            }
-
-            return std::filesystem::path("dist/lang");
+            return std::filesystem::path("Data/Interface/ESPExplorerAE/lang");
         }
 
         std::filesystem::path LanguagePath(const std::filesystem::path& directory, std::string_view code)

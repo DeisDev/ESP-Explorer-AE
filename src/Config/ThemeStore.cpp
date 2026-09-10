@@ -85,13 +85,7 @@ namespace ESPExplorerAE
 
     std::filesystem::path ThemeStore::ResolveThemesDirectory()
     {
-        const auto runtimePath = std::filesystem::path("Data/Interface/ESPExplorerAE/themes");
-        std::error_code error;
-        if (std::filesystem::exists(runtimePath, error) || error) {
-            return runtimePath;
-        }
-
-        return std::filesystem::path("dist/themes");
+        return std::filesystem::path("Data/Interface/ESPExplorerAE/themes");
     }
 
     std::vector<ThemePreset> ThemeStore::ReadDirectory(const std::filesystem::path& directory, const Diagnostic& diagnostic)
