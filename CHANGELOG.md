@@ -28,8 +28,7 @@ Target version: **1.6.0**.
   with F4SE 0.7.7, 0.7.8, and 0.7.9 respectively and the matching Address Library.
   Other executable versions remain excluded.
 - Redesigned the menu with sidebar navigation, a custom header, restrained
-  accents, softer controls, and a Modern Charcoal default theme. Existing saved
-  colors and the original green preset remain available.
+  accents, and softer controls. Modern Charcoal is an optional shipped theme.
 - Separated status information from footer actions and removed the inactive
   footer undo button; action results remain available in Action History.
 - Separated engine readers, application services, and UI presentation. Catalog,
@@ -40,6 +39,8 @@ Target version: **1.6.0**.
 
 ### Fixed
 
+- Restored Default Green for new installations and theme resets. Modern Charcoal
+  now loads from its own editable theme INI; existing saved colors are preserved.
 - Language files, fonts, and themes load from the installed mod directories;
   missing files no longer cause a search in the source checkout's `dist` folder.
 - Corrected stale catalog/filter results and range selection across clipped rows.

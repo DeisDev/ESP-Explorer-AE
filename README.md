@@ -143,10 +143,6 @@ Relative `sFontFiles` entries resolve inside `Data/Interface/ESPExplorerAE/fonts
 Themes are data-driven `.ini` files. Shipped themes live in `dist/themes` and
 are packaged to `Data/Interface/ESPExplorerAE/themes`.
 
-New installations use Modern Charcoal. Existing configurations keep their saved
-colors; select Modern Charcoal in Settings to use the new palette. Default Green
-remains available alongside the other presets.
-
 When adding or changing a theme:
 
 - start from an existing file;

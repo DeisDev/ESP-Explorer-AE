@@ -27,20 +27,20 @@ namespace ESPExplorerAE
     };
 
     inline const ThemePreset DefaultTheme{
-        .id = "modern-charcoal",
-        .name = "Modern Charcoal",
-        .nameKey = "sPresetModernCharcoal",
-        .accentR = 0.38f,
-        .accentG = 0.78f,
-        .accentB = 0.71f,
+        .id = "default-green",
+        .name = "Default Green",
+        .nameKey = "sPresetDefaultGreen",
+        .accentR = 0.27f,
+        .accentG = 0.94f,
+        .accentB = 0.38f,
         .accentA = 1.0f,
-        .windowR = 0.055f,
-        .windowG = 0.063f,
-        .windowB = 0.078f,
+        .windowR = 0.03f,
+        .windowG = 0.08f,
+        .windowB = 0.05f,
         .windowA = 0.96f,
-        .panelR = 0.080f,
-        .panelG = 0.090f,
-        .panelB = 0.110f,
+        .panelR = 0.06f,
+        .panelG = 0.14f,
+        .panelB = 0.09f,
         .panelA = 0.94f,
         .builtIn = true
     };
