@@ -20,6 +20,8 @@ namespace ESPExplorerAE
         std::uint64_t count{ 0 };
         float weight{ 0.0f };
         std::int32_t value{ 0 };
+        double totalWeight{};
+        std::int64_t totalValue{};
         bool isEquipped{ false };
         bool isFavorited{ false };
         bool isLegendary{ false };
@@ -54,6 +56,10 @@ namespace ESPExplorerAE
         std::string inventorySearch;
         InventoryCategoryTab activeCategory{ InventoryCategoryTab::All };
         bool showEquippedOnly{};
+        bool showFavoritesOnly{};
+        bool showLegendaryOnly{};
+        bool showQuestOnly{};
+        bool resetCategory{};
         bool focusPending{};
         InventoryQuickState quick;
         bool selectionChanged{};
@@ -90,6 +96,7 @@ namespace ESPExplorerAE
     {
     public:
         static void Draw(InventoryTabState& state, const InventoryTabView& view, InventoryTabRequests& requests);
+        static void ResetFilters(InventoryTabState& state);
         static void ResetState(InventoryTabState& state);
     };
 }

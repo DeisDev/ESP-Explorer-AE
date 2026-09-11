@@ -13,6 +13,7 @@
 #include "GUI/Widgets/SharedUtils.h"
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 
 #include <algorithm>
@@ -27,6 +28,20 @@ namespace ESPExplorerAE
 {
     namespace
     {
+        // ImGui borrows localization pointers. Restore its previous entries
+        // before the view's language-frame owner releases them.
+        class InventoryTableText
+        {
+            std::array<ImGuiLocEntry, 4> previous;
+        public:
+            explicit InventoryTableText(const std::array<ImGuiLocEntry, 4>& entries)
+            {
+                for (std::size_t index = 0; index < entries.size(); ++index) previous[index] = { entries[index].Key, ImGui::LocalizeGetMsg(entries[index].Key) };
+                ImGui::LocalizeRegisterEntries(entries.data(), static_cast<int>(entries.size()));
+            }
+            ~InventoryTableText() { ImGui::LocalizeRegisterEntries(previous.data(), static_cast<int>(previous.size())); }
+        };
+
         class InventoryView
         {
             InventoryTabState& state;
@@ -109,7 +124,7 @@ namespace ESPExplorerAE
                 if (category == "KEYM") {
                     return L(context, "Inventory", "sKeys", "Keys");
                 }
-                if (category == "BOOK") {
+                if (category == "BOOK" || category == "NOTE") {
                     return L(context, "Inventory", "sNotes", "Notes/Holotapes");
                 }
                 if (category == "CMPO") {
@@ -149,6 +164,8 @@ namespace ESPExplorerAE
                     entry.count = group.count;
                     entry.weight = stack.weight;
                     entry.value = stack.value;
+                    entry.totalWeight = group.totalWeight;
+                    entry.totalValue = group.totalValue;
                     entry.isEquipped = group.anyEquipped;
                     entry.isFavorited = group.anyFavorited;
                     entry.isLegendary = group.anyLegendary;
@@ -204,6 +221,9 @@ namespace ESPExplorerAE
                     if (state.showEquippedOnly && !entry.isEquipped) {
                         continue;
                     }
+                    if (state.showFavoritesOnly && !entry.isFavorited) continue;
+                    if (state.showLegendaryOnly && !entry.isLegendary) continue;
+                    if (state.showQuestOnly && !entry.isQuestItem) continue;
                     if (!state.inventorySearch.empty()) {
                         const std::string formIDText = FormatUtils::FormID(entry.formID);
                         if (!SharedUtils::ContainsCaseInsensitive(entry.name, state.inventorySearch) &&
@@ -244,6 +264,10 @@ namespace ESPExplorerAE
                     return left.modCount < right.modCount ? -1 : (left.modCount > right.modCount ? 1 : 0);
                 case 7:
                     return left.sourcePlugin.compare(right.sourcePlugin);
+                case 8:
+                    return left.totalWeight < right.totalWeight ? -1 : (left.totalWeight > right.totalWeight ? 1 : 0);
+                case 9:
+                    return left.totalValue < right.totalValue ? -1 : (left.totalValue > right.totalValue ? 1 : 0);
                 default:
                     return 0;
                 }
@@ -291,6 +315,12 @@ namespace ESPExplorerAE
                 if (choice == state.instanceChoices.end()) return {};
                 for (const auto index : entry.stacks) if (entry.source->stacks[index].token == choice->second) return index;
                 return {};
+            }
+
+            bool SelectedInstanceEquipped(const InventoryEntry& entry)
+            {
+                const auto selected = SelectedInstance(entry);
+                return selected && entry.source->stacks[*selected].isEquipped;
             }
 
             InventoryPreparation PrepareEntries(std::span<const InventoryEntry> entries, InventoryAction action, std::optional<std::uint64_t> quantity = {})
@@ -350,6 +380,16 @@ namespace ESPExplorerAE
                 if (!prepared) return;
                 if (prepared.plan.source->session != view.session) { state.admission = ActionAdmission::StaleSession; return; }
                 if (!view.gameplayReady) { state.admission = ActionAdmission::Unavailable; return; }
+                if (entries.size() > 1) {
+                    std::uint64_t count{};
+                    for (const auto& entry : entries) count += entry.count;
+                    message += "\n" + std::string(L(view, "Inventory", "sItemGroups", "Item Groups")) + ": " + std::to_string(entries.size()) +
+                        "  |  " + L(view, "Inventory", "sQuantity", "Qty") + ": " + std::to_string(count);
+                    for (const auto& entry : entries.first((std::min)(entries.size(), std::size_t{ 6 }))) {
+                        message += "\n" + (entry.name.empty() ? std::string(L(view, "General", "sUnnamed", "<Unnamed>")) : entry.name) + " (x" + std::to_string(entry.count) + ")";
+                    }
+                    if (entries.size() > 6) message += "\n...";
+                }
                 requests.confirmations.push_back({ std::move(title), std::move(message), InventoryRequests(prepared) });
             }
 
@@ -563,11 +603,11 @@ namespace ESPExplorerAE
                 const char* applyTimeLabel = L(context, "Inventory", "sApplyTime", "Set Time");
 
                 if (ImGui::Button(morningLabel)) { state.quick.gameHour = 6.0f; }
-                ImGui::SameLine();
+                wrappedSameLine(noonLabel);
                 if (ImGui::Button(noonLabel)) { state.quick.gameHour = 12.0f; }
-                ImGui::SameLine();
+                wrappedSameLine(eveningLabel);
                 if (ImGui::Button(eveningLabel)) { state.quick.gameHour = 18.0f; }
-                ImGui::SameLine();
+                wrappedSameLine(midnightLabel);
                 if (ImGui::Button(midnightLabel)) { state.quick.gameHour = 0.0f; }
                 wrappedSameLine(applyTimeLabel);
                 if (ImGui::Button(applyTimeLabel)) {
@@ -582,21 +622,20 @@ namespace ESPExplorerAE
 
             void DrawSummaryBar(const InventoryTabView& context)
             {
+                if (!context.inventory || !context.inventory->ready) return;
                 const float totalWeight = CalculateTotalWeight();
                 const float carryWeight = context.inventory ? context.inventory->carryWeight : 0.0f;
                 const float ratio = carryWeight > 0.0f ? totalWeight / carryWeight : 0.0f;
 
-                ImGui::TextDisabled(
-                    "%s: %zu  |  %s: %.1f  |  %s: %.1f / %.1f  |  %s: %lld",
-                    L(context, "Inventory", "sTotalItems", "Total Items"),
+                ImGui::TextWrapped(
+                    "%s: %zu  |  %s: %.1f / %.1f  |  %s: %llu",
+                    L(context, "Inventory", "sItemGroups", "Item Groups"),
                     state.cachedInventory.size(),
-                    L(context, "Inventory", "sTotalWeight", "Total Weight"),
-                    totalWeight,
                     L(context, "Inventory", "sCarryWeight", "Carry Weight"),
                     totalWeight,
                     carryWeight,
                     L(context, "Inventory", "sCaps", "Caps"),
-                    static_cast<long long>(context.inventory ? context.inventory->capsCount : 0));
+                    static_cast<unsigned long long>(context.inventory->capsCount));
 
                 ImVec4 color = ImVec4(0.30f, 0.72f, 0.38f, 1.0f);
                 if (ratio >= 0.90f) {
@@ -606,8 +645,9 @@ namespace ESPExplorerAE
                 }
 
                 ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
-                ImGui::ProgressBar((std::clamp)(ratio, 0.0f, 1.0f), ImVec2(-1.0f, 0.0f));
+                ImGui::ProgressBar((std::clamp)(ratio, 0.0f, 1.0f), ImVec2(-1.0f, ImGui::GetFontSize() * 0.3f), "");
                 ImGui::PopStyleColor();
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", L(context, "Inventory", "sTotalsHelp", "Totals include every instance in a row. Captured item weights may differ from Pip-Boy carry weight; values are not vendor prices."));
             }
 
             void DrawInventoryDetails(const InventoryEntry& entry, const InventoryTabView& context)
@@ -625,7 +665,7 @@ namespace ESPExplorerAE
                     .catalog = context.catalog.get(),
                     .details = context.details && context.details->key == *requests.details ? context.details : nullptr
                 };
-                FormDetailsView::Draw(formEntry, detailsContext);
+                ImGui::TextWrapped("%s", entry.name.empty() ? L(context, "General", "sUnnamed", "<Unnamed>") : entry.name.c_str());
 
                 if (entry.stacks.size() > 1) {
                     const auto chosen = SelectedInstance(entry);
@@ -637,7 +677,8 @@ namespace ESPExplorerAE
                             const auto& stack = entry.source->stacks[index];
                             const auto label = std::string(L(context, "Inventory", "sInstance", "Instance")) + " " + std::to_string(position + 1) + " (" +
                                 L(context, "Inventory", "sQuantity", "Qty") + ": " + std::to_string(stack.count) + ", " +
-                                L(context, "Inventory", "sMods", "Mods") + ": " + std::to_string(stack.modCount) + ")###" + std::to_string(stack.token);
+                                L(context, "Inventory", "sMods", "Mods") + ": " + std::to_string(stack.modCount) + ")" +
+                                (stack.isEquipped ? " (" + std::string(L(context, "Inventory", "sEquipped", "Equipped")) + ")" : "") + "###" + std::to_string(stack.token);
                             if (ImGui::Selectable(label.c_str(), chosen && *chosen == index)) state.instanceChoices[entry.groupID] = stack.token;
                         }
                         ImGui::EndCombo();
@@ -646,11 +687,29 @@ namespace ESPExplorerAE
                 }
                 const auto selected = SelectedInstance(entry);
                 const auto& instance = entry.source->stacks[selected.value_or(entry.representative)];
+                bool firstAction = true;
+                ImGui::BeginDisabled(!context.gameplayReady || !selected);
+                if (IsEquippable(entry)) {
+                    if (ImGuiWidgetUtils::DrawWrappedButton(instance.isEquipped ? L(context, "Inventory", "sUnequipItem", "Unequip") : L(context, "Inventory", "sEquipItem", "Equip"), firstAction)) {
+                        EquipInventoryEntry(entry, !instance.isEquipped);
+                    }
+                } else if (IsAidCategory(entry.category)) {
+                    if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "Inventory", "sUseItem", "Use"), firstAction)) UseInventoryEntry(entry);
+                }
+                ImGui::EndDisabled();
+                if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "General", "sActions", "Actions"), firstAction)) ImGui::OpenPopup("InventoryDetailActions");
+                if (ImGui::BeginPopup("InventoryDetailActions")) {
+                    if (state.selectionChanged) ImGui::CloseCurrentPopup();
+                    else DrawInventoryContextMenu(entry, context);
+                    ImGui::EndPopup();
+                }
                 ImGui::Spacing();
                 ImGui::Separator();
                 ImGui::Spacing();
 
                 if (entry.stacks.size() > 1) ImGui::Text("%s: %llu", L(context, "Inventory", "sGroupQuantity", "Group Quantity"), static_cast<unsigned long long>(entry.count));
+                ImGui::TextWrapped("%s: %.2f  |  %s: %lld", L(context, "Inventory", "sStackWeight", "Stack Weight"), entry.totalWeight,
+                    L(context, "Inventory", "sStackValue", "Stack Value"), static_cast<long long>(entry.totalValue));
                 ImGui::Text("%s: %llu", L(context, "Inventory", "sQuantity", "Qty"), static_cast<unsigned long long>(instance.count));
                 ImGui::Text("%s: %s", L(context, "Inventory", "sEquipped", "Equipped"), instance.isEquipped ? L(context, "General", "sYes", "Yes") : L(context, "General", "sNo", "No"));
                 ImGui::Text("%s: %s", L(context, "General", "sFavorite", "Favorite"), instance.isFavorited ? L(context, "General", "sYes", "Yes") : L(context, "General", "sNo", "No"));
@@ -695,6 +754,8 @@ namespace ESPExplorerAE
                         ImGui::BulletText("%s", enchantment.name.c_str());
                     }
                 }
+                ImGui::Spacing();
+                if (ImGui::CollapsingHeader(L(context, "Inventory", "sBaseDetails", "Base Record Details"))) FormDetailsView::Draw(formEntry, detailsContext);
             }
 
             void DrawCategoryTabs(const InventoryTabView& context)
@@ -717,13 +778,14 @@ namespace ESPExplorerAE
                 }
 
                 for (const auto& [category, label] : tabs) {
-                    if (ImGui::BeginTabItem(label)) {
+                    if (ImGui::BeginTabItem(label, nullptr, state.resetCategory && category == InventoryCategoryTab::All ? ImGuiTabItemFlags_SetSelected : 0)) {
                         state.activeCategory = category;
                         ImGui::EndTabItem();
                     }
                 }
 
                 ImGui::EndTabBar();
+                state.resetCategory = false;
             }
 
             std::vector<InventoryEntry> CopySelectedEntries(const std::vector<const InventoryEntry*>& visibleEntries)
@@ -764,29 +826,32 @@ namespace ESPExplorerAE
                     ConfirmEntries(std::span{ &entry, 1 }, InventoryAction::Drop, L(context, "Inventory", "sDropItem", "Drop Item"), message);
                 }
 
-                auto& desiredCount = state.desiredCounts.try_emplace(entry.groupID, 1).first->second;
+                auto& desiredCount = state.desiredCounts.try_emplace(entry.groupID, static_cast<int>((std::min)(entry.count, static_cast<std::uint64_t>(ActionQueue::MaxQuantity)))).first->second;
                 desiredCount = (std::clamp)(desiredCount, 0, static_cast<int>(ActionQueue::MaxQuantity));
+                ImGui::TextUnformatted(L(context, "Inventory", "sSetCount", "Set Count"));
                 ImGui::SetNextItemWidth(140.0f);
                 ImGui::InputInt("##SetCountInput", &desiredCount, 1, 10);
                 desiredCount = (std::clamp)(desiredCount, 0, static_cast<int>(ActionQueue::MaxQuantity));
                 const bool increase = static_cast<std::uint64_t>(desiredCount) > entry.count;
                 const auto applyCountLabel = increase ? std::string(L(context, "Inventory", "sAddBaseItems", "Add Base Items")) + " (+" + std::to_string(static_cast<std::uint64_t>(desiredCount) - entry.count) + ")###ApplyInventoryCount" :
                     std::string(L(context, "Inventory", "sApplySetCount", "Apply Count")) + "###ApplyInventoryCount";
-                if (ImGui::MenuItem(applyCountLabel.c_str())) {
+                const bool countChangeAllowed = static_cast<std::uint64_t>(desiredCount) != entry.count && (increase || !entry.isQuestItem);
+                if (ImGui::MenuItem(applyCountLabel.c_str(), nullptr, false, countChangeAllowed)) {
                     AdjustInventoryEntryCount(entry, desiredCount);
                 }
                 if (static_cast<std::uint64_t>(desiredCount) > entry.count && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", L(context, "Inventory", "sBaseItemNotice", "Adds the base item without this instance’s modifications."));
 
                 if (IsEquippable(entry)) {
-                    if (ImGui::MenuItem(entry.isEquipped ? L(context, "Inventory", "sUnequipItem", "Unequip") : L(context, "Inventory", "sEquipItem", "Equip"))) {
-                        EquipInventoryEntry(entry, !entry.isEquipped);
+                    const bool equipped = SelectedInstanceEquipped(entry);
+                    if (ImGui::MenuItem(equipped ? L(context, "Inventory", "sUnequipItem", "Unequip") : L(context, "Inventory", "sEquipItem", "Equip"), nullptr, false, SelectedInstance(entry).has_value())) {
+                        EquipInventoryEntry(entry, !equipped);
                     }
                     if (ImGui::MenuItem(L(context, "Inventory", "sAddBaseItem", "Add Base Item"))) {
                         AddBaseItems(entry, 1);
                     }
                     if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", L(context, "Inventory", "sBaseItemNotice", "Adds the base item without this instance’s modifications."));
                 } else if (IsAidCategory(entry.category)) {
-                    if (ImGui::MenuItem(L(context, "Inventory", "sUseItem", "Use"))) {
+                    if (ImGui::MenuItem(L(context, "Inventory", "sUseItem", "Use"), nullptr, false, SelectedInstance(entry).has_value())) {
                         UseInventoryEntry(entry);
                     }
                 }
@@ -816,21 +881,45 @@ namespace ESPExplorerAE
                 }
             }
 
+            void DrawFilters(const InventoryTabView& context)
+            {
+                const auto* refreshLabel = L(context, "Inventory", "sRefreshInventory", "Refresh");
+                const float refreshWidth = ImGui::CalcTextSize(refreshLabel).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+                const float searchWidth = (std::max)(1.0f, ImGui::GetContentRegionAvail().x - refreshWidth - ImGui::GetStyle().ItemSpacing.x);
+                SearchBar::Draw(L(context, "Inventory", "sSearch", "Search Inventory..."), state.inventorySearchBuffer.data(), state.inventorySearchBuffer.size(), state.inventorySearch, &state.focusPending, "InventorySearch", L(context, "General", "sClearSearchButton", "X"), searchWidth);
+                ImGuiWidgetUtils::SameLineIfFits(refreshWidth);
+                if (ImGui::Button(refreshLabel)) MarkRefreshNeeded();
+                ImGui::Checkbox(L(context, "Inventory", "sEquipped", "Equipped"), &state.showEquippedOnly);
+                const auto filter = [&](const char* label, bool& enabled) {
+                    ImGuiWidgetUtils::SameLineIfFits(ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::CalcTextSize(label).x);
+                    ImGui::Checkbox(label, &enabled);
+                };
+                filter(L(context, "Inventory", "sPipboyFavorites", "Pip-Boy Favorites"), state.showFavoritesOnly);
+                filter(L(context, "Inventory", "sLegendary", "Legendary"), state.showLegendaryOnly);
+                filter(L(context, "Inventory", "sQuestItem", "Quest Item"), state.showQuestOnly);
+                const auto* resetLabel = L(context, "General", "sResetFilters", "Reset Filters");
+                ImGuiWidgetUtils::DrawWrappedSameLine(resetLabel);
+                if (ImGui::Button(resetLabel)) {
+                    InventoryTab::ResetFilters(state);
+                    state.focusPending = true;
+                }
+            }
+
             void Draw(const InventoryTabView& context)
             {
+                const InventoryTableText tableText({{
+                    { ImGuiLocKey_TableSizeOne, L(context, "Inventory", "sFitColumn", "Size Column to Fit") },
+                    { ImGuiLocKey_TableSizeAllFit, L(context, "Inventory", "sFitAllColumns", "Size All Columns to Fit") },
+                    { ImGuiLocKey_TableSizeAllDefault, L(context, "Inventory", "sResetColumnWidths", "Reset Column Widths") },
+                    { ImGuiLocKey_TableResetOrder, L(context, "Inventory", "sResetColumnOrder", "Reset Column Order") }
+                }});
                 RefreshPlayerInventory(context);
 
                 DrawQuickActions(context);
-                SearchBar::Draw(L(context, "Inventory", "sSearch", "Search Inventory..."), state.inventorySearchBuffer.data(), state.inventorySearchBuffer.size(), state.inventorySearch, &state.focusPending, "InventorySearch", L(context, "General", "sClearSearchButton", "X"));
-                ImGui::Checkbox(L(context, "Inventory", "sEquipped", "Equipped"), &state.showEquippedOnly);
-                const auto* refreshLabel = L(context, "Inventory", "sRefreshInventory", "Refresh");
-                ImGuiWidgetUtils::DrawWrappedSameLine(refreshLabel);
-                if (ImGui::Button(refreshLabel)) {
-                    MarkRefreshNeeded();
-                    RefreshPlayerInventory(context);
-                }
+                DrawFilters(context);
 
-                if (!context.inventory || !context.inventory->ready) ImGui::TextDisabled("%s", L(context, "Inventory", "sLoading", "Loading inventory..."));
+                if (!context.gameplayReady) ImGui::TextDisabled("%s", L(context, "Inventory", "sUnavailable", "Inventory is unavailable."));
+                else if (!context.inventory || !context.inventory->ready) ImGui::TextDisabled("%s", L(context, "Inventory", "sLoading", "Loading inventory..."));
                 if (state.selectionChanged) ImGui::TextWrapped("%s", L(context, "Inventory", "sSelectionChanged", "Inventory changed. Select the items again."));
                 const auto feedback = InventoryFeedback::Message(state.rejection, context.localize);
                 if (!feedback.empty()) ImGui::TextWrapped("%s", feedback.c_str());
@@ -840,46 +929,103 @@ namespace ESPExplorerAE
                 DrawCategoryTabs(context);
 
                 auto visibleEntries = BuildVisibleEntries();
-
-                const ImVec2 available = ImGui::GetContentRegionAvail();
-                const bool sideBySide = available.x >= 1020.0f;
-                const ImVec2 tablePaneSize = sideBySide ? ImVec2(available.x * 0.64f, available.y) : ImVec2(0.0f, available.y * 0.58f);
-                const ImVec2 detailPaneSize = sideBySide ? ImVec2(0.0f, available.y) : ImVec2(0.0f, 0.0f);
-
+                std::vector<std::uint64_t> visibleOrder;
+                visibleOrder.reserve(visibleEntries.size());
+                for (const auto* entry : visibleEntries) visibleOrder.push_back(entry->groupID);
+                state.selection.Reconcile(visibleOrder);
+                bool firstSelectionButton = true;
+                ImGui::BeginDisabled(visibleEntries.empty());
+                if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "Inventory", "sSelectVisible", "Select Visible"), firstSelectionButton)) {
+                    state.selection.All(visibleOrder);
+                    state.selectionChanged = false;
+                    state.rejection = InventoryRejection::None;
+                }
+                ImGui::EndDisabled();
+                ImGui::BeginDisabled(state.selection.selected.empty());
+                if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "General", "sClearSelection", "Clear Selection"), firstSelectionButton)) state.selection.Clear();
+                ImGui::EndDisabled();
+                const auto* selectionHelp = L(context, "Inventory", "sSelectionHelp", "Ctrl+click toggles items; Shift+click selects a range. Right-click a column header to choose columns.");
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", selectionHelp);
                 const auto selectedEntries = CopySelectedEntries(visibleEntries);
                 if (selectedEntries.size() > 1) {
-                    bool firstButton = true;
-                    if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "Inventory", "sRemoveSelected", "Remove Selected"), firstButton)) {
+                    const auto actionsLabel = std::string(L(context, "General", "sActions", "Actions")) + " (" + std::to_string(selectedEntries.size()) + ")###InventorySelectionActions";
+                    if (ImGuiWidgetUtils::DrawWrappedButton(actionsLabel.c_str(), firstSelectionButton)) ImGui::OpenPopup("InventorySelectionMenu");
+                }
+                if (!selectedEntries.empty()) {
+                    std::uint64_t selectedCount{};
+                    double selectedWeight{};
+                    for (const auto& entry : selectedEntries) {
+                        selectedCount += entry.count;
+                        if (std::isfinite(entry.totalWeight)) selectedWeight += entry.totalWeight;
+                    }
+                    ImGui::TextWrapped("%s: %zu / %zu  |  %s: %zu (%s: %llu, %s: %.2f)",
+                        L(context, "General", "sVisible", "Visible"), visibleEntries.size(), state.cachedInventory.size(), L(context, "General", "sSelected", "Selected"), selectedEntries.size(),
+                        L(context, "Inventory", "sQuantity", "Qty"), static_cast<unsigned long long>(selectedCount), L(context, "Inventory", "sStackWeight", "Stack Weight"), selectedWeight);
+                } else {
+                    ImGui::TextWrapped("%s: %zu / %zu  |  %s: 0", L(context, "General", "sVisible", "Visible"), visibleEntries.size(), state.cachedInventory.size(),
+                        L(context, "General", "sSelected", "Selected"));
+                }
+                if (ImGui::BeginPopup("InventorySelectionMenu")) {
+                    if (state.selectionChanged || selectedEntries.size() < 2) ImGui::CloseCurrentPopup();
+                    ImGui::Text("%s: %zu", L(context, "General", "sSelected", "Selected"), selectedEntries.size());
+                    ImGui::Separator();
+                    ImGui::BeginDisabled(!context.gameplayReady);
+                    const bool hasQuestItem = std::ranges::any_of(selectedEntries, [](const auto& entry) { return entry.isQuestItem; });
+                    ImGui::BeginDisabled(hasQuestItem);
+                    if (ImGui::MenuItem(L(context, "Inventory", "sRemoveSelected", "Remove Selected"))) {
                         ConfirmEntries(selectedEntries, InventoryAction::Remove, L(context, "Inventory", "sRemoveSelected", "Remove Selected"), L(context, "General", "sConfirmAction", "Confirm Action"));
                     }
-                    if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "Inventory", "sDropSelected", "Drop Selected"), firstButton)) {
+                    if (ImGui::MenuItem(L(context, "Inventory", "sDropSelected", "Drop Selected"))) {
                         ConfirmEntries(selectedEntries, InventoryAction::Drop, L(context, "Inventory", "sDropSelected", "Drop Selected"), L(context, "General", "sConfirmAction", "Confirm Action"));
                     }
-                    if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "Inventory", "sEquipSelected", "Equip Selected"), firstButton)) {
+                    ImGui::EndDisabled();
+                    if (hasQuestItem && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", L(context, "Inventory", "sQuestRestriction", "Quest items cannot be removed or dropped."));
+                    const bool hasEquipment = std::ranges::any_of(selectedEntries, [&](const auto& entry) { return IsEquippable(entry); });
+                    ImGui::BeginDisabled(!hasEquipment);
+                    if (ImGui::MenuItem(L(context, "Inventory", "sEquipSelected", "Equip Selected"))) {
                         std::vector<InventoryEntry> equippable;
                         for (const auto& entry : selectedEntries) if (IsEquippable(entry)) equippable.push_back(entry);
                         SubmitPrepared(PrepareEntries(equippable, InventoryAction::Equip));
                     }
-                    if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "Inventory", "sUnequipSelected", "Unequip Selected"), firstButton)) {
+                    if (ImGui::MenuItem(L(context, "Inventory", "sUnequipSelected", "Unequip Selected"))) {
                         std::vector<InventoryEntry> equippable;
                         for (const auto& entry : selectedEntries) if (IsEquippable(entry)) equippable.push_back(entry);
                         SubmitPrepared(PrepareEntries(equippable, InventoryAction::Unequip));
                     }
-                    ImGui::Separator();
+                    ImGui::EndDisabled();
+                    ImGui::EndDisabled();
+                    ImGui::EndPopup();
                 }
 
+                const ImVec2 available = ImGui::GetContentRegionAvail();
+                const float spacing = ImGui::GetStyle().ItemSpacing.y;
+                const bool sideBySide = available.x >= ImGui::GetFontSize() * 45.0f;
+                const float paneHeight = (std::max)(ImGui::GetFrameHeight() * 2.0f, available.y);
+                const ImVec2 tablePaneSize = sideBySide ? ImVec2(available.x * 0.64f, paneHeight) : ImVec2(0.0f, (paneHeight - spacing) * 0.58f);
+                const ImVec2 detailPaneSize = sideBySide ? ImVec2(0.0f, paneHeight) : ImVec2(0.0f, (paneHeight - spacing) * 0.42f);
                 if (ImGui::BeginChild("InventoryTablePane", tablePaneSize, false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
-                    const float tableHeight = (std::max)(220.0f, ImGui::GetContentRegionAvail().y);
-                    if (ImGui::BeginTable("InventoryTable", 8, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_Sortable | ImGuiTableFlags_SortMulti | ImGuiTableFlags_ScrollY, ImVec2(0.0f, tableHeight))) {
+                    if (visibleEntries.empty() && context.inventory && context.inventory->ready) {
+                        ImGui::TextWrapped("%s", state.cachedInventory.empty() ? L(context, "Inventory", "sEmptyInventory", "Your inventory is empty.") :
+                            L(context, "Inventory", "sNoMatches", "No items match these filters. Reset filters to see all items."));
+                    }
+                    const float tableHeight = (std::max)(1.0f, ImGui::GetContentRegionAvail().y);
+                    if (ImGui::BeginTable("InventoryTable", 10, ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Resizable |
+                        ImGuiTableFlags_Hideable | ImGuiTableFlags_Reorderable | ImGuiTableFlags_Sortable | ImGuiTableFlags_SortMulti | ImGuiTableFlags_ScrollY | ImGuiTableFlags_ScrollX, ImVec2(0.0f, tableHeight))) {
                         ImGui::TableSetupScrollFreeze(0, 1);
-                        ImGui::TableSetupColumn(L(context, "Inventory", "sName", "Name"), ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_WidthStretch);
-                        ImGui::TableSetupColumn(L(context, "Inventory", "sCategory", "Category"), ImGuiTableColumnFlags_WidthFixed, 100.0f);
-                        ImGui::TableSetupColumn(L(context, "Inventory", "sQuantity", "Qty"), ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_WidthFixed, 50.0f);
-                        ImGui::TableSetupColumn(L(context, "Inventory", "sValue", "Value"), ImGuiTableColumnFlags_WidthFixed, 60.0f);
-                        ImGui::TableSetupColumn(L(context, "Inventory", "sWeight", "Weight"), ImGuiTableColumnFlags_WidthFixed, 65.0f);
-                        ImGui::TableSetupColumn(L(context, "Inventory", "sDamageOrRating", "DMG/DR"), ImGuiTableColumnFlags_WidthFixed, 60.0f);
-                        ImGui::TableSetupColumn(L(context, "Inventory", "sMods", "Mods"), ImGuiTableColumnFlags_WidthFixed, 50.0f);
-                        ImGui::TableSetupColumn(L(context, "Inventory", "sSource", "Source"), ImGuiTableColumnFlags_WidthStretch);
+                        const float unit = ImGui::GetFontSize();
+                        const auto columnWidth = [&](const char* label, float minimum) {
+                            return (std::max)(unit * minimum, ImGui::CalcTextSize(label).x + unit + ImGui::GetStyle().CellPadding.x * 2.0f);
+                        };
+                        ImGui::TableSetupColumn(L(context, "Inventory", "sName", "Name"), ImGuiTableColumnFlags_DefaultSort | ImGuiTableColumnFlags_NoHide, unit * 12.0f);
+                        ImGui::TableSetupColumn(L(context, "Inventory", "sCategory", "Category"), ImGuiTableColumnFlags_DefaultHide, unit * 7.0f);
+                        ImGui::TableSetupColumn(L(context, "Inventory", "sQuantity", "Qty"), ImGuiTableColumnFlags_PreferSortDescending, columnWidth(L(context, "Inventory", "sQuantity", "Qty"), 2.5f));
+                        ImGui::TableSetupColumn(L(context, "Inventory", "sValue", "Value"), ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_DefaultHide, columnWidth(L(context, "Inventory", "sValue", "Value"), 3.5f));
+                        ImGui::TableSetupColumn(L(context, "Inventory", "sWeight", "Weight"), ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_DefaultHide, columnWidth(L(context, "Inventory", "sWeight", "Weight"), 3.5f));
+                        ImGui::TableSetupColumn(L(context, "Inventory", "sDamageOrRating", "DMG/DR"), ImGuiTableColumnFlags_DefaultHide, unit * 4.0f);
+                        ImGui::TableSetupColumn(L(context, "Inventory", "sMods", "Mods"), ImGuiTableColumnFlags_DefaultHide, unit * 3.0f);
+                        ImGui::TableSetupColumn(L(context, "Inventory", "sSource", "Source"), ImGuiTableColumnFlags_DefaultHide, unit * 12.0f);
+                        ImGui::TableSetupColumn(L(context, "Inventory", "sStackWeight", "Stack Weight"), ImGuiTableColumnFlags_PreferSortDescending, columnWidth(L(context, "Inventory", "sStackWeight", "Stack Weight"), 6.5f));
+                        ImGui::TableSetupColumn(L(context, "Inventory", "sStackValue", "Stack Value"), ImGuiTableColumnFlags_PreferSortDescending | ImGuiTableColumnFlags_DefaultHide, columnWidth(L(context, "Inventory", "sStackValue", "Stack Value"), 6.5f));
                         ImGui::TableHeadersRow();
 
                         if (ImGuiTableSortSpecs* sortSpecs = ImGui::TableGetSortSpecs()) {
@@ -923,14 +1069,24 @@ namespace ESPExplorerAE
 
                                     if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                                         if (IsEquippable(entry)) {
-                                            EquipInventoryEntry(entry, !entry.isEquipped);
+                                            EquipInventoryEntry(entry, !SelectedInstanceEquipped(entry));
                                         } else if (IsAidCategory(entry.category)) {
                                             UseInventoryEntry(entry);
                                         }
                                     }
                                 }
 
-                                SharedUtils::DrawCurrentItemChrome(rowSelected, ImGui::IsItemHovered(), false, true);
+                                SharedUtils::DrawCurrentItemChrome(state.selection.selected.contains(rowKey), ImGui::IsItemHovered(), false, true);
+                                if (ImGui::IsItemHovered()) {
+                                    ImGui::BeginTooltip();
+                                    ImGui::TextUnformatted(entry.name.c_str());
+                                    ImGui::TextDisabled("%s  |  %s", FormatUtils::FormID(entry.formID).c_str(), entry.sourcePlugin.c_str());
+                                    if (entry.isFavorited) ImGui::TextUnformatted(L(context, "General", "sFavorite", "Favorite"));
+                                    if (entry.isLegendary) ImGui::TextUnformatted(L(context, "Inventory", "sLegendary", "Legendary"));
+                                    if (entry.isQuestItem) ImGui::TextUnformatted(L(context, "Inventory", "sQuestItem", "Quest Item"));
+                                    ImGui::TextUnformatted(selectionHelp);
+                                    ImGui::EndTooltip();
+                                }
                                 if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && !rowSelected) {
                                     state.selection.Single(rowKey);
                                     state.selectionChanged = false;
@@ -952,12 +1108,16 @@ namespace ESPExplorerAE
                                 ImGui::Text("%u", entry.modCount);
                                 ImGui::TableSetColumnIndex(7);
                                 ImGui::TextUnformatted(entry.sourcePlugin.c_str());
+                                ImGui::TableSetColumnIndex(8);
+                                ImGui::Text("%.2f", entry.totalWeight);
+                                ImGui::TableSetColumnIndex(9);
+                                ImGui::Text("%lld", static_cast<long long>(entry.totalValue));
 
                                 ImGui::PopStyleColor();
 
-                        if (ImGui::BeginPopup("InventoryRowContext")) {
-                            if (state.selectionChanged) ImGui::CloseCurrentPopup();
-                            else DrawInventoryContextMenu(entry, context);
+                                if (ImGui::BeginPopup("InventoryRowContext")) {
+                                    if (state.selectionChanged) ImGui::CloseCurrentPopup();
+                                    else DrawInventoryContextMenu(entry, context);
                                     ImGui::EndPopup();
                                 }
 
@@ -997,13 +1157,14 @@ namespace ESPExplorerAE
                 }
                 ImGui::EndChild();
 
-                if (!ImGui::IsAnyItemActive() && !visibleEntries.empty()) {
-                    if (!selectedEntries.empty() && ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
-                        ConfirmEntries(selectedEntries, InventoryAction::Remove, L(context, "Inventory", "sRemoveSelected", "Remove Selected"), L(context, "General", "sConfirmAction", "Confirm Action"));
+                if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId) &&
+                    !ImGui::IsAnyItemActive() && !visibleEntries.empty()) {
+                    if (!state.selection.selected.empty() && ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
+                        ConfirmEntries(CopySelectedEntries(visibleEntries), InventoryAction::Remove, L(context, "Inventory", "sRemoveSelected", "Remove Selected"), L(context, "General", "sConfirmAction", "Confirm Action"));
                     }
 
                     if (selectedEntry && ImGui::IsKeyPressed(ImGuiKey_E, false) && IsEquippable(*selectedEntry)) {
-                        EquipInventoryEntry(*selectedEntry, !selectedEntry->isEquipped);
+                        EquipInventoryEntry(*selectedEntry, !SelectedInstanceEquipped(*selectedEntry));
                     }
                 }
             }
@@ -1016,6 +1177,15 @@ namespace ESPExplorerAE
         const ProfileScope profileScope(ProfileMetric::InventoryView);
         if (!context.catalog) return;
         InventoryView(state, context, requests).Draw(context);
+    }
+
+    void InventoryTab::ResetFilters(InventoryTabState& state)
+    {
+        state.inventorySearch.clear();
+        state.inventorySearchBuffer.fill(0);
+        state.showEquippedOnly = state.showFavoritesOnly = state.showLegendaryOnly = state.showQuestOnly = false;
+        state.activeCategory = InventoryCategoryTab::All;
+        state.resetCategory = true;
     }
 
     void InventoryTab::ResetState(InventoryTabState& state) { const auto quick = state.quick; state = {}; state.quick = quick; }

@@ -13,6 +13,9 @@ Target version: **1.6.0**.
 
 ### Added
 
+- Inventory filters for Pip-Boy favorites, legendary items, and quest items;
+  sortable stack weight and value totals; and Select Visible/Clear Selection
+  controls with selected quantity and weight totals.
 - An All tab in Object Browser combining activators, containers, statics, and
   furniture with the existing search, filters, favorites, and placement controls.
 - Bulk quantity increments, clear controls, and item/ammo totals in Add Item.
@@ -27,6 +30,10 @@ Target version: **1.6.0**.
 
 ### Changed
 
+- Inventory columns can be resized, reordered, and hidden; the default view
+  focuses on name, quantity, and stack weight. Bulk actions use a compact menu
+  with item quantities in removal/drop confirmations. Instance details and
+  actions appear first, with base-record details in an expandable section.
 - Add Item quantities start at zero, and quantity shortcuts add to the current
   amount. Pressing +100 twice selects 200; zero-quantity entries are skipped.
 - Simplified the Nexus description and corrected outdated feature and
@@ -48,6 +55,10 @@ Target version: **1.6.0**.
 
 ### Fixed
 
+- Inventory count editing starts at the current quantity, and equip/unequip
+  follows the chosen instance when a group contains mixed equipment states.
+  Selection controls fit above the table and details, and empty filter results
+  explain how to restore the item list.
 - Restored the player HUD after closing the explorer or turning off Hide Player
   HUD When Menu Open, including when hiding the HUD removes its menu object.
 - Search clearing keeps the field ready for typing, and Plugin Browser uses the

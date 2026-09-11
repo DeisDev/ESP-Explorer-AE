@@ -108,6 +108,7 @@ namespace ESPExplorerAE
 
         void ResetQuickFilters()
         {
+            InventoryTab::ResetFilters(inventoryBrowser);
             selectedPluginFilter.clear();
             pluginBrowser.diagnosticsPlugin.clear();
             pluginBrowser.search.clear();

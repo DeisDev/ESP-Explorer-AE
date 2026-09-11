@@ -31,6 +31,13 @@ The plugin accepts these three executable versions. Earlier runtimes, GOG, VR,
 and unknown future updates are outside this compatibility list. Do not rename
 an Address Library file from another executable version.
 
+The Inventory tab can filter equipped items, Pip-Boy favorites, legendary items,
+and quest items. Sort by Stack Weight to find heavy item groups, or use Select
+Visible to select the filtered list, then open Actions beside the selection
+controls for bulk operations. Right-click a column header to choose which
+columns to show. The details pane offers equip/use controls and an Actions menu
+for count changes, dropping, removal, and inspection in Plugin Browser.
+
 ## Repository Layout
 
 - `src/` - plugin source code.
