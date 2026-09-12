@@ -41,6 +41,10 @@ namespace ESPExplorerAE::MenuStyle
         colors[ImGuiCol_TitleBg] = window;
         colors[ImGuiCol_TitleBgActive] = panel;
         colors[ImGuiCol_TitleBgCollapsed] = window;
+        // Overlapping popup surfaces and title bars must cover the text below.
+        // The user's overall interface opacity still applies through style.Alpha.
+        for (const auto color : { ImGuiCol_PopupBg, ImGuiCol_TitleBg, ImGuiCol_TitleBgActive, ImGuiCol_TitleBgCollapsed })
+            colors[color].w = 1.0f;
         colors[ImGuiCol_Button] = Mix(panel, text, 0.055f);
         colors[ImGuiCol_ButtonHovered] = Mix(panel, accent, 0.18f);
         colors[ImGuiCol_ButtonActive] = Mix(panel, accent, 0.28f);

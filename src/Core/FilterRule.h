@@ -29,6 +29,8 @@ namespace ESPExplorerAE
         AdvancedFilterMatch match{ AdvancedFilterMatch::Contains };
         std::string value{};
         std::vector<std::string> targetPlugins{};
+
+        bool operator==(const AdvancedFilterRule&) const = default;
     };
 
 }

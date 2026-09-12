@@ -98,6 +98,9 @@ namespace ESPExplorerAE
 
     std::vector<AdvancedFilterRule> AdvancedRecordFilters::LoadRules(std::string_view serialized)
     {
+        // An absent value keeps the first-install defaults; an explicit empty
+        // list must survive saving and restarting. Older rule records still load.
+        if (serialized == "none") return {};
         if (serialized.empty()) {
             return GetDefaultRules();
         }
@@ -191,7 +194,7 @@ namespace ESPExplorerAE
             }
         }
 
-        return serialized;
+        return serialized.empty() ? "none" : serialized;
     }
 
     bool AdvancedRecordFilters::IsRegexValid(std::string_view pattern)

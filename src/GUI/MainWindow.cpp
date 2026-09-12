@@ -29,7 +29,7 @@
 #include "GUI/Tabs/SettingsTab.h"
 #include "GUI/Tabs/SpellPerkBrowserTab.h"
 #include "GUI/Widgets/FormatUtils.h"
-#include "GUI/Widgets/ActionHistory.h"
+#include "GUI/Widgets/ActionHistoryView.h"
 #include "GUI/Widgets/FormTable.h"
 #include "GUI/Widgets/ItemGrantPopup.h"
 #include "GUI/Widgets/MainWindowPopups.h"
@@ -81,6 +81,7 @@ namespace ESPExplorerAE
         LogViewerState logViewer;
         ItemGrantPopup itemGrantPopup;
         MainWindowPopups mainWindowPopups;
+        ActionHistoryViewState actionHistory;
         bool browserSettingsInitialized{ false };
         std::string activeMainTab{};
         std::string previousMainTab{};
@@ -157,119 +158,6 @@ namespace ESPExplorerAE
             return ImVec2(
                 std::clamp(requestedPos.x, viewportPos.x, maxX),
                 std::clamp(requestedPos.y, viewportPos.y, maxY));
-        }
-
-        void DrawActionHistoryPopup()
-        {
-            ImGui::SetNextWindowSize(ImVec2(760.0f, 520.0f), ImGuiCond_Appearing);
-            const auto& settings = Config::Get();
-            ImGui::SetNextWindowPos(ImVec2(settings.actionHistoryWindowX, settings.actionHistoryWindowY), ImGuiCond_Appearing);
-            ImVec4 popupBg = ImGui::GetStyleColorVec4(ImGuiCol_PopupBg);
-            popupBg.x *= 0.78f;
-            popupBg.y *= 0.80f;
-            popupBg.z *= 0.82f;
-            popupBg.w = (std::max)(popupBg.w, 0.96f);
-            ImVec4 popupBorder = ImGui::GetStyleColorVec4(ImGuiCol_Border);
-            popupBorder.x = (std::min)(popupBorder.x + 0.20f, 1.0f);
-            popupBorder.y = (std::min)(popupBorder.y + 0.20f, 1.0f);
-            popupBorder.z = (std::min)(popupBorder.z + 0.20f, 1.0f);
-            popupBorder.w = 1.0f;
-            ImGui::PushStyleColor(ImGuiCol_PopupBg, popupBg);
-            ImGui::PushStyleColor(ImGuiCol_Border, popupBorder);
-            if (!ImGui::BeginPopup("##ActionHistoryPopup")) {
-                ImGui::PopStyleColor(2);
-                return;
-            }
-            ImGui::PopStyleColor(2);
-
-            auto& mutableSettings = Config::GetMutable();
-            const ImVec2 popupPos = ImGui::GetWindowPos();
-            if (std::fabs(mutableSettings.actionHistoryWindowX - popupPos.x) > 0.5f ||
-                std::fabs(mutableSettings.actionHistoryWindowY - popupPos.y) > 0.5f) {
-                mutableSettings.actionHistoryWindowX = popupPos.x;
-                mutableSettings.actionHistoryWindowY = popupPos.y;
-                Config::RequestSave();
-            }
-
-            const auto receipts = ActionService::Receipts();
-            const auto history = FormatActionHistory(receipts, L);
-            const auto& style = ImGui::GetStyle();
-
-            ImGui::TextUnformatted(L("General", "sActionHistory", "Action History"));
-            ImGui::SameLine();
-            ImGui::TextDisabled("(%zu)", history.size());
-            const float closeButtonWidth = 28.0f;
-            ImGui::SetCursorPosX((std::max)(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - closeButtonWidth));
-            if (ImGui::Button("X", ImVec2(closeButtonWidth, 0.0f))) {
-                ImGui::CloseCurrentPopup();
-                ImGui::EndPopup();
-                return;
-            }
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            if (history.empty()) {
-                ImGui::TextDisabled("%s", L("General", "sNoRecentActions", "No recent actions yet."));
-                ImGui::EndPopup();
-                return;
-            }
-
-            const float listHeight = (std::max)(280.0f, ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing());
-            if (ImGui::BeginChild("##ActionHistoryList", ImVec2(0.0f, listHeight), ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
-                const float minCardHeight = ImGui::GetFrameHeightWithSpacing() * 3.0f;
-                ImVec4 evenCardBg = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
-                evenCardBg.x *= 0.82f;
-                evenCardBg.y *= 0.84f;
-                evenCardBg.z *= 0.88f;
-                evenCardBg.w = (std::max)(evenCardBg.w, 0.95f);
-                ImVec4 oddCardBg = ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive);
-                oddCardBg.x *= 0.88f;
-                oddCardBg.y *= 0.90f;
-                oddCardBg.z *= 0.94f;
-                oddCardBg.w = (std::max)(oddCardBg.w, 0.92f);
-                ImVec4 cardBorder = ImGui::GetStyleColorVec4(ImGuiCol_Border);
-                cardBorder.x = (std::min)(cardBorder.x + 0.15f, 1.0f);
-                cardBorder.y = (std::min)(cardBorder.y + 0.15f, 1.0f);
-                cardBorder.z = (std::min)(cardBorder.z + 0.15f, 1.0f);
-                cardBorder.w = 1.0f;
-
-                for (std::size_t index = 0; index < history.size(); ++index) {
-                    const auto& entry = history[index];
-                    ImGui::PushID(static_cast<int>(entry.id));
-
-                    const float availableWidth = ImGui::GetContentRegionAvail().x;
-                    const float wrapWidth = (std::max)(160.0f, availableWidth - style.WindowPadding.x * 2.0f);
-                    const ImVec2 descriptionSize = ImGui::CalcTextSize(entry.description.c_str(), nullptr, false, wrapWidth);
-                    const float cardHeight = (std::max)(minCardHeight, descriptionSize.y + style.WindowPadding.y * 2.0f + ImGui::GetTextLineHeightWithSpacing() + style.ItemSpacing.y * 2.0f);
-
-                    ImGui::PushStyleColor(ImGuiCol_ChildBg, (index % 2 == 0) ? evenCardBg : oddCardBg);
-                    ImGui::PushStyleColor(ImGuiCol_Border, cardBorder);
-                    ImGui::BeginChild("##ActionHistoryEntry", ImVec2(0.0f, cardHeight), ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-                    ImGui::PopStyleColor(2);
-
-                    char indexLabel[16]{};
-                    std::snprintf(indexLabel, sizeof(indexLabel), "#%02zu", index + 1);
-                    ImGui::TextDisabled("%s", indexLabel);
-                    ImGui::SameLine();
-                    ImGui::TextDisabled("%s", entry.status.c_str());
-                    if (!entry.details.empty() && ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip("%s", entry.details.c_str());
-                    }
-
-                    ImGui::SetCursorPos(ImVec2(style.WindowPadding.x, style.WindowPadding.y + ImGui::GetTextLineHeightWithSpacing() + style.ItemSpacing.y * 0.5f));
-                    ImGui::PushTextWrapPos(ImGui::GetWindowContentRegionMax().x);
-                    ImGui::TextUnformatted(entry.description.c_str());
-                    ImGui::PopTextWrapPos();
-
-                    ImGui::EndChild();
-                    ImGui::PopID();
-                }
-            }
-
-            ImGui::EndChild();
-
-            ImGui::EndPopup();
         }
 
         void DrawWaitingForDataHandlerPopup()
@@ -583,6 +471,7 @@ namespace ESPExplorerAE
     {
         const auto& settings = Config::Get();
         itemGrantPopup.Close();
+        actionHistory = {};
         mainWindowPopups.HandleMenuVisibilityChanged(false);
         discardPopupStack = true;
 
@@ -639,6 +528,7 @@ namespace ESPExplorerAE
     {
         // Render-owner cleanup only; no config reset or gameplay effects.
         itemGrantPopup.Close();
+        actionHistory = {};
         mainWindowPopups.HandleMenuVisibilityChanged(false);
         settingsTab = {};
         logViewer = {};
@@ -661,6 +551,7 @@ namespace ESPExplorerAE
     {
         const ProfileScope profileScope(visible ? ProfileMetric::MenuOpen : ProfileMetric::MenuClose);
         mainWindowPopups.HandleMenuVisibilityChanged(visible);
+        if (visible && actionHistory.open) actionHistory.focusPending = true;
         for (auto* editor : { &pluginBrowser.filterEditor, &itemBrowser.filterEditor, &npcBrowser.browser.filterEditor,
                  &objectBrowser.filterEditor, &spellPerkBrowser.filterEditor, &cellBrowser.filterEditor }) editor->HandleMenuVisibilityChanged(visible);
         REX::DEBUG("{}", std::string("Main window visibility handler: ") + (visible ? "shown" : "hidden"));
@@ -694,6 +585,7 @@ namespace ESPExplorerAE
         if (lastSession != session) {
             lastSession = session;
             discardPopupStack = true;
+            actionHistory = {};
             mainWindowPopups.HandleMenuVisibilityChanged(false);
             itemGrantPopup.Close();
             settingsTab.Close();
@@ -776,7 +668,7 @@ namespace ESPExplorerAE
         const auto* windowTitle = title.empty() ? "ESP Explorer AE" : title.data();
 
         bool windowOpen = true;
-        if (ImGui::Begin(windowTitle, &windowOpen, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse)) {
+        if (ImGui::Begin(windowTitle, &windowOpen, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus)) {
             if (MenuChrome::Header(windowTitle, L("General", "sWorkspaceCaption", "Load order workspace"), L("General", "sCloseMenu", "Close menu"))) windowOpen = false;
             bool settingsDirty{ false };
             const ImVec2 menuWindowSize = ImGui::GetWindowSize();
@@ -812,7 +704,7 @@ namespace ESPExplorerAE
             const auto& tabLabels = GetMainTabLabels(*catalog);
 
             ImGuiIO& io = ImGui::GetIO();
-            if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F, false) && !io.WantTextInput && !ImGui::IsAnyItemActive() && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup)) {
+            if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F, false) && !io.WantTextInput && !ImGui::IsAnyItemActive() && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup)) {
                 tabSearchFocusPending = true;
             }
 
@@ -823,7 +715,7 @@ namespace ESPExplorerAE
             if (ImGui::BeginChild("MainContentRegion", ImVec2(0.0f, -footerHeight), ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
                 const auto visibleTabCount = GetVisibleTabCount(settings.showLogsTab);
                 if (!settings.showLogsTab && requestedMainTab == "Logs") requestedMainTab.clear();
-                if (settings.enableGamepadNav && (GamepadInput::WasTabNextPressed() || GamepadInput::WasTabPrevPressed())) {
+                if (settings.enableGamepadNav && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel) && (GamepadInput::WasTabNextPressed() || GamepadInput::WasTabPrevPressed())) {
                     std::size_t currentIndex{};
                     for (std::size_t i = 0; i < visibleTabCount; ++i) if (activeMainTab == kMainTabOrder[i]) currentIndex = i;
                     currentIndex = GamepadInput::WasTabNextPressed() ? (currentIndex + 1) % visibleTabCount : (currentIndex + visibleTabCount - 1) % visibleTabCount;
@@ -1008,11 +900,35 @@ namespace ESPExplorerAE
                 }
                 ImGui::SameLine();
                 if (ImGui::Button(L("General", "sActionHistory", "Action History"))) {
-                    ImGui::OpenPopup("##ActionHistoryPopup");
+                    actionHistory.open = true;
+                    actionHistory.focusPending = true;
                 }
-                DrawActionHistoryPopup();
+
             }
             ImGui::EndChild();
+
+            // Submit tool windows independently of the selected page. The main
+            // window cannot cover them when its workspace receives focus.
+            const std::pair<const char*, AdvancedFilterEditorState*> editors[]{
+                { "PluginBrowser", &pluginBrowser.filterEditor }, { "ItemBrowser", &itemBrowser.filterEditor },
+                { "NPCBrowser", &npcBrowser.browser.filterEditor }, { "CellBrowser", &cellBrowser.filterEditor },
+                { "ObjectBrowser", &objectBrowser.filterEditor }, { "SpellPerkBrowser", &spellPerkBrowser.filterEditor }
+            };
+            for (const auto& [id, editor] : editors) {
+                if (RecordFiltersWidget::DrawEditor(L, id, { browserFilters.showNonPlayableRecords, browserFilters.showUnnamedRecords,
+                        browserFilters.showDeletedRecords, browserFilters.advancedRecordFilters, browserFilters.hiddenPlugins }, *editor, catalog))
+                    PersistListFilterSettings();
+            }
+            if (actionHistory.open) {
+                const auto receipts = ActionService::Receipts();
+                const auto position = DrawActionHistoryWindow(actionHistory, receipts, L, { settings.actionHistoryWindowX, settings.actionHistoryWindowY });
+                auto& updated = Config::GetMutable();
+                if (std::fabs(updated.actionHistoryWindowX - position.x) > 0.5f || std::fabs(updated.actionHistoryWindowY - position.y) > 0.5f) {
+                    updated.actionHistoryWindowX = position.x;
+                    updated.actionHistoryWindowY = position.y;
+                    settingsDirty = true;
+                }
+            }
 
             FavoriteService::CommitEdits(favoritesBefore);
 

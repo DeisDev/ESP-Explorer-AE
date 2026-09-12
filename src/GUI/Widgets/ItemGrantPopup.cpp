@@ -91,6 +91,7 @@ namespace ESPExplorerAE
         const auto popupTitle = std::string(multipleItems ? L("Items", "sGivePopupTitleMulti", "Add Selected Items") : L("Items", "sGivePopupTitle", "Add Item")) + "###ItemGrantPopup";
 
         if (state.openRequested) {
+            if (!ModalUtils::CanOpenPopup(popupTitle.c_str())) return;
             ImGui::OpenPopup(popupTitle.c_str());
             state.openRequested = false;
         }

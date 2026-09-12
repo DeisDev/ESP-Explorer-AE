@@ -4,6 +4,7 @@
 #include "Core/CatalogQuery.h"
 #include "GUI/Widgets/ImGuiWidgetUtils.h"
 #include "GUI/Widgets/SharedUtils.h"
+#include "GUI/Widgets/ModalUtils.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -81,7 +82,11 @@ namespace ESPExplorerAE
             const auto it = std::ranges::find_if(rules, [&](const AdvancedFilterRule& existingRule) {
                 return existingRule.field == rule.field &&
                        existingRule.match == rule.match &&
-                       existingRule.value == rule.value;
+                       (rule.match == AdvancedFilterMatch::Regex ? existingRule.value == rule.value : TextEquals(existingRule.value, rule.value)) &&
+                       existingRule.targetPlugins.size() == rule.targetPlugins.size() &&
+                       std::ranges::all_of(rule.targetPlugins, [&](const auto& plugin) {
+                           return std::ranges::any_of(existingRule.targetPlugins, [&](const auto& existing) { return TextEquals(plugin, existing); });
+                       });
             });
             if (it != rules.end()) {
                 const bool changed = !it->enabled;
@@ -148,326 +153,304 @@ namespace ESPExplorerAE
             return buf;
         }
 
-        bool DrawRuleScopeCombo(const RecordFiltersWidget::LocalizeFn& localize, const char* id, std::vector<std::string>& targetPlugins, char* searchBuf, std::size_t searchBufSize, const AdvancedFilterEditorState& editorState)
+        void PickerSearch(const char* id, const char* hint, char* buffer, std::size_t size)
+        {
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            if (ImGui::IsWindowAppearing()) {
+                buffer[0] = '\0';
+                ImGui::SetKeyboardFocusHere();
+            }
+            ImGui::InputTextWithHint(id, hint, buffer, size);
+        }
+
+        bool DrawRuleScopeCombo(const RecordFiltersWidget::LocalizeFn& localize, const char* id,
+            std::vector<std::string>& targetPlugins, AdvancedFilterEditorState& editor)
         {
             bool changed = false;
             const auto label = FormatScopeLabel(localize, targetPlugins);
-            if (ImGui::BeginCombo(id, label.c_str())) {
-                ImGui::SetNextItemWidth(-FLT_MIN);
-                if (ImGui::IsWindowAppearing()) {
-                    ImGui::SetKeyboardFocusHere();
+            if (ImGui::BeginCombo(id, label.c_str(), ImGuiComboFlags_HeightLarge)) {
+                PickerSearch("##ScopeSearch", localize("General", "sSearch", "Search..."), editor.ruleScopeSearch, sizeof(editor.ruleScopeSearch));
+                if (ImGui::Selectable(localize("General", "sAdvancedFilterScopeClear", "-- All Plugins --"), targetPlugins.empty(), ImGuiSelectableFlags_NoAutoClosePopups)) {
+                    changed = !targetPlugins.empty();
+                    targetPlugins.clear();
                 }
-                ImGui::InputTextWithHint("##ScopeSearch", localize("General", "sSearch", "Search..."), searchBuf, searchBufSize);
-                ImGui::Separator();
-
-                if (ImGui::Selectable(localize("General", "sAdvancedFilterScopeClear", "-- All Plugins --"), targetPlugins.empty())) {
-                    if (!targetPlugins.empty()) {
-                        targetPlugins.clear();
-                        changed = true;
-                    }
+                ImGui::TextWrapped("%s", localize("General", "sAdvancedFilterScopeHint", "Choose one or more plugins. An empty selection applies to all plugins."));
+                std::vector<std::string> choices = targetPlugins;
+                for (const auto index : editor.pluginOrder) {
+                    const auto& plugin = editor.catalog->plugins[index].filename;
+                    if (!std::ranges::any_of(choices, [&](const auto& name) { return TextEquals(name, plugin); })) choices.push_back(plugin);
                 }
-                ImGui::Separator();
-
-                int displayed = 0;
-                for (const auto index : editorState.pluginOrder) {
-                    const auto& plugin = editorState.catalog->plugins[index].filename;
-                    if (searchBuf[0] != '\0' && !SharedUtils::ContainsCaseInsensitive(plugin, searchBuf)) {
-                        continue;
-                    }
-                    bool selected = std::ranges::any_of(targetPlugins, [&](const std::string& p) {
-                        return SharedUtils::EqualsCaseInsensitive(p, plugin);
-                    });
-                    if (ImGui::Selectable(plugin.c_str(), selected)) {
-                        if (selected) {
-                            std::erase_if(targetPlugins, [&](const std::string& p) {
-                                return SharedUtils::EqualsCaseInsensitive(p, plugin);
-                            });
-                        } else {
-                            targetPlugins.push_back(plugin);
+                std::ranges::sort(choices, [](const auto& a, const auto& b) { return _stricmp(a.c_str(), b.c_str()) < 0; });
+                std::erase_if(choices, [&](const auto& plugin) { return !TextContains(plugin, editor.ruleScopeSearch); });
+                if (ImGui::BeginChild("##ScopeChoices", { 0, ImGui::GetTextLineHeightWithSpacing() * 9 }, ImGuiChildFlags_NavFlattened)) {
+                    ImGuiListClipper clipper;
+                    clipper.Begin(static_cast<int>(choices.size()));
+                    while (clipper.Step()) for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+                        const auto& plugin = choices[i];
+                        const bool selected = std::ranges::any_of(targetPlugins, [&](const auto& name) { return TextEquals(name, plugin); });
+                        if (ImGui::Selectable(plugin.c_str(), selected, ImGuiSelectableFlags_NoAutoClosePopups)) {
+                            if (selected) std::erase_if(targetPlugins, [&](const auto& name) { return TextEquals(name, plugin); });
+                            else targetPlugins.push_back(plugin);
+                            changed = true;
                         }
-                        changed = true;
                     }
-                    ++displayed;
-                    if (displayed >= 300) break;
+                    if (choices.empty()) ImGui::TextDisabled("%s", localize("General", "sAdvancedFilterNoResults", "No results"));
                 }
+                ImGui::EndChild();
+                ImGui::EndCombo();
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", label.c_str());
+            return changed;
+        }
+
+        bool DrawKeywordPicker(const RecordFiltersWidget::LocalizeFn& localize, std::string_view suffix,
+            RecordFilterState state, AdvancedFilterEditorState& editor)
+        {
+            bool changed = false;
+            const auto label = "##KeywordPicker" + std::string(suffix);
+            if (ImGui::BeginCombo(label.c_str(), localize("General", "sAdvancedFilterKeywordPicker", "Add Keyword Rule"), ImGuiComboFlags_HeightLarge)) {
+                PickerSearch("##KeywordSearch", localize("General", "sSearch", "Search..."), editor.keywordSearch, sizeof(editor.keywordSearch));
+                std::vector<const std::string*> choices;
+                for (const auto& keyword : editor.catalog->availableKeywords)
+                    if (TextContains(keyword, editor.keywordSearch)) choices.push_back(&keyword);
+                if (ImGui::BeginChild("##KeywordChoices", { 0, ImGui::GetTextLineHeightWithSpacing() * 10 }, ImGuiChildFlags_NavFlattened)) {
+                    ImGuiListClipper clipper;
+                    clipper.Begin(static_cast<int>(choices.size()));
+                    while (clipper.Step()) for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+                        if (ImGui::Selectable(choices[i]->c_str())) {
+                            changed = AddRuleIfMissing(state.advancedRules, { true, AdvancedFilterField::Keyword,
+                                AdvancedFilterMatch::Exact, *choices[i], editor.newTargetPlugins }) || changed;
+                            ImGui::CloseCurrentPopup();
+                        }
+                    }
+                    if (choices.empty()) ImGui::TextDisabled("%s", localize("General", "sAdvancedFilterNoKeywordResults", "No matching keywords"));
+                }
+                ImGui::EndChild();
                 ImGui::EndCombo();
             }
             return changed;
         }
 
-        bool DrawAdvancedFiltersWindow(const RecordFiltersWidget::LocalizeFn& localize, std::string_view idSuffix, RecordFilterState state, AdvancedFilterEditorState& editorState)
+        bool DrawHiddenPlugins(const RecordFiltersWidget::LocalizeFn& localize, RecordFilterState state, AdvancedFilterEditorState& editor)
         {
             bool changed = false;
-
-            char windowTitle[160]{};
-            const char* scopeLabel = ScopeLabel(localize, idSuffix);
-            if (scopeLabel[0] != '\0') {
-                std::snprintf(
-                    windowTitle,
-                    sizeof(windowTitle),
-                    "%s - %s###AdvancedFiltersWindow%s",
-                    localize("General", "sAdvancedRecordFilters", "Advanced Filters"),
-                    scopeLabel,
-                    std::string(idSuffix).c_str());
-            } else {
-                std::snprintf(
-                    windowTitle,
-                    sizeof(windowTitle),
-                    "%s###AdvancedFiltersWindow%s",
-                    localize("General", "sAdvancedRecordFilters", "Advanced Filters"),
-                    std::string(idSuffix).c_str());
-            }
-
-            ImGui::SetNextWindowSize(ImVec2(1060.0f, 620.0f), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowSizeConstraints(ImVec2(820.0f, 480.0f), ImVec2(2400.0f, 1600.0f));
-            if (editorState.focusPending) {
-                ImGui::SetNextWindowFocus();
-                ImGui::SetNextWindowCollapsed(false, ImGuiCond_Always);
-                editorState.focusPending = false;
-            }
-            bool windowOpen = true;
-            ImGui::Begin(windowTitle, &windowOpen, ImGuiWindowFlags_NoCollapse);
-            if (!windowOpen) {
-                editorState.open = false;
-                ImGui::End();
-                return changed;
-            }
-
-            SharedUtils::DrawSectionLabel(localize("General", "sAdvancedRecordFilters", "Advanced Filters"));
-            ImGui::TextDisabled(
-                "%zu %s | %zu %s",
-                AdvancedRecordFilters::CountActiveRules(state.advancedRules),
-                localize("General", "sAdvancedFiltersActiveSummary", "active block rules"),
-                state.hiddenPlugins.size(),
-                localize("General", "sAdvancedFiltersHiddenPluginsSummary", "hidden plugins"));
-            if (scopeLabel[0] != '\0') {
-                ImGui::SameLine();
-                ImGui::TextDisabled("| %s", scopeLabel);
-            }
-
-            const float totalWidth = ImGui::GetContentRegionAvail().x;
-            const float comboWidth = (std::clamp)(totalWidth * 0.18f, 140.0f, 220.0f);
-            const float matchWidth = (std::clamp)(totalWidth * 0.14f, 120.0f, 170.0f);
-            const float actionWidth = 120.0f;
-            const float spacing = ImGui::GetStyle().ItemSpacing.x;
-            const float inputWidth = (std::max)(220.0f, totalWidth - comboWidth - matchWidth - actionWidth - spacing * 3.0f);
-
-            AdvancedFilterField newField = static_cast<AdvancedFilterField>(editorState.newField);
-            AdvancedFilterMatch newMatch = static_cast<AdvancedFilterMatch>(editorState.newMatch);
-
-            SharedUtils::DrawSectionLabel(localize("General", "sAdvancedFilterAddRule", "Add Rule"));
-            ImGui::SetNextItemWidth(comboWidth);
-            if (DrawRuleFieldCombo(localize, ("##AdvancedField" + std::string(idSuffix)).c_str(), newField)) {
-                editorState.newField = static_cast<int>(newField);
-            }
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(matchWidth);
-            if (DrawRuleMatchCombo(localize, ("##AdvancedMatch" + std::string(idSuffix)).c_str(), newMatch)) {
-                editorState.newMatch = static_cast<int>(newMatch);
-            }
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(inputWidth);
-            ImGui::InputTextWithHint(
-                ("##AdvancedValue" + std::string(idSuffix)).c_str(),
-                localize("General", "sAdvancedFilterValueHint", "Value or pattern"),
-                editorState.newValue,
-                sizeof(editorState.newValue));
-            ImGui::SameLine();
-            if (ImGui::Button((std::string(localize("General", "sAdvancedFilterAddRule", "Add Rule")) + "##AddRule" + std::string(idSuffix)).c_str(), ImVec2(actionWidth, 0.0f))) {
-                if (editorState.newValue[0] != '\0') {
-                    const AdvancedFilterRule newRule{
-                        .enabled = true,
-                        .field = newField,
-                        .match = newMatch,
-                        .value = editorState.newValue
-                    };
-                    changed = AddRuleIfMissing(state.advancedRules, newRule) || changed;
-                    editorState.newValue[0] = '\0';
-                }
-            }
-
-            const auto& availableKeywords = editorState.catalog->availableKeywords;
-            ImGui::SetNextItemWidth((std::min)(380.0f, ImGui::GetContentRegionAvail().x));
-            if (ImGui::BeginCombo(
-                    (std::string(localize("General", "sAdvancedFilterKeywordPicker", "Add Keyword Rule")) + "##KeywordPicker" + std::string(idSuffix)).c_str(),
-                    localize("General", "sAdvancedFilterKeywordPicker", "Add Keyword Rule"))) {
-                ImGui::SetNextItemWidth(-FLT_MIN);
-                if (ImGui::IsWindowAppearing()) {
-                    ImGui::SetKeyboardFocusHere();
-                }
-                ImGui::InputTextWithHint(
-                    ("##KeywordSearch" + std::string(idSuffix)).c_str(),
-                    localize("General", "sSearch", "Search..."),
-                    editorState.keywordSearch,
-                    sizeof(editorState.keywordSearch));
-                ImGui::Separator();
-
-                int displayed = 0;
-                for (const auto& keyword : availableKeywords) {
-                    if (editorState.keywordSearch[0] != '\0' && !SharedUtils::ContainsCaseInsensitive(keyword, editorState.keywordSearch)) {
-                        continue;
-                    }
-
-                    if (ImGui::Selectable(keyword.c_str(), false)) {
-                        changed = AddRuleIfMissing(state.advancedRules, AdvancedFilterRule{
-                            .enabled = true,
-                            .field = AdvancedFilterField::Keyword,
-                            .match = AdvancedFilterMatch::Exact,
-                            .value = keyword
-                        }) || changed;
-                    }
-
-                    ++displayed;
-                    if (displayed >= 250) {
-                        break;
-                    }
-                }
-
-                if (displayed == 0) {
-                    ImGui::TextDisabled("%s", localize("General", "sAdvancedFilterNoKeywordResults", "No matching keywords"));
-                }
-
-                ImGui::EndCombo();
-            }
-
-            bool firstButton = true;
-            if (ImGuiWidgetUtils::DrawWrappedButton((std::string(localize("General", "sAdvancedFilterRestoreDefaults", "Restore Defaults")) + "##RestoreDefaults" + std::string(idSuffix)).c_str(), firstButton)) {
-                for (const auto& defaultRule : AdvancedRecordFilters::GetDefaultRules()) {
-                    changed = AddRuleIfMissing(state.advancedRules, defaultRule) || changed;
-                }
-            }
-            if (ImGuiWidgetUtils::DrawWrappedButton((std::string(localize("General", "sClearAll", "Clear All")) + "##ClearAdvanced" + std::string(idSuffix)).c_str(), firstButton)) {
-                state.advancedRules.clear();
+            ImGui::TextWrapped("%s", localize("General", "sHiddenPluginsHint", "Checked plugins are hidden from browser results. Uncheck a plugin to show its records again."));
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::InputTextWithHint("##HiddenPluginSearch", localize("General", "sSearch", "Search..."), editor.hiddenPluginSearch, sizeof(editor.hiddenPluginSearch));
+            ImGui::BeginDisabled(state.hiddenPlugins.empty());
+            if (ImGui::Button(localize("General", "sUnhideAll", "Unhide All"))) {
+                state.hiddenPlugins.clear();
                 changed = true;
             }
-
-            ImGui::Spacing();
-
-            if (ImGui::BeginChild(("AdvancedRulesRegion" + std::string(idSuffix)).c_str(), ImVec2(0.0f, 0.0f), false)) {
-                if (ImGui::CollapsingHeader(
-                    (std::string(localize("General", "sHiddenPlugins", "Hidden Plugins")) + " (" + std::to_string(state.hiddenPlugins.size()) + ")###HiddenPluginsSection" + std::string(idSuffix)).c_str(),
-                    state.hiddenPlugins.empty() ? ImGuiTreeNodeFlags_None : ImGuiTreeNodeFlags_DefaultOpen)) {
-                    ImGui::SetNextItemWidth((std::min)(380.0f, ImGui::GetContentRegionAvail().x));
-                    if (ImGui::BeginCombo(
-                            (std::string(localize("General", "sHidePlugin", "Hide Plugin")) + "##HidePluginPicker" + std::string(idSuffix)).c_str(),
-                            localize("General", "sHidePlugin", "Hide Plugin"))) {
-                        ImGui::SetNextItemWidth(-FLT_MIN);
-                        if (ImGui::IsWindowAppearing()) {
-                            ImGui::SetKeyboardFocusHere();
-                        }
-                        ImGui::InputTextWithHint(
-                            ("##HiddenPluginSearch" + std::string(idSuffix)).c_str(),
-                            localize("General", "sSearch", "Search..."),
-                            editorState.hiddenPluginSearch,
-                            sizeof(editorState.hiddenPluginSearch));
-                        ImGui::Separator();
-
-                        int displayed = 0;
-                        for (const auto index : editorState.pluginOrder) {
-                            const auto& plugin = editorState.catalog->plugins[index].filename;
-                            if (state.hiddenPlugins.contains(plugin)) continue;
-                            if (editorState.hiddenPluginSearch[0] != '\0' && !SharedUtils::ContainsCaseInsensitive(plugin, editorState.hiddenPluginSearch)) continue;
-
-                            if (ImGui::Selectable(plugin.c_str(), false)) {
-                                state.hiddenPlugins.insert(plugin);
-                                changed = true;
-                            }
-                            ++displayed;
-                            if (displayed >= 300) break;
-                        }
-
-                        if (displayed == 0) {
-                            ImGui::TextDisabled("%s", localize("General", "sAdvancedFilterNoResults", "No results"));
-                        }
-                        ImGui::EndCombo();
-                    }
-
-                    if (!state.hiddenPlugins.empty()) {
-                        ImGui::SameLine();
-                        if (ImGui::SmallButton((std::string(localize("General", "sUnhideAll", "Unhide All")) + "##UnhideAll" + std::string(idSuffix)).c_str())) {
-                            state.hiddenPlugins.clear();
-                            changed = true;
-                        }
-
-                        std::vector<std::string> sorted(state.hiddenPlugins.begin(), state.hiddenPlugins.end());
-                        std::sort(sorted.begin(), sorted.end(), [](const std::string& a, const std::string& b) {
-                            return _stricmp(a.c_str(), b.c_str()) < 0;
-                        });
-                        std::string toRemove{};
-                        for (const auto& plugin : sorted) {
-                            ImGui::BulletText("%s", plugin.c_str());
-                            ImGui::SameLine();
-                            if (ImGui::SmallButton((std::string(localize("General", "sUnhide", "Unhide")) + "##Unhide" + plugin).c_str())) {
-                                toRemove = plugin;
-                            }
-                        }
-                        if (!toRemove.empty()) {
-                            state.hiddenPlugins.erase(toRemove);
-                            changed = true;
-                        }
-                    }
-                }
-
-                ImGui::Spacing();
-
-                if (ImGui::BeginTable(("AdvancedRulesTable" + std::string(idSuffix)).c_str(), 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY)) {
-                    ImGui::TableSetupScrollFreeze(0, 1);
-                    ImGui::TableSetupColumn(localize("General", "sEnabled", "Enabled"), ImGuiTableColumnFlags_WidthFixed, 70.0f);
-                    ImGui::TableSetupColumn(localize("General", "sAdvancedFilterTarget", "Target"), ImGuiTableColumnFlags_WidthFixed, 150.0f);
-                    ImGui::TableSetupColumn(localize("General", "sAdvancedFilterMatchLabel", "Match"), ImGuiTableColumnFlags_WidthFixed, 120.0f);
-                    ImGui::TableSetupColumn(localize("General", "sValue", "Value"), ImGuiTableColumnFlags_WidthStretch);
-                    ImGui::TableSetupColumn(localize("General", "sAdvancedFilterScope", "Scope"), ImGuiTableColumnFlags_WidthFixed, 180.0f);
-                    ImGui::TableSetupColumn(localize("General", "sActions", "Actions"), ImGuiTableColumnFlags_WidthFixed, 90.0f);
-                    ImGui::TableHeadersRow();
-
-                    std::size_t removeIndex = state.advancedRules.size();
-                    for (std::size_t index = 0; index < state.advancedRules.size(); ++index) {
-                        auto& rule = state.advancedRules[index];
-                        ImGui::PushID(static_cast<int>(index));
-                        ImGui::TableNextRow();
-
-                        ImGui::TableSetColumnIndex(0);
-                        changed = ImGui::Checkbox("##Enabled", &rule.enabled) || changed;
-
-                        ImGui::TableSetColumnIndex(1);
-                        changed = DrawRuleFieldCombo(localize, "##Field", rule.field) || changed;
-
-                        ImGui::TableSetColumnIndex(2);
-                        changed = DrawRuleMatchCombo(localize, "##Match", rule.match) || changed;
-
-                        ImGui::TableSetColumnIndex(3);
-                        std::vector<char> buffer((std::max)(rule.value.size() + 1, static_cast<std::size_t>(256)), '\0');
-                        std::copy(rule.value.begin(), rule.value.end(), buffer.begin());
-                        if (ImGui::InputText("##Value", buffer.data(), buffer.size())) {
-                            rule.value = buffer.data();
-                            changed = true;
-                        }
-                        if (rule.match == AdvancedFilterMatch::Regex && !rule.value.empty() && !AdvancedRecordFilters::IsRegexValid(rule.value)) {
-                            ImGui::SameLine();
-                            ImGui::TextDisabled("%s", localize("General", "sAdvancedFilterInvalidRegex", "Invalid regex"));
-                        }
-
-                        ImGui::TableSetColumnIndex(4);
-                        changed = DrawRuleScopeCombo(localize, "##Scope", rule.targetPlugins, editorState.ruleScopeSearch, sizeof(editorState.ruleScopeSearch), editorState) || changed;
-
-                        ImGui::TableSetColumnIndex(5);
-                        if (ImGui::SmallButton(localize("General", "sRemove", "Remove"))) {
-                            removeIndex = index;
-                        }
-
-                        ImGui::PopID();
-                    }
-
-                    if (removeIndex < state.advancedRules.size()) {
-                        state.advancedRules.erase(state.advancedRules.begin() + static_cast<std::ptrdiff_t>(removeIndex));
+            ImGui::EndDisabled();
+            std::vector<std::string> choices(state.hiddenPlugins.begin(), state.hiddenPlugins.end());
+            for (const auto index : editor.pluginOrder) {
+                const auto& plugin = editor.catalog->plugins[index].filename;
+                if (std::ranges::find(choices, plugin) == choices.end()) choices.push_back(plugin);
+            }
+            std::ranges::sort(choices, [](const auto& a, const auto& b) { return _stricmp(a.c_str(), b.c_str()) < 0; });
+            std::erase_if(choices, [&](const auto& plugin) { return !TextContains(plugin, editor.hiddenPluginSearch); });
+            if (ImGui::BeginChild("##HiddenPluginsList", { 0, 0 }, ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened)) {
+                ImGuiListClipper clipper;
+                clipper.Begin(static_cast<int>(choices.size()), ImGui::GetFrameHeightWithSpacing());
+                while (clipper.Step()) for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+                    const auto& plugin = choices[i];
+                    ImGui::PushID(plugin.c_str());
+                    bool hidden = state.hiddenPlugins.contains(plugin);
+                    if (ImGui::Checkbox("##Hidden", &hidden)) {
+                        if (hidden) state.hiddenPlugins.insert(plugin);
+                        else state.hiddenPlugins.erase(plugin);
                         changed = true;
                     }
-
-                    ImGui::EndTable();
+                    ImGui::SameLine();
+                    ImGui::TextUnformatted(plugin.c_str());
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", plugin.c_str());
+                    ImGui::PopID();
                 }
+                if (choices.empty()) ImGui::TextDisabled("%s", localize("General", "sAdvancedFilterNoResults", "No results"));
             }
             ImGui::EndChild();
+            return changed;
+        }
 
+        bool DrawAdvancedFiltersWindow(const RecordFiltersWidget::LocalizeFn& localize, std::string_view idSuffix,
+            RecordFilterState state, AdvancedFilterEditorState& editor)
+        {
+            const auto title = std::string(localize("General", "sAdvancedRecordFilters", "Advanced Filters")) + " - " +
+                ScopeLabel(localize, idSuffix) + "###AdvancedFiltersWindow" + std::string(idSuffix);
+            const float scale = ImGui::GetFontSize() / 20.0f;
+            ModalUtils::PrepareToolWindow(title.c_str(), { 960 * scale, 740 * scale }, { 540 * scale, 460 * scale }, editor.focusPending);
+            if (!ImGui::Begin(title.c_str(), &editor.open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing)) {
+                ImGui::End();
+                return false;
+            }
+            if (ModalUtils::EscapeClosesCurrentWindow()) editor.open = false;
+            if (!editor.open) { ImGui::End(); return false; }
+
+            const AdvancedFilterEditorState::UndoState before{ state.advancedRules, state.hiddenPlugins };
+            if (editor.undo && (!editor.undoResult || editor.undoResult->rules != state.advancedRules || editor.undoResult->hiddenPlugins != state.hiddenPlugins)) {
+                editor.undo.reset();
+                editor.undoResult.reset();
+            }
+            bool changed = false;
+            bool undoing = false;
+            ImGui::TextWrapped("%s", localize("General", "sAdvancedFilterExplanation", "Shared across all browsers. A record is hidden if any enabled rule matches. Text matching ignores case. Changes are saved automatically."));
+            ImGui::TextDisabled("%zu %s | %zu %s", AdvancedRecordFilters::CountActiveRules(state.advancedRules),
+                localize("General", "sAdvancedFiltersActiveSummary", "active block rules"), state.hiddenPlugins.size(),
+                localize("General", "sAdvancedFiltersHiddenPluginsSummary", "hidden plugins"));
+            ImGuiWidgetUtils::SameLineIfFits(ImGui::CalcTextSize(localize("General", "sUndoFilterChange", "Undo Last Change")).x + ImGui::GetStyle().FramePadding.x * 2);
+            ImGui::BeginDisabled(!editor.undo);
+            if (ImGui::Button(localize("General", "sUndoFilterChange", "Undo Last Change")) && editor.undo) {
+                state.advancedRules = std::move(editor.undo->rules);
+                state.hiddenPlugins = std::move(editor.undo->hiddenPlugins);
+                editor.undo.reset();
+                changed = undoing = true;
+            }
+            ImGui::EndDisabled();
+
+            if (ImGui::BeginTabBar("##FilterSections")) {
+                const auto rulesTitle = std::string(localize("General", "sBlockRules", "Block Rules")) + " (" + std::to_string(state.advancedRules.size()) + ")###Rules";
+                if (ImGui::BeginTabItem(rulesTitle.c_str())) {
+                    const auto composerTitle = std::string(localize("General", "sAdvancedFilterAddRule", "Add Rule")) + "###NewRuleComposer";
+                    ImGui::SetNextItemOpen(state.advancedRules.empty(), ImGuiCond_Once);
+                    if (ImGui::CollapsingHeader(composerTitle.c_str())) {
+                        // The composer stays compact; the rule list owns its scrolling.
+                        auto field = static_cast<AdvancedFilterField>(editor.newField);
+                        auto match = static_cast<AdvancedFilterMatch>(editor.newMatch);
+                        if (ImGui::BeginTable("##NewRuleFields", 2, ImGuiTableFlags_SizingStretchSame)) {
+                            ImGui::TableNextColumn();
+                            ImGui::TextDisabled("%s", localize("General", "sAdvancedFilterTarget", "Target"));
+                            ImGui::SetNextItemWidth(-FLT_MIN);
+                            if (DrawRuleFieldCombo(localize, "##AdvancedField", field)) editor.newField = static_cast<int>(field);
+                            ImGui::TableNextColumn();
+                            ImGui::TextDisabled("%s", localize("General", "sAdvancedFilterMatchLabel", "Match"));
+                            ImGui::SetNextItemWidth(-FLT_MIN);
+                            if (DrawRuleMatchCombo(localize, "##AdvancedMatch", match)) editor.newMatch = static_cast<int>(match);
+                            ImGui::EndTable();
+                        }
+                        ImGui::SetNextItemWidth(-FLT_MIN);
+                        const bool enter = ImGui::InputTextWithHint("##AdvancedValue", localize("General", "sAdvancedFilterValueHint", "Value or pattern"),
+                            editor.newValue, sizeof(editor.newValue), ImGuiInputTextFlags_EnterReturnsTrue);
+                        const bool invalid = match == AdvancedFilterMatch::Regex && editor.newValue[0] && !AdvancedRecordFilters::IsRegexValid(editor.newValue);
+                        if (invalid) ImGui::TextWrapped("%s", localize("General", "sAdvancedFilterInvalidDraft", "Invalid regex. Correct the pattern before adding this rule."));
+                        ImGui::TextDisabled("%s", localize("General", "sAdvancedFilterScope", "Scope"));
+                        ImGui::SetNextItemWidth(-FLT_MIN);
+                        DrawRuleScopeCombo(localize, "##NewRuleScope", editor.newTargetPlugins, editor);
+                        bool first = true;
+                        ImGui::BeginDisabled(!editor.newValue[0] || invalid);
+                        const auto addLabel = std::string(localize("General", "sAdvancedFilterAddRule", "Add Rule")) + "##AddRule" + std::string(idSuffix);
+                        const bool add = ImGuiWidgetUtils::DrawWrappedButton(addLabel.c_str(), first);
+                        const AdvancedFilterRule draft{ true, field, match, editor.newValue, editor.newTargetPlugins };
+                        if (editor.previewRule && *editor.previewRule != draft) editor.previewRule.reset();
+                        if (ImGuiWidgetUtils::DrawWrappedButton(localize("General", "sPreviewRule", "Preview Matches"), first)) {
+                            editor.previewRule = draft;
+                            editor.previewCount = 0;
+                            editor.previewSamples.clear();
+                            const PreparedRecordFilters preview(std::span(&draft, 1));
+                            for (RecordIndex index = 0; index < editor.catalog->records.size(); ++index) {
+                                if (preview.Passes(editor.catalog->records[index])) continue;
+                                ++editor.previewCount;
+                                if (editor.previewSamples.size() < 5) editor.previewSamples.push_back(index);
+                            }
+                        }
+                        ImGui::EndDisabled();
+                        if ((add || enter) && editor.newValue[0] && !invalid) {
+                            changed = AddRuleIfMissing(state.advancedRules, { true, field, match, editor.newValue, editor.newTargetPlugins }) || changed;
+                            editor.newValue[0] = '\0';
+                            editor.previewRule.reset();
+                        }
+                        ImGuiWidgetUtils::SameLineIfFits(ImGui::GetFontSize() * 17);
+                        ImGui::SetNextItemWidth((std::min)(ImGui::GetContentRegionAvail().x, ImGui::GetFontSize() * 17));
+                        changed = DrawKeywordPicker(localize, idSuffix, state, editor) || changed;
+                        if (editor.previewRule) {
+                            ImGui::Text("%zu %s", editor.previewCount, localize("General", "sPreviewRuleCount", "matching runtime records"));
+                            if (ImGui::TreeNode("##PreviewSamples", "%s", localize("General", "sPreviewRuleSamples", "Sample matches"))) {
+                                ImGui::TextWrapped("%s", localize("General", "sPreviewRuleHint", "Up to five matches in the loaded catalog, before other browser filters."));
+                                for (const auto index : editor.previewSamples) {
+                                    const auto& record = editor.catalog->records[index];
+                                    ImGui::TextWrapped("%08X | %s | %s", record.formID, record.name.empty() ? record.editorID.c_str() : record.name.c_str(), record.sourcePlugin.c_str());
+                                }
+                                ImGui::TreePop();
+                            }
+                        }
+                    }
+                    ImGui::Separator();
+                    ImGui::SetNextItemWidth(-FLT_MIN);
+                    ImGui::InputTextWithHint("##RuleSearch", localize("General", "sSearchRules", "Search rules, fields, or plugin scopes..."), editor.ruleSearch, sizeof(editor.ruleSearch));
+                    bool first = true;
+                    ImGui::BeginDisabled(state.advancedRules.empty());
+                    if (ImGuiWidgetUtils::DrawWrappedButton(localize("General", "sEnableAllRules", "Enable All"), first)) {
+                        for (auto& rule : state.advancedRules) { changed = !rule.enabled || changed; rule.enabled = true; }
+                    }
+                    if (ImGuiWidgetUtils::DrawWrappedButton(localize("General", "sDisableAllRules", "Disable All"), first)) {
+                        for (auto& rule : state.advancedRules) { changed = rule.enabled || changed; rule.enabled = false; }
+                    }
+                    const auto clearLabel = std::string(localize("General", "sClearAll", "Clear All")) + "##ClearAdvanced" + std::string(idSuffix);
+                    if (ImGuiWidgetUtils::DrawWrappedButton(clearLabel.c_str(), first)) { state.advancedRules.clear(); changed = true; }
+                    ImGui::EndDisabled();
+                    const auto defaultsLabel = std::string(localize("General", "sAdvancedFilterRestoreDefaults", "Restore Defaults")) + "##RestoreDefaults" + std::string(idSuffix);
+                    if (ImGuiWidgetUtils::DrawWrappedButton(defaultsLabel.c_str(), first))
+                        for (const auto& rule : AdvancedRecordFilters::GetDefaultRules()) changed = AddRuleIfMissing(state.advancedRules, rule) || changed;
+
+                    if (ImGui::BeginChild("##RuleList", { 0, (std::max)(ImGui::GetTextLineHeightWithSpacing() * 3, ImGui::GetContentRegionAvail().y) }, ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened)) {
+                        std::optional<std::size_t> remove;
+                        std::size_t displayed{};
+                        for (std::size_t index = 0; index < state.advancedRules.size(); ++index) {
+                            auto& rule = state.advancedRules[index];
+                            if (!TextContains(rule.value, editor.ruleSearch) && !TextContains(FieldLabel(localize, rule.field), editor.ruleSearch) &&
+                                !TextContains(MatchLabel(localize, rule.match), editor.ruleSearch) && !TextContains(FormatScopeLabel(localize, rule.targetPlugins), editor.ruleSearch) &&
+                                !std::ranges::any_of(rule.targetPlugins, [&](const auto& plugin) { return TextContains(plugin, editor.ruleSearch); })) continue;
+                            ++displayed;
+                            ImGui::PushID(static_cast<int>(index));
+                            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
+                            if (ImGui::BeginChild("##Rule", { 0, 0 }, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysAutoResize | ImGuiChildFlags_NavFlattened)) {
+                                changed = ImGui::Checkbox(localize("General", "sEnabled", "Enabled"), &rule.enabled) || changed;
+                                ImGui::SameLine();
+                                ImGui::TextDisabled("#%zu", index + 1);
+                                ImGuiWidgetUtils::SameLineIfFits(ImGui::CalcTextSize(localize("General", "sRemove", "Remove")).x + ImGui::GetStyle().FramePadding.x * 2);
+                                if (ImGui::SmallButton(localize("General", "sRemove", "Remove"))) remove = index;
+                                if (ImGui::BeginTable("##RuleFields", 2, ImGuiTableFlags_SizingStretchSame)) {
+                                    ImGui::TableNextColumn();
+                                    ImGui::SetNextItemWidth(-FLT_MIN);
+                                    changed = DrawRuleFieldCombo(localize, "##Field", rule.field) || changed;
+                                    ImGui::TableNextColumn();
+                                    ImGui::SetNextItemWidth(-FLT_MIN);
+                                    changed = DrawRuleMatchCombo(localize, "##Match", rule.match) || changed;
+                                    ImGui::EndTable();
+                                }
+                                std::vector<char> buffer(rule.value.size() + 1024, '\0');
+                                std::copy(rule.value.begin(), rule.value.end(), buffer.begin());
+                                ImGui::SetNextItemWidth(-FLT_MIN);
+                                if (ImGui::InputText("##Value", buffer.data(), buffer.size())) { rule.value = buffer.data(); changed = true; }
+                                if (rule.value.empty()) ImGui::TextWrapped("%s", localize("General", "sAdvancedFilterEmptyRule", "Enter a value to activate this rule."));
+                                else if (rule.match == AdvancedFilterMatch::Regex && !AdvancedRecordFilters::IsRegexValid(rule.value))
+                                    ImGui::TextWrapped("%s", localize("General", "sAdvancedFilterInvalidRule", "Invalid regex. This rule is ignored until the pattern is corrected."));
+                                ImGui::SetNextItemWidth(-FLT_MIN);
+                                changed = DrawRuleScopeCombo(localize, "##Scope", rule.targetPlugins, editor) || changed;
+                            }
+                            ImGui::EndChild();
+                            ImGui::PopStyleColor();
+                            ImGui::PopID();
+                        }
+                        if (remove) { state.advancedRules.erase(state.advancedRules.begin() + static_cast<std::ptrdiff_t>(*remove)); changed = true; }
+                        if (!displayed) ImGui::TextWrapped("%s", state.advancedRules.empty() ?
+                            localize("General", "sNoBlockRules", "No block rules. Add a rule above or restore the defaults.") :
+                            localize("General", "sNoMatchingRules", "No matching rules. Clear the search to see all rules."));
+                    }
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
+                const auto hiddenTitle = std::string(localize("General", "sHiddenPlugins", "Hidden Plugins")) + " (" + std::to_string(state.hiddenPlugins.size()) + ")###HiddenPlugins";
+                if (ImGui::BeginTabItem(hiddenTitle.c_str())) {
+                    changed = DrawHiddenPlugins(localize, state, editor) || changed;
+                    ImGui::EndTabItem();
+                }
+                ImGui::EndTabBar();
+            }
+            if (changed && !undoing) {
+                editor.undo = before;
+                editor.undoResult = { state.advancedRules, state.hiddenPlugins };
+            }
             ImGui::End();
             return changed;
         }
@@ -495,47 +478,31 @@ namespace ESPExplorerAE
             changed = true;
         }
 
-        char advancedButtonVisible[160]{};
         const auto activeRules = AdvancedRecordFilters::CountActiveRules(state.advancedRules);
         const auto hiddenCount = state.hiddenPlugins.size();
-        if (hiddenCount > 0) {
-            std::snprintf(
-                advancedButtonVisible,
-                sizeof(advancedButtonVisible),
-                "%s (%zu+%zu)",
-                localize("General", "sAdvancedRecordFilters", "Advanced Filters"),
-                activeRules,
-                hiddenCount);
-        } else {
-            std::snprintf(
-                advancedButtonVisible,
-                sizeof(advancedButtonVisible),
-                "%s (%zu)",
-                localize("General", "sAdvancedRecordFilters", "Advanced Filters"),
-                activeRules);
-        }
-        char advancedButtonLabel[160]{};
-        std::snprintf(
-            advancedButtonLabel,
-            sizeof(advancedButtonLabel),
-            "%s##AdvancedFilters%s",
-            advancedButtonVisible,
-            std::string(idSuffix).c_str());
-        ImGuiWidgetUtils::DrawWrappedSameLine(advancedButtonVisible);
-        if (ImGui::GetCursorPosX() > 0.0f) {
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetStyle().ItemSpacing.x * 1.5f);
-        }
-        if (ImGui::Button(advancedButtonLabel)) {
-            editorState.open = !editorState.open;
-            if (editorState.open)
-                editorState.focusPending = true;
+        const auto visibleLabel = std::string(localize("General", "sAdvancedRecordFilters", "Advanced Filters")) + " (" +
+            std::to_string(activeRules) + (hiddenCount ? "+" + std::to_string(hiddenCount) : "") + ")";
+        const auto advancedButtonLabel = visibleLabel + "###AdvancedFilters" + std::string(idSuffix);
+        ImGuiWidgetUtils::DrawWrappedSameLine(visibleLabel.c_str());
+        if (ImGui::Button(advancedButtonLabel.c_str())) {
+            editorState.open = true;
+            editorState.focusPending = true;
         }
 
+        // Editors are submitted by the window owner after the active browser,
+        // so changing tabs does not hide an open tool window.
+        (void)catalog;
+        return changed;
+    }
+
+    bool RecordFiltersWidget::DrawEditor(const LocalizeFn& localize, std::string_view idSuffix, RecordFilterState state,
+        AdvancedFilterEditorState& editorState, std::shared_ptr<const CatalogSnapshot> catalog)
+    {
+        bool changed = false;
         if (editorState.open && catalog) {
             editorState.UpdateChoices(std::move(catalog));
-            changed = DrawAdvancedFiltersWindow(localize, idSuffix, state, editorState) || changed;
+            changed = DrawAdvancedFiltersWindow(localize, idSuffix, state, editorState);
         }
-
         if (!editorState.open) editorState.UpdateChoices({});
         return changed;
     }
@@ -544,6 +511,8 @@ namespace ESPExplorerAE
     {
         if (catalog == snapshot) return;
         catalog = std::move(snapshot);
+        previewRule.reset();
+        previewSamples.clear();
         pluginOrder.clear();
         if (!catalog) return;
         pluginOrder.resize(catalog->plugins.size());
@@ -566,6 +535,8 @@ namespace ESPExplorerAE
             // Choices will be reacquired from the supplied catalog on reopening.
             catalog.reset();
             pluginOrder.clear();
+            undo.reset();
+            undoResult.reset();
         } else {
             open = reopenAfterMenuShow;
             focusPending = reopenAfterMenuShow;

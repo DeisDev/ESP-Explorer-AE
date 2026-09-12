@@ -13,6 +13,10 @@ Target version: **1.6.0**.
 
 ### Added
 
+- Advanced filter rule search, bulk enable/disable, undo, plugin scopes when
+  adding rules, and a preview of matching loaded records with examples.
+- Search, an attention filter, expandable result details, and copying in
+  Action History.
 - Resizable Plugin Browser panes, selection clearing, and a compact Copy menu
   with EditorID and record-source copying for single and multiple selections.
 - Duplicate inventory items, including weapons and armor, with their extra data,
@@ -25,8 +29,6 @@ Target version: **1.6.0**.
 - Bulk quantity increments, clear controls, and item/ammo totals in Add Item.
 - Saved options for including weapon ammo and its default quantity in Add Item.
 - Log search with matching-line copying and a jump-to-latest button.
-- A project changelog and Semantic Versioning policy, including compatibility
-  criteria and release checks for plugin metadata and packaged artifacts.
 - Optional bounded performance profiling for data capture, UI interactions, and
   lifecycle transitions.
 - Bundled font assets and redistribution notices, with matching debug symbols
@@ -34,6 +36,9 @@ Target version: **1.6.0**.
 
 ### Changed
 
+- Advanced Filters and Action History are resizable tool windows that remain
+  available across menu pages. Filter rules use a compact, collapsible composer
+  and scrolling cards; hidden plugins use a searchable checklist.
 - Plugin Browser keeps action controls above the scrolling record details and
   plugin diagnostics. Bulk controls distinguish the selection from the active
   record, with clearer search scope, empty results, and record tooltips.
@@ -43,8 +48,6 @@ Target version: **1.6.0**.
   actions appear first, with base-record details in an expandable section.
 - Add Item quantities start at zero, and quantity shortcuts add to the current
   amount. Pressing +100 twice selects 200; zero-quantity entries are skipped.
-- Simplified the Nexus description and corrected outdated feature and
-  compatibility claims.
 - Menu navigation, header, and close controls use bundled Lucide icons that scale
   with the interface and follow the selected theme.
 - The runtime check accepts Steam Fallout 4 1.11.191, 1.11.221, and 1.11.240,
@@ -54,14 +57,17 @@ Target version: **1.6.0**.
   accents, and softer controls. Modern Charcoal is an optional shipped theme.
 - Separated status information from footer actions and removed the inactive
   footer undo button; action results remain available in Action History.
-- Separated engine readers, application services, and UI presentation. Catalog,
-  details, inventory, and player status use detached owning data; browser and
-  popup state have explicit owners, and redundant caches were removed.
 - Favorites now use plugin-relative identities. Legacy entries require review,
   with configuration backups before migration; unresolved favorites are retained.
 
 ### Fixed
 
+- Popouts stay above the workspace when browsing, fit the current screen, and
+  keep modal dialogs above tool windows. Dialogs wait for existing popups to
+  close, and long confirmation messages scroll above the action buttons.
+- Clearing all advanced filter rules remains cleared after restarting. New
+  rules reject invalid regular expressions, plugin scopes stay distinct, and
+  searchable keyword and scope lists no longer stop at a fixed result limit.
 - Inventory duplication remains available after making a copy. The selected
   instance survives quantity changes and added stacks, and the context menu
   lets you choose between different instances of the same item.

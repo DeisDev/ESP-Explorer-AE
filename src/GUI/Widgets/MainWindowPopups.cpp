@@ -102,11 +102,11 @@ namespace ESPExplorerAE
         if (globalValuePopup.visible && globalValuePopup.session != view.session) CloseGlobal();
 
         if (closeConfirmationRequested) {
-            ClosePopup("##ConfirmActionPopup");
+            ClosePopup("###ConfirmActionPopup");
             closeConfirmationRequested = false;
         } else RenderConfirmActionPopup(view, requests);
         if (closeGlobalRequested) {
-            ClosePopup("##SetGlobalValuePopup");
+            ClosePopup("###SetGlobalValuePopup");
             closeGlobalRequested = false;
         } else RenderGlobalValuePopup(view, requests);
         RenderHelpOverlay(view, requests);
@@ -117,15 +117,17 @@ namespace ESPExplorerAE
         if (confirmations.empty()) return;
         auto& current = confirmations.front();
         if (current.openRequested) {
-            ImGui::OpenPopup("##ConfirmActionPopup");
+            if (!ModalUtils::CanOpenPopup("###ConfirmActionPopup")) return;
+            ImGui::OpenPopup("###ConfirmActionPopup");
             current.openRequested = false;
         }
         const float popupScale = (std::clamp)(view.fontSize / 20.0f, 0.75f, 1.5f);
-        const ImVec2 initialSize(460.0f * popupScale, 180.0f * popupScale);
+        const ImVec2 initialSize(560.0f * popupScale, 300.0f * popupScale);
         const ModalUtils::PopupSizing popupSizing(initialSize,
             ImVec2(initialSize.x * 0.8f, initialSize.y * 0.8f),
-            ImVec2(initialSize.x * 1.8f, initialSize.y * 1.8f));
-        if (!ImGui::BeginPopupModal("##ConfirmActionPopup", &current.visible)) {
+            ImVec2(initialSize.x * 1.8f, initialSize.y * 2.4f), false);
+        const auto popupTitle = std::string(ResolveString(view.localize, "General", "sConfirm", "Confirm")) + "###ConfirmActionPopup";
+        if (!ImGui::BeginPopupModal(popupTitle.c_str(), &current.visible)) {
             if (!current.visible) CloseConfirmation();
             return;
         }
@@ -136,15 +138,19 @@ namespace ESPExplorerAE
             return;
         }
         const auto L = [&](auto section, auto key, auto fallback) { return ResolveString(view.localize, section, key, fallback); };
-        ImGui::TextUnformatted(current.title.empty() ? L("General", "sConfirm", "Confirm") : current.title.c_str());
-        ImGui::Separator();
-        ImGui::TextWrapped("%s", current.message.c_str());
-        ImGui::Spacing();
-        ActionFeedback::Draw(current.admission, L);
+        const float footer = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
+        if (ImGui::BeginChild("##ConfirmationMessage", { 0, (std::max)(1.0f, ImGui::GetContentRegionAvail().y - footer) })) {
+            ImGui::TextWrapped("%s", current.title.empty() ? L("General", "sConfirm", "Confirm") : current.title.c_str());
+            ImGui::Separator();
+            ImGui::TextWrapped("%s", current.message.c_str());
+            ActionFeedback::Draw(current.admission, L);
+        }
+        ImGui::EndChild();
         if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
         const bool canApply = view.gameplayReady && !current.pending;
         ImGui::BeginDisabled(!canApply);
-        const bool apply = ImGui::Button(L("General", "sConfirm", "Confirm"), ImVec2(110.0f, 0.0f));
+        bool firstButton = true;
+        const bool apply = ImGuiWidgetUtils::DrawWrappedButton(L("General", "sConfirm", "Confirm"), firstButton);
         ImGuiWidgetUtils::ShowGameplayDisabledTooltip(view.gameplayReady,
             L("General", "sGameplayActionsDisabledInMainMenu", "Gameplay actions are disabled while the main menu is open."));
         ImGui::EndDisabled();
@@ -153,8 +159,7 @@ namespace ESPExplorerAE
             requests.submissions.push_back(current.submission);
             current.pending = true;
         }
-        ImGui::SameLine();
-        if (ImGui::Button(L("General", "sCancel", "Cancel"), ImVec2(110.0f, 0.0f))) {
+        if (ImGuiWidgetUtils::DrawWrappedButton(L("General", "sCancel", "Cancel"), firstButton)) {
             CloseConfirmation();
             ImGui::CloseCurrentPopup();
         }
@@ -165,15 +170,17 @@ namespace ESPExplorerAE
     {
         if (!globalValuePopup.visible && !globalValuePopup.openRequested) return;
         if (globalValuePopup.openRequested) {
-            ImGui::OpenPopup("##SetGlobalValuePopup");
+            if (!ModalUtils::CanOpenPopup("###SetGlobalValuePopup")) return;
+            ImGui::OpenPopup("###SetGlobalValuePopup");
             globalValuePopup.openRequested = false;
         }
         const float popupScale = (std::clamp)(view.fontSize / 20.0f, 0.75f, 1.5f);
-        const ImVec2 initialSize(430.0f * popupScale, 180.0f * popupScale);
+        const ImVec2 initialSize(480.0f * popupScale, 260.0f * popupScale);
         const ModalUtils::PopupSizing popupSizing(initialSize,
             ImVec2(initialSize.x * 0.8f, initialSize.y * 0.8f),
-            ImVec2(initialSize.x * 1.8f, initialSize.y * 1.8f));
-        if (!ImGui::BeginPopupModal("##SetGlobalValuePopup", &globalValuePopup.visible)) {
+            ImVec2(initialSize.x * 1.8f, initialSize.y * 2.4f), false);
+        const auto popupTitle = std::string(ResolveString(view.localize, "General", "sSetGlobal", "Set Global")) + "###SetGlobalValuePopup";
+        if (!ImGui::BeginPopupModal(popupTitle.c_str(), &globalValuePopup.visible)) {
             if (!globalValuePopup.visible) CloseGlobal();
             return;
         }
@@ -184,17 +191,17 @@ namespace ESPExplorerAE
             return;
         }
         const auto L = [&](auto section, auto key, auto fallback) { return ResolveString(view.localize, section, key, fallback); };
-        ImGui::TextUnformatted(L("General", "sSetGlobal", "Set Global"));
-        ImGui::Separator();
-        ImGui::Text("%s: %s", L("General", "sEditorID", "EditorID"), globalValuePopup.editorID.c_str());
+        ImGui::TextWrapped("%s: %s", L("General", "sEditorID", "EditorID"), globalValuePopup.editorID.c_str());
+        ImGui::TextUnformatted(L("General", "sValue", "Value"));
         ImGui::SetNextItemWidth(-1.0f);
-        ImGui::InputFloat(L("General", "sValue", "Value"), &globalValuePopup.value, 1.0f, 10.0f, "%.3f");
+        ImGui::InputFloat("##GlobalValue", &globalValuePopup.value, 1.0f, 10.0f, "%.3f");
         ImGui::Spacing();
         if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
         ActionFeedback::Draw(globalValuePopup.admission, L);
         const bool canApply = view.gameplayReady && std::isfinite(globalValuePopup.value) && !globalValuePopup.pending;
         ImGui::BeginDisabled(!canApply);
-        const bool apply = ImGui::Button(L("General", "sApply", "Apply"), ImVec2(100.0f, 0.0f));
+        bool firstButton = true;
+        const bool apply = ImGuiWidgetUtils::DrawWrappedButton(L("General", "sApply", "Apply"), firstButton);
         ImGuiWidgetUtils::ShowGameplayDisabledTooltip(view.gameplayReady,
             L("General", "sGameplayActionsDisabledInMainMenu", "Gameplay actions are disabled while the main menu is open."));
         ImGui::EndDisabled();
@@ -204,8 +211,7 @@ namespace ESPExplorerAE
                     .session = globalValuePopup.session, .value = globalValuePopup.value } } });
             globalValuePopup.pending = true;
         }
-        ImGui::SameLine();
-        if (ImGui::Button(L("General", "sCancel", "Cancel"), ImVec2(100.0f, 0.0f))) {
+        if (ImGuiWidgetUtils::DrawWrappedButton(L("General", "sCancel", "Cancel"), firstButton)) {
             CloseGlobal();
             ImGui::CloseCurrentPopup();
         }
@@ -216,6 +222,7 @@ namespace ESPExplorerAE
     {
         if (!helpOverlay.visible && !helpOverlay.openRequested) return;
         if (helpOverlay.openRequested) {
+            if (!ModalUtils::CanOpenPopup("##HelpOverlayPopup")) return;
             ImGui::OpenPopup("##HelpOverlayPopup");
             helpOverlay.openRequested = false;
         }
@@ -243,7 +250,7 @@ namespace ESPExplorerAE
         ImGui::Separator();
 
         const float buttonHeight = ImGui::GetFrameHeightWithSpacing();
-        const float contentHeight = (std::max)(120.0f, ImGui::GetContentRegionAvail().y - buttonHeight - ImGui::GetStyle().ItemSpacing.y * 2.0f);
+        const float contentHeight = (std::max)(1.0f, ImGui::GetContentRegionAvail().y - buttonHeight - ImGui::GetStyle().ItemSpacing.y * 2.0f);
         if (ImGui::BeginChild("##HelpOverlayContent", ImVec2(0.0f, contentHeight), false, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
             ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x);
             ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlayHotkeys", "Hotkeys"));
@@ -264,7 +271,7 @@ namespace ESPExplorerAE
 
             ImGui::Spacing();
             ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlayAdvancedFilters", "Advanced Filters"));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayAdvancedFiltersBody", "Advanced Record Filters let you define keyword-based rules to block or allow specific records globally. Access them from the filter toolbar or Settings."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayAdvancedFiltersBody", "Open Advanced Filters from a browser toolbar to hide records by name, EditorID, plugin, category, or keyword. Rules are shared across browsers and can be limited to selected plugins."));
             ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayAdvancedFiltersExampleBody", "For example, you can hide all records containing 'SS2_Tag_' to declutter Sim Settlements content from your results."));
 
             ImGui::Spacing();
