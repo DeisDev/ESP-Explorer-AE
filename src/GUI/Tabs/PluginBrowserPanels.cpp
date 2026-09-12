@@ -108,6 +108,14 @@ namespace ESPExplorerAE::PluginBrowserPanels
                 // Apply after all expanded sections supply their complete order.
                 frame.click = TreeFrame::Click{ row, ImGui::GetIO().KeyCtrl, ImGui::GetIO().KeyShift };
             }
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+                ImGui::BeginTooltip();
+                ImGui::TextUnformatted(displayName);
+                ImGui::TextDisabled("%s | %s", formIDText.c_str(), record.category.c_str());
+                ImGui::TextUnformatted(record.sourcePlugin.c_str());
+                if (!record.editorID.empty()) ImGui::TextUnformatted(record.editorID.c_str());
+                ImGui::EndTooltip();
+            }
             if (ImGui::BeginPopupContextItem()) {
                 if (!context.state.selection.records.selected.contains(record.formID)) {
                     context.state.selection.Single(row);
@@ -145,10 +153,11 @@ namespace ESPExplorerAE::PluginBrowserPanels
         TreeFrame frame;
         const auto& result = context.state.query.Result();
 
-        if (ImGui::BeginChild("PluginTreeLeft", ImVec2(leftWidth, 0.0f), ImGuiChildFlags_Borders)) {
-            const std::string globalResultsHeader = std::string(context.view.records.localize("PluginBrowser", "sGlobalSearchResults", "Global Search Results")) + "###PluginGlobalSearchResults";
+        if (ImGui::BeginChild("PluginTreeLeft", ImVec2(leftWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoSavedSettings)) {
+            const std::string globalResultsHeader = CopyLabel(context.view.records.localize("PluginBrowser", "sGlobalSearchResults", "Global Search Results"), result.records.order.size(), "PluginGlobalSearchResults");
             if (context.state.globalSearch && !context.state.search.empty() && ImGui::TreeNodeEx(globalResultsHeader.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
                 DrawRecordSection(result.records.order, "GlobalResult", cache, context, frame);
+                if (result.records.order.empty()) ImGui::TextWrapped("%s", context.view.records.localize("PluginBrowser", "sNoMatches", "No matching records. Clear the search or adjust the record filters."));
                 ImGui::TreePop();
             }
 
@@ -158,6 +167,7 @@ namespace ESPExplorerAE::PluginBrowserPanels
                 for (const auto id : context.view.records.favorites) if (result.eligibleIDs.contains(id)) frame.favorites.push_back(cache.byID.at(id));
                 std::ranges::sort(frame.favorites);
                 DrawRecordSection(frame.favorites, "FavoriteRecord", cache, context, frame);
+                if (frame.favorites.empty()) ImGui::TextWrapped("%s", context.view.records.localize("PluginBrowser", "sNoFavorites", "No favorites match the current search and record filters."));
                 ImGui::TreePop();
             }
 
@@ -192,10 +202,13 @@ namespace ESPExplorerAE::PluginBrowserPanels
                     if (result.eligibleIDs.contains(id)) frame.recent.push_back(cache.byID.at(id));
                 }
                 DrawRecordSection(frame.recent, "RecentRecord", cache, context, frame);
+                if (frame.recent.empty()) ImGui::TextWrapped("%s", context.view.records.localize("PluginBrowser", "sNoRecentRecords", "No recent records match the current search and record filters."));
                 ImGui::TreePop();
             }
 
             ImGui::Separator();
+            ImGui::TextDisabled("%s: %zu", context.view.records.localize("PluginBrowser", "sPluginsCount", "Plugins"), result.plugins.size());
+            if (result.plugins.empty()) ImGui::TextWrapped("%s", context.view.records.localize("PluginBrowser", "sNoPluginMatches", "No plugins match. Clear the search, clear the plugin filter, or adjust the record filters."));
 
             for (const auto& pluginName : result.plugins) {
                 auto pluginIt = result.groups.find(pluginName);
@@ -209,7 +222,8 @@ namespace ESPExplorerAE::PluginBrowserPanels
                 }
 
                 const std::string pluginLabel = (pluginName.empty() ? std::string(context.view.records.localize("General", "sUnknown", "<Unknown>")) : BuildPluginDisplayName(pluginName, plugins)) + " (" + std::to_string(totalRecords) + ")###Plugin:" + pluginName;
-                const bool pluginNodeOpen = ImGui::TreeNodeEx(pluginLabel.c_str(), ImGuiTreeNodeFlags_OpenOnArrow);
+                const auto selectedFlag = context.state.selection.records.selected.empty() && context.state.diagnosticsPlugin == pluginName ? ImGuiTreeNodeFlags_Selected : ImGuiTreeNodeFlags_None;
+                const bool pluginNodeOpen = ImGui::TreeNodeEx(pluginLabel.c_str(), ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | selectedFlag);
                 if (!ImGui::IsItemToggledOpen() && ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
                     context.state.diagnosticsPlugin = pluginName;
                     context.state.selection.Clear();
@@ -245,7 +259,7 @@ namespace ESPExplorerAE::PluginBrowserPanels
                         }
                         categoryLabel += "###Category:" + category;
                         ImGui::PushStyleColor(ImGuiCol_Text, CategoryColor(category));
-                        if (ImGui::TreeNode(categoryLabel.c_str())) {
+                        if (ImGui::TreeNodeEx(categoryLabel.c_str(), ImGuiTreeNodeFlags_SpanAvailWidth)) {
                             DrawRecordSection(categoryIt->second, ("TreeRecord/" + pluginName + "/" + category).c_str(), cache, context, frame);
                             ImGui::TreePop();
                         }
@@ -270,204 +284,195 @@ namespace ESPExplorerAE::PluginBrowserPanels
         }
     }
 
-    void DrawDetailsPane(const std::vector<PluginInfo>& plugins, const CatalogSnapshot& cache, Context& context)
+    namespace
     {
-        if (ImGui::BeginChild("PluginTreeDetails", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders)) {
-            EnsurePrimarySelectionValid(context);
-            const FormEntry* selectedRecord = context.state.selection.records.active != 0 ? FindRecordByFormID(cache, context.state.selection.records.active) : nullptr;
-            const auto selectedIndices = CollectSelectedEntries(cache, context);
-            const auto selectedEntries = selectedIndices | std::views::transform([&](RecordIndex index) -> const FormEntry& { return cache.records[index]; });
-            const auto selectedGiveableEntries = CollectSelectedGiveableEntries(cache, context);
-            const bool hasMultipleSelection = context.state.selection.records.selected.size() > 1;
-            const auto diagnosticPluginName = selectedRecord ? selectedRecord->sourcePlugin : (!context.state.diagnosticsPlugin.empty() ? context.state.diagnosticsPlugin : context.view.records.pluginFilter);
-            const PluginInfo* diagnosticPlugin = diagnosticPluginName.empty() ? nullptr : FindPluginInfo(diagnosticPluginName, plugins);
+        void DrawDetailsActions(const FormEntry& record, const CatalogSnapshot& cache, Context& context)
+        {
+            const auto localize = context.view.records.localize;
+            const auto selected = CollectSelectedEntries(cache, context);
+            const bool multiple = selected.size() > 1;
+            const bool gameplayAllowed = context.view.records.gameplayReady && !record.isDeleted;
+            const char* disabledTooltip = record.isDeleted ?
+                localize("PluginBrowser", "sDeletedActionsDisabled", "Gameplay actions are unavailable for deleted records.") :
+                localize("General", "sGameplayActionsDisabledInMainMenu", "Gameplay actions are disabled while the main menu is open.");
+            bool first = true;
+            const auto button = [&](const char* label) { return ImGuiWidgetUtils::DrawWrappedButton(label, first); };
 
-            if (!selectedRecord) {
-                if (diagnosticPlugin) {
-                    DrawPluginDiagnosticsSection(*diagnosticPlugin, context, false);
-                } else {
-                    ImGui::TextUnformatted(context.view.records.localize("PluginBrowser", "sSelectRecordHint", "Select a record to view details."));
+            if (multiple) {
+                const auto giveable = CollectSelectedGiveableEntries(cache, context);
+                if (!giveable.empty()) {
+                    ImGui::BeginDisabled(!context.view.records.gameplayReady);
+                    if (button(CopyLabel(localize("Items", "sGiveItem", "Give Item"), giveable.size(), "GiveSelection").c_str())) RequestGrant(giveable, context);
+                    ImGuiWidgetUtils::ShowGameplayDisabledTooltip(context.view.records.gameplayReady,
+                        localize("General", "sGameplayActionsDisabledInMainMenu", "Gameplay actions are disabled while the main menu is open."));
+                    ImGui::EndDisabled();
+                }
+            }
+
+            // A record-specific popup ID prevents an open copy menu changing targets.
+            const auto copyPopup = "PluginDetailsCopy/" + std::to_string(record.formID);
+            if (button(localize("General", "sCopy", "Copy"))) ImGui::OpenPopup(copyPopup.c_str());
+            if (ImGui::BeginPopup(copyPopup.c_str())) {
+                const auto copy = [&](const char* key, const char* fallback, auto value, bool enabled = true) {
+                    if (ImGui::MenuItem(localize("General", key, fallback), nullptr, false, enabled)) {
+                        std::vector<std::string> values;
+                        values.reserve(selected.size());
+                        for (const auto index : selected) values.push_back(value(cache.records[index]));
+                        const auto clipboard = multiple ? FormatUtils::MultiCopyList(values, context.view.copyFormat) : value(record);
+                        ImGui::SetClipboardText(clipboard.c_str());
+                    }
+                };
+                copy("sCopyFormID", "Copy FormID", [](const FormEntry& entry) { return FormatUtils::FormID(entry.formID); });
+                copy("sCopyName", "Copy Name", [&](const FormEntry& entry) {
+                    return entry.name.empty() ? std::string(localize("General", "sUnnamed", "<Unnamed>")) : entry.name;
+                });
+                copy("sCopyRecordSource", "Copy Record Source", [](const FormEntry& entry) { return entry.sourcePlugin; });
+                copy("sCopyEditorID", "Copy EditorID", [](const FormEntry& entry) { return entry.editorID; },
+                    std::ranges::any_of(selected, [&](RecordIndex index) { return !cache.records[index].editorID.empty(); }));
+                ImGui::EndPopup();
+            }
+            if (multiple) {
+                if (button(localize("General", "sFavorites", "Favorites"))) ImGui::OpenPopup("PluginSelectionFavorites");
+                if (ImGui::BeginPopup("PluginSelectionFavorites")) {
+                    if (ImGui::MenuItem(localize("General", "sAddFavorite", "Add Favorite"))) {
+                        for (const auto index : selected) context.view.records.favorites.insert(cache.records[index].formID);
+                    }
+                    if (ImGui::MenuItem(localize("General", "sRemoveFavorite", "Remove Favorite"))) {
+                        for (const auto index : selected) context.view.records.favorites.erase(cache.records[index].formID);
+                    }
+                    ImGui::EndPopup();
                 }
             } else {
-                const float totalAvail = ImGui::GetContentRegionAvail().y;
-                const float minDetailsHeight = ImGui::GetFrameHeightWithSpacing() * 6.0f;
-                const float detailsHeight = (std::max)(minDetailsHeight, totalAvail * 0.55f);
-                if (ImGui::BeginChild("PluginDetailsInfo", ImVec2(0.0f, detailsHeight), false)) {
-                    context.requests.details = DetailKey{ selectedRecord->formID, context.view.records.session, cache.generation, context.view.advancedDetails };
-                    FormDetailsViewContext detailsContext{
+                const bool favorite = context.view.records.favorites.contains(record.formID);
+                if (button(favorite ? localize("General", "sRemoveFavorite", "Remove Favorite") : localize("General", "sAddFavorite", "Add Favorite"))) {
+                    if (favorite) context.view.records.favorites.erase(record.formID);
+                    else context.view.records.favorites.insert(record.formID);
+                }
+            }
+
+            if (multiple) {
+                const auto popup = "PluginActiveRecord/" + std::to_string(record.formID);
+                if (button(localize("PluginBrowser", "sActiveRecord", "Active record"))) ImGui::OpenPopup(popup.c_str());
+                if (!ImGui::BeginPopup(popup.c_str())) return;
+                ImGui::TextUnformatted(record.name.empty() ? localize("General", "sUnnamed", "<Unnamed>") : record.name.c_str());
+                ImGui::TextDisabled("%s | %s", FormatUtils::FormID(record.formID).c_str(), record.category.c_str());
+                ImGui::Separator();
+                first = true;
+            }
+            ImGui::BeginDisabled(!gameplayAllowed);
+            if (!multiple && SupportsRecordAction(record.category, ActionKind::Give)) {
+                if (button(localize("Items", "sGiveItem", "Give Item"))) {
+                    context.requests.records.grants.push_back({ context.view.records.session, { record.formID } });
+                }
+                ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayAllowed, disabledTooltip);
+            }
+            if (SupportsRecordAction(record.category, ActionKind::Equip)) {
+                if (button(localize("General", "sEquipItem", "Equip Item"))) BrowserWidgets::Emit(context.requests.records, context.view.records, record, ActionKind::Equip);
+                ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayAllowed, disabledTooltip);
+            }
+            const auto action = [&](ActionKind kind, const char* key, const char* fallback, bool confirm = true) {
+                if (!SupportsRecordAction(record.category, kind)) return;
+                const auto request = PrepareRecordAction(kind, record, context.view.records.session, gameplayAllowed);
+                ImGui::BeginDisabled(!request);
+                const auto label = std::string(localize("General", key, fallback)) + "###" + key;
+                if (button(label.c_str())) BrowserWidgets::Emit(context.requests.records, context.view.records, record, kind, confirm);
+                ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayAllowed, disabledTooltip);
+                ImGui::EndDisabled();
+            };
+            action(ActionKind::StartQuest, "sStartQuest", "Start Quest");
+            action(ActionKind::CompleteQuest, "sCompleteQuest", "Complete Quest");
+            action(ActionKind::AddPerk, "sAddPerk", "Add Perk");
+            action(ActionKind::RemovePerk, "sRemovePerk", "Remove Perk");
+            action(ActionKind::AddSpell, "sAddSpellEffect", "Add Spell/Effect");
+            action(ActionKind::RemoveSpell, "sRemoveSpellEffect", "Remove Spell/Effect");
+            action(ActionKind::SetWeather, "sSetWeather", "Set Weather");
+            action(ActionKind::PlaySound, "sPlaySound", "Play Sound", false);
+            if (SupportsRecordAction(record.category, ActionKind::SetGlobal)) {
+                ImGui::BeginDisabled(record.editorID.empty());
+                if (button(localize("General", "sSetGlobal", "Set Global"))) context.requests.records.globalValues.push_back({ context.view.records.session, record.formID });
+                ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayAllowed, disabledTooltip);
+                ImGui::EndDisabled();
+            }
+            action(ActionKind::Outfit, "sAddOutfitItems", "Add Outfit Items");
+            action(ActionKind::ConstructedItem, "sAddCraftedItem", "Add Crafted Item");
+            action(ActionKind::Teleport, "sTeleportCOC", "Teleport (COC)");
+
+            if (SupportsRecordAction(record.category, ActionKind::Spawn)) {
+                first = true;
+                int& quantity = context.state.spawnQuantity;
+                quantity = (std::clamp)(quantity, 1, static_cast<int>(ActionQueue::MaxQuantity));
+                if (button(localize("NPCs", "sSpawnAtPlayer", "Spawn At Player"))) {
+                    BrowserWidgets::Emit(context.requests.records, context.view.records, record, ActionKind::Spawn, true, static_cast<std::uint32_t>(quantity));
+                }
+                ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayAllowed, disabledTooltip);
+                const auto* quantityLabel = localize("General", "sQuantity", "Quantity");
+                const float quantityWidth = ImGui::GetFontSize() * 6.0f;
+                ImGuiWidgetUtils::SameLineIfFits(quantityWidth + ImGui::CalcTextSize(quantityLabel).x + ImGui::GetStyle().ItemInnerSpacing.x);
+                ImGui::SetNextItemWidth((std::min)(quantityWidth, ImGui::GetContentRegionAvail().x));
+                const auto label = std::string(quantityLabel) + "###DetailSpawnQty";
+                ImGui::InputInt(label.c_str(), &quantity, 1, 10);
+                quantity = (std::clamp)(quantity, 1, static_cast<int>(ActionQueue::MaxQuantity));
+            }
+            ImGui::EndDisabled();
+            if (multiple) ImGui::EndPopup();
+        }
+    }
+
+    void DrawDetailsPane(const std::vector<PluginInfo>& plugins, const CatalogSnapshot& cache, Context& context)
+    {
+        // Only the information child scrolls. Toolbar height is established this
+        // frame, so wrapping/localization never relies on a previous measurement.
+        if (ImGui::BeginChild("PluginTreeDetails", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders,
+                ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+            if (!context.state.selection.records.selected.empty()) {
+                ImGui::AlignTextToFramePadding();
+                if (context.state.selection.records.selected.size() == 1) {
+                    ImGui::Text("%s: %s", context.view.records.localize("General", "sFormID", "FormID"),
+                        FormatUtils::FormID(*context.state.selection.records.selected.begin()).c_str());
+                } else {
+                    ImGui::Text("%s: %zu", context.view.records.localize("General", "sSelected", "Selected"), context.state.selection.records.selected.size());
+                }
+                const auto* clear = context.view.records.localize("General", "sClearSelection", "Clear Selection");
+                ImGuiWidgetUtils::DrawWrappedSameLine(clear);
+                if (ImGui::Button(clear)) context.state.selection.Clear();
+            }
+            EnsurePrimarySelectionValid(context);
+            const auto* record = FindRecordByFormID(cache, context.state.selection.records.active);
+            const auto diagnosticName = record ? record->sourcePlugin : (!context.state.diagnosticsPlugin.empty() ? context.state.diagnosticsPlugin : std::string(context.view.records.pluginFilter));
+            const auto* plugin = diagnosticName.empty() ? nullptr : FindPluginInfo(diagnosticName, plugins);
+            const auto formID = record ? record->formID : 0;
+            const bool changed = context.state.detailsFormID != formID || context.state.detailsPlugin != diagnosticName;
+            context.state.detailsFormID = formID;
+            context.state.detailsPlugin = diagnosticName;
+
+            if (record) {
+                DrawDetailsActions(*record, cache, context);
+                ImGui::Separator();
+                context.requests.details = DetailKey{ formID, context.view.records.session, cache.generation, context.view.advancedDetails };
+            }
+            if (changed) ImGui::SetNextWindowScroll(ImVec2(0.0f, 0.0f));
+            if (ImGui::BeginChild("PluginDetailsInfo", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None)) {
+                if (record) {
+                    const FormDetailsViewContext detailsContext{
                         .localize = context.view.records.localize,
                         .showAdvancedDetailsView = context.view.advancedDetails,
                         .catalog = &cache,
                         .details = context.view.details && context.view.details->key == *context.requests.details ? context.view.details : nullptr
                     };
-                    FormDetailsView::Draw(*selectedRecord, detailsContext);
+                    FormDetailsView::Draw(*record, detailsContext);
+                    if (plugin) {
+                        ImGui::Spacing();
+                        DrawPluginDiagnosticsSection(*plugin, context, true);
+                    }
+                } else if (plugin) {
+                    DrawPluginDiagnosticsSection(*plugin, context, false);
+                } else {
+                    ImGui::TextWrapped("%s", context.view.records.localize("PluginBrowser", "sSelectRecordHint", "Select a record to view details."));
+                    ImGui::Spacing();
+                    ImGui::TextWrapped("%s", context.view.records.localize("PluginBrowser", "sSelectionHint", "Ctrl-click to toggle records; Shift-click to select a range."));
                 }
-                ImGui::EndChild();
-
-                ImGui::Separator();
-                if (ImGui::BeginChild("PluginDetailsActions", ImVec2(0.0f, 0.0f), false)) {
-                    if (diagnosticPlugin) {
-                        DrawPluginDiagnosticsSection(*diagnosticPlugin, context, true);
-                        ImGui::Separator();
-                    }
-
-                    const bool canGive = SupportsRecordAction(selectedRecord->category, ActionKind::Give);
-                    const bool canSpawn = SupportsRecordAction(selectedRecord->category, ActionKind::Spawn);
-                    const bool isEquippable = SupportsRecordAction(selectedRecord->category, ActionKind::Equip);
-                    const bool gameplayActionsAllowed = context.view.records.gameplayReady && !selectedRecord->isDeleted;
-                    const char* disabledTooltip = context.view.records.localize("General", "sGameplayActionsDisabledInMainMenu", "Gameplay actions are disabled while the main menu is open.");
-
-                    bool firstBtn = true;
-                    ImGuiWidgetUtils::FixedGridButtonRow buttonRow{};
-                    const auto drawActionButton = [&](const char* label) {
-                        return ImGuiWidgetUtils::DrawFixedGridButton(label, firstBtn, buttonRow);
-                    };
-
-                    if (hasMultipleSelection && !selectedEntries.empty()) {
-                        if (drawActionButton(CopyLabel(context.view.records.localize("General", "sCopyName", "Copy Name"), selectedEntries.size(), "sCopyName").c_str())) {
-                            std::vector<std::string> values{};
-                            values.reserve(selectedEntries.size());
-                            for (const auto& selectedEntry : selectedEntries) {
-                                values.push_back(selectedEntry.name.empty() ? context.view.records.localize("General", "sUnnamed", "<Unnamed>") : selectedEntry.name);
-                            }
-                            const auto text = FormatUtils::MultiCopyList(values, context.view.copyFormat);
-                            ImGui::SetClipboardText(text.c_str());
-                        }
-
-                        if (drawActionButton(CopyLabel(context.view.records.localize("General", "sCopyFormID", "Copy FormID"), selectedEntries.size(), "sCopyFormID").c_str())) {
-                            std::vector<std::string> values{};
-                            values.reserve(selectedEntries.size());
-                            for (const auto& selectedEntry : selectedEntries) {
-                                values.push_back(FormatUtils::FormID(selectedEntry.formID));
-                            }
-                            const auto text = FormatUtils::MultiCopyList(values, context.view.copyFormat);
-                            ImGui::SetClipboardText(text.c_str());
-                        }
-
-                        if (drawActionButton(CopyLabel(context.view.records.localize("General", "sAddFavorite", "Add Favorite"), selectedEntries.size(), "sAddFavorite").c_str())) {
-                            for (const auto& selectedEntry : selectedEntries) {
-                                context.view.records.favorites.insert(selectedEntry.formID);
-                            }
-                        }
-
-                        if (drawActionButton(CopyLabel(context.view.records.localize("General", "sRemoveFavorite", "Remove Favorite"), selectedEntries.size(), "sRemoveFavorite").c_str())) {
-                            for (const auto& selectedEntry : selectedEntries) {
-                                context.view.records.favorites.erase(selectedEntry.formID);
-                            }
-                        }
-                    } else {
-                        if (drawActionButton(context.view.records.localize("General", "sCopyFormID", "Copy FormID"))) {
-                            ImGui::SetClipboardText(FormatUtils::FormID(selectedRecord->formID).c_str());
-                        }
-
-                        if (drawActionButton(context.view.records.localize("General", "sCopyRecordSource", "Copy Record Source"))) {
-                            ImGui::SetClipboardText(selectedRecord->sourcePlugin.c_str());
-                        }
-
-                        if (drawActionButton(context.view.records.localize("General", "sCopyName", "Copy Name"))) {
-                            ImGui::SetClipboardText(selectedRecord->name.empty() ? context.view.records.localize("General", "sUnnamed", "<Unnamed>") : selectedRecord->name.c_str());
-                        }
-
-                        if (canGive || isEquippable) {
-                            if (!gameplayActionsAllowed) {
-                                ImGui::BeginDisabled(true);
-                            }
-                            if (canGive) {
-                                if (drawActionButton(context.view.records.localize("Items", "sGiveItem", "Give Item"))) {
-                                    context.requests.records.grants.push_back({ context.view.records.session, { selectedRecord->formID } });
-                                }
-                                ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
-                            }
-
-                            if (isEquippable) {
-                                if (drawActionButton(context.view.records.localize("General", "sEquipItem", "Equip Item"))) {
-                                    BrowserWidgets::Emit(context.requests.records, context.view.records, *selectedRecord, ActionKind::Equip);
-                                }
-                                ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
-                            }
-                            if (!gameplayActionsAllowed) {
-                                ImGui::EndDisabled();
-                            }
-                        }
-
-                        const bool isFavorite = context.view.records.favorites.contains(selectedRecord->formID);
-                        if (drawActionButton(isFavorite ? context.view.records.localize("General", "sRemoveFavorite", "Remove Favorite") : context.view.records.localize("General", "sAddFavorite", "Add Favorite"))) {
-                            if (isFavorite) {
-                                context.view.records.favorites.erase(selectedRecord->formID);
-                            } else {
-                                context.view.records.favorites.insert(selectedRecord->formID);
-                            }
-                        }
-                    }
-
-                    if (!gameplayActionsAllowed) {
-                        ImGui::BeginDisabled(true);
-                    }
-                    if (hasMultipleSelection && !selectedGiveableEntries.empty()) {
-                        std::string giveSelectedLabel = std::string(context.view.records.localize("Items", "sGiveItem", "Give Item")) + " (" + std::to_string(selectedGiveableEntries.size()) + ")###GiveSelection";
-                        if (drawActionButton(giveSelectedLabel.c_str())) {
-                            RequestGrant(selectedGiveableEntries, context);
-                        }
-                        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
-                    }
-
-                    if (canSpawn || canGive) {
-                        const char* spawnLabel = context.view.records.localize("NPCs", "sSpawnAtPlayer", "Spawn At Player");
-
-                        int& detailSpawnQuantity = context.state.spawnQuantity;
-                        if (drawActionButton(spawnLabel)) {
-                            BrowserWidgets::Emit(context.requests.records, context.view.records, *selectedRecord,
-                                ActionKind::Spawn, true, static_cast<std::uint32_t>(detailSpawnQuantity));
-                        }
-                        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
-
-                        const auto& style = ImGui::GetStyle();
-                        const float quantityWidth = 140.0f;
-                        if (ImGui::GetContentRegionAvail().x >= (style.ItemSpacing.x + quantityWidth)) {
-                            ImGui::SameLine();
-                        }
-                        ImGui::SetNextItemWidth(quantityWidth);
-                        ImGui::InputInt("##DetailSpawnQty", &detailSpawnQuantity, 1, 10);
-                        detailSpawnQuantity = (std::clamp)(detailSpawnQuantity, 1, static_cast<int>(ActionQueue::MaxQuantity));
-
-                        firstBtn = true;
-                        buttonRow = {};
-                    }
-
-                    const auto drawRecordAction = [&](ActionKind kind, const char* key, const char* fallback, bool confirm = true) {
-                        if (!SupportsRecordAction(selectedRecord->category, kind)) return;
-                        const auto request = PrepareRecordAction(kind, *selectedRecord, context.view.records.session, gameplayActionsAllowed);
-                        ImGui::BeginDisabled(!request);
-                        const auto label = std::string(context.view.records.localize("General", key, fallback)) + "###" + key;
-                        if (drawActionButton(label.c_str())) BrowserWidgets::Emit(context.requests.records, context.view.records, *selectedRecord, kind, confirm);
-                        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
-                        ImGui::EndDisabled();
-                    };
-                    drawRecordAction(ActionKind::StartQuest, "sStartQuest", "Start Quest");
-                    drawRecordAction(ActionKind::CompleteQuest, "sCompleteQuest", "Complete Quest");
-                    drawRecordAction(ActionKind::AddPerk, "sAddPerk", "Add Perk");
-                    drawRecordAction(ActionKind::RemovePerk, "sRemovePerk", "Remove Perk");
-                    drawRecordAction(ActionKind::AddSpell, "sAddSpellEffect", "Add Spell/Effect");
-                    drawRecordAction(ActionKind::RemoveSpell, "sRemoveSpellEffect", "Remove Spell/Effect");
-                    drawRecordAction(ActionKind::SetWeather, "sSetWeather", "Set Weather");
-                    drawRecordAction(ActionKind::PlaySound, "sPlaySound", "Play Sound", false);
-                    if (SupportsRecordAction(selectedRecord->category, ActionKind::SetGlobal)) {
-                        ImGui::BeginDisabled(selectedRecord->editorID.empty());
-                        if (drawActionButton(context.view.records.localize("General", "sSetGlobal", "Set Global"))) {
-                            context.requests.records.globalValues.push_back({ context.view.records.session, selectedRecord->formID });
-                        }
-                        ImGuiWidgetUtils::ShowGameplayDisabledTooltip(gameplayActionsAllowed, disabledTooltip);
-                        ImGui::EndDisabled();
-                    }
-                    drawRecordAction(ActionKind::Outfit, "sAddOutfitItems", "Add Outfit Items");
-                    drawRecordAction(ActionKind::ConstructedItem, "sAddCraftedItem", "Add Crafted Item");
-                    drawRecordAction(ActionKind::Teleport, "sTeleportCOC", "Teleport (COC)");
-                    if (!gameplayActionsAllowed) {
-                        ImGui::EndDisabled();
-                    }
-                }
-                ImGui::EndChild();
             }
+            ImGui::EndChild();
         }
         ImGui::EndChild();
     }

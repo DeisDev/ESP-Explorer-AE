@@ -49,7 +49,7 @@ namespace ESPExplorerAE
 
         void DrawTextLine(const char* label, std::string_view value, int& popupCounter, const FormDetailsViewContext& context)
         {
-            ImGui::Text("%s: %s", label, std::string(value).c_str());
+            ImGui::TextWrapped("%s: %s", label, std::string(value).c_str());
             DrawCopyPopup(value, popupCounter, context);
         }
 
@@ -448,9 +448,8 @@ namespace ESPExplorerAE
         const ProfileScope profileScope(ProfileMetric::DetailsView);
         ImGui::PushID(static_cast<int>(selectedRecord.formID));
         int detailCopyPopupCounter = 0;
-        ImGui::TextUnformatted(selectedRecord.name.empty() ? L(context, "General", "sUnnamed") : selectedRecord.name.c_str());
+        ImGui::TextWrapped("%s", selectedRecord.name.empty() ? L(context, "General", "sUnnamed") : selectedRecord.name.c_str());
         DrawCopyPopup(selectedRecord.name.empty() ? L(context, "General", "sUnnamed") : selectedRecord.name, detailCopyPopupCounter, context);
-        ImGui::SameLine();
         const auto id = FormatUtils::FormID(selectedRecord.formID);
         ImGui::TextDisabled("%s", id.c_str());
         DrawCopyPopup(id, detailCopyPopupCounter, context);

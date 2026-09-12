@@ -13,6 +13,8 @@ Target version: **1.6.0**.
 
 ### Added
 
+- Resizable Plugin Browser panes, selection clearing, and a compact Copy menu
+  with EditorID and record-source copying for single and multiple selections.
 - Duplicate an inventory weapon with its attachments, legendary effects, custom
   name, condition, and instance stats using the chosen instance's actions.
 - Inventory filters for Pip-Boy favorites, legendary items, and quest items;
@@ -32,6 +34,9 @@ Target version: **1.6.0**.
 
 ### Changed
 
+- Plugin Browser keeps action controls above the scrolling record details and
+  plugin diagnostics. Bulk controls distinguish the selection from the active
+  record, with clearer search scope, empty results, and record tooltips.
 - Inventory columns can be resized, reordered, and hidden; the default view
   focuses on name, quantity, and stack weight. Bulk actions use a compact menu
   with item quantities in removal/drop confirmations. Instance details and
@@ -57,6 +62,9 @@ Target version: **1.6.0**.
 
 ### Fixed
 
+- Long detail values wrap within the pane, and changing records returns details
+  to the top. Bulk giving remains available for eligible records when the active
+  record in the selection is deleted.
 - Inventory count editing starts at the current quantity, and equip/unequip
   follows the chosen instance when a group contains mixed equipment states.
   Selection controls fit above the table and details, and empty filter results

@@ -21,6 +21,8 @@ namespace ESPExplorerAE
         bool globalSearch{};
         bool collapseDiagnostics{};
         int spawnQuantity{ 1 };
+        std::uint32_t detailsFormID{};
+        std::string detailsPlugin;
         ActionAdmission admission{ ActionAdmission::Accepted };
         std::unordered_map<std::uint32_t, int> contextQuantities;
         TreeSelection selection;
@@ -42,6 +44,8 @@ namespace ESPExplorerAE
             diagnosticsPlugin.clear();
             query.Clear();
             spawnQuantity = 1;
+            detailsFormID = 0;
+            detailsPlugin.clear();
             admission = ActionAdmission::Accepted;
             contextQuantities.clear();
         }

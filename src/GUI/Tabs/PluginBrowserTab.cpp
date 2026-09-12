@@ -9,6 +9,7 @@
 #include "GUI/Widgets/ActionFeedback.h"
 
 #include <imgui.h>
+#include <limits>
 
 namespace ESPExplorerAE
 {
@@ -26,26 +27,17 @@ namespace ESPExplorerAE
         bool listFilterSettingsChanged = false;
 
         const auto* clearLabel = view.records.localize("General", "sClearSearchButton", "X");
-        SearchBar::Draw(view.records.localize("PluginBrowser", "sSearch", "Plugin Search"), state.searchBuffer.data(), state.searchBuffer.size(),
-            state.search, &state.focusPending, "PluginSearchInput", clearLabel, ImGui::GetContentRegionAvail().x * 0.55f);
-        const auto* clearFilter = view.records.localize("PluginBrowser", "sClearFilter", "Clear Plugin Filter");
-        ImGuiWidgetUtils::DrawWrappedSameLine(clearFilter);
-        if (ImGui::Button(clearFilter)) {
-            context.requests.pluginFilter = std::string{};
-        }
+        SearchBar::Draw(view.records.localize("PluginBrowser", "sSearch", "Search name, FormID, EditorID, plugin or type"), state.searchBuffer.data(), state.searchBuffer.size(),
+            state.search, &state.focusPending, "PluginSearchInput", clearLabel);
 
         if (ImGui::Checkbox(context.view.records.localize("PluginBrowser", "sGlobalSearch", "Global Search"), &context.state.globalSearch)) {
             context.requests.settingsChanged = true;
         }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", view.records.localize("PluginBrowser", "sGlobalSearchHint",
+            "Search all visible plugins, ignoring the active plugin filter. Record filters still apply."));
         {
-            auto wrappedSameLine = [](const char* label) {
-                float w = ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f + ImGui::GetFontSize() + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::GetStyle().ItemSpacing.x;
-                if (ImGui::GetContentRegionAvail().x >= w) {
-                    ImGui::SameLine();
-                }
-            };
             const char* unknownLabel = context.view.records.localize("PluginBrowser", "sShowUnknownCategories", "Show Unknown Categories");
-            wrappedSameLine(unknownLabel);
+            ImGuiWidgetUtils::SameLineIfFits(ImGui::CalcTextSize(unknownLabel).x + ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x);
             if (ImGui::Checkbox(unknownLabel, &context.state.showUnknown)) {
                 listFilterSettingsChanged = true;
                 context.requests.settingsChanged = true;
@@ -54,7 +46,18 @@ namespace ESPExplorerAE
 
         if (!context.view.records.pluginFilter.empty()) {
             const std::string activePluginLabel = BuildPluginDisplayName(context.view.records.pluginFilter, plugins);
-            ImGui::Text("%s: %s", context.view.records.localize("PluginBrowser", "sActiveFilter", "Active"), activePluginLabel.c_str());
+            const auto filterLabel = activePluginLabel + "  " + clearLabel + "###PluginFilter";
+            bool first = false;
+            if (state.globalSearch) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+            if (ImGuiWidgetUtils::DrawWrappedButton(filterLabel.c_str(), first)) context.requests.pluginFilter = std::string{};
+            if (state.globalSearch) ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered()) {
+                ImGui::BeginTooltip();
+                ImGui::TextUnformatted(activePluginLabel.c_str());
+                ImGui::TextUnformatted(view.records.localize("PluginBrowser", "sClearFilter", "Clear Plugin Filter"));
+                if (state.globalSearch) ImGui::TextUnformatted(view.records.localize("PluginBrowser", "sFilterBypassed", "Global Search is ignoring this plugin filter."));
+                ImGui::EndTooltip();
+            }
         }
 
         if (RecordFiltersWidget::Draw(
@@ -88,14 +91,16 @@ namespace ESPExplorerAE
         context.state.selection.Reconcile(result.eligibleIDs);
 
         const float totalWidth = ImGui::GetContentRegionAvail().x;
-        const float minDetailsWidth = 520.0f;
-        const float preferredLeftWidth = totalWidth * 0.52f;
-        const float maxLeftWidth = (std::max)(220.0f, totalWidth - minDetailsWidth - ImGui::GetStyle().ItemSpacing.x);
-        const float leftWidth = (std::clamp)(preferredLeftWidth, 220.0f, maxLeftWidth);
+        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+        const float minLeftWidth = (std::min)(ImGui::GetFontSize() * 12.0f, totalWidth * 0.35f);
+        const float minDetailsWidth = (std::min)(ImGui::GetFontSize() * 26.0f, totalWidth * 0.60f);
+        const float maxLeftWidth = (std::max)(minLeftWidth, totalWidth - minDetailsWidth - spacing);
+        const float leftWidth = (std::clamp)(totalWidth * 0.44f, minLeftWidth, maxLeftWidth);
+        // Constrain the draggable tree edge so it cannot squeeze actions out of
+        // the details pane; the limits also adapt when the menu/font size changes.
+        ImGui::SetNextWindowSizeConstraints(ImVec2(minLeftWidth, 0.0f), ImVec2(maxLeftWidth, (std::numeric_limits<float>::max)()));
         DrawTreePane(plugins, cache, context, leftWidth);
-
         ImGui::SameLine();
-
         DrawDetailsPane(plugins, cache, context);
     }
 }
