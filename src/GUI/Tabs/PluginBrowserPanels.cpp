@@ -451,7 +451,7 @@ namespace ESPExplorerAE::PluginBrowserPanels
                 context.requests.details = DetailKey{ formID, context.view.records.session, cache.generation, context.view.advancedDetails };
             }
             if (changed) ImGui::SetNextWindowScroll(ImVec2(0.0f, 0.0f));
-            if (ImGui::BeginChild("PluginDetailsInfo", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None)) {
+            if (ImGui::BeginChild("PluginDetailsInfo", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
                 if (record) {
                     const FormDetailsViewContext detailsContext{
                         .localize = context.view.records.localize,

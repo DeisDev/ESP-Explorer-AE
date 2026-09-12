@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdio>
+#include <format>
 #include <limits>
 #include <map>
 #include <ranges>
@@ -971,10 +972,6 @@ namespace ESPExplorerAE
 
                 if (!context.gameplayReady) ImGui::TextDisabled("%s", L(context, "Inventory", "sUnavailable", "Inventory is unavailable."));
                 else if (!context.inventory || !context.inventory->ready) ImGui::TextDisabled("%s", L(context, "Inventory", "sLoading", "Loading inventory..."));
-                if (state.selectionChanged) ImGui::TextWrapped("%s", L(context, "Inventory", "sSelectionChanged", "Inventory changed. Select the items again."));
-                const auto feedback = InventoryFeedback::Message(state.rejection, context.localize);
-                if (!feedback.empty()) ImGui::TextWrapped("%s", feedback.c_str());
-                ActionFeedback::Draw(state.admission, context.localize);
                 DrawSummaryBar(context);
                 ImGui::Separator();
                 DrawCategoryTabs(context);
@@ -998,24 +995,24 @@ namespace ESPExplorerAE
                 const auto* selectionHelp = L(context, "Inventory", "sSelectionHelp", "Ctrl+click toggles items; Shift+click selects a range. Right-click a column header to choose columns.");
                 if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", selectionHelp);
                 const auto selectedEntries = CopySelectedEntries(visibleEntries);
-                if (selectedEntries.size() > 1) {
-                    const auto actionsLabel = std::string(L(context, "General", "sActions", "Actions")) + " (" + std::to_string(selectedEntries.size()) + ")###InventorySelectionActions";
-                    if (ImGuiWidgetUtils::DrawWrappedButton(actionsLabel.c_str(), firstSelectionButton)) ImGui::OpenPopup("InventorySelectionMenu");
+                // Keep the toolbar and summary height independent of selection so
+                // rows stay under the pointer during clicks and inventory refreshes.
+                ImGui::BeginDisabled(selectedEntries.size() < 2);
+                const auto actionsLabel = std::string(L(context, "General", "sActions", "Actions")) + "###InventorySelectionActions";
+                if (ImGuiWidgetUtils::DrawWrappedButton(actionsLabel.c_str(), firstSelectionButton)) ImGui::OpenPopup("InventorySelectionMenu");
+                ImGui::EndDisabled();
+                std::uint64_t selectedCount{};
+                double selectedWeight{};
+                for (const auto& entry : selectedEntries) {
+                    selectedCount += entry.count;
+                    if (std::isfinite(entry.totalWeight)) selectedWeight += entry.totalWeight;
                 }
-                if (!selectedEntries.empty()) {
-                    std::uint64_t selectedCount{};
-                    double selectedWeight{};
-                    for (const auto& entry : selectedEntries) {
-                        selectedCount += entry.count;
-                        if (std::isfinite(entry.totalWeight)) selectedWeight += entry.totalWeight;
-                    }
-                    ImGui::TextWrapped("%s: %zu / %zu  |  %s: %zu (%s: %llu, %s: %.2f)",
-                        L(context, "General", "sVisible", "Visible"), visibleEntries.size(), state.cachedInventory.size(), L(context, "General", "sSelected", "Selected"), selectedEntries.size(),
-                        L(context, "Inventory", "sQuantity", "Qty"), static_cast<unsigned long long>(selectedCount), L(context, "Inventory", "sStackWeight", "Stack Weight"), selectedWeight);
-                } else {
-                    ImGui::TextWrapped("%s: %zu / %zu  |  %s: 0", L(context, "General", "sVisible", "Visible"), visibleEntries.size(), state.cachedInventory.size(),
-                        L(context, "General", "sSelected", "Selected"));
-                }
+                const auto summary = std::format("{}: {} / {}  |  {}: {} ({}: {}, {}: {:.2f})",
+                    L(context, "General", "sVisible", "Visible"), visibleEntries.size(), state.cachedInventory.size(), L(context, "General", "sSelected", "Selected"), selectedEntries.size(),
+                    L(context, "Inventory", "sQuantity", "Qty"), selectedCount, L(context, "Inventory", "sStackWeight", "Stack Weight"), selectedWeight);
+                const float summaryWidth = ImGui::GetContentRegionAvail().x;
+                ImGui::TextUnformatted(summary.c_str());
+                if (ImGui::GetItemRectSize().x > summaryWidth && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", summary.c_str());
                 if (ImGui::BeginPopup("InventorySelectionMenu")) {
                     if (inventoryChanged || state.selectionChanged || selectedEntries.size() < 2) ImGui::CloseCurrentPopup();
                     ImGui::Text("%s: %zu", L(context, "General", "sSelected", "Selected"), selectedEntries.size());
@@ -1199,7 +1196,22 @@ namespace ESPExplorerAE
                     }
                 }
 
-                if (ImGui::BeginChild("InventoryDetailPane", detailPaneSize, sideBySide)) {
+                const auto detailGroup = selectedEntry ? selectedEntry->groupID : 0;
+                const auto selectedInstance = selectedEntry ? SelectedInstance(*selectedEntry) : std::nullopt;
+                const auto detailToken = selectedInstance ? selectedEntry->source->stacks[*selectedInstance].token : 0;
+                const bool newFeedback = state.detailsAdmission != state.admission || state.detailsRejection != state.rejection;
+                if (state.detailsGroup != detailGroup || state.detailsToken != detailToken || newFeedback) ImGui::SetNextWindowScroll(ImVec2(0.0f, 0.0f));
+                state.detailsGroup = detailGroup;
+                state.detailsToken = detailToken;
+                state.detailsAdmission = state.admission;
+                state.detailsRejection = state.rejection;
+                // Reserve the scrollbar from the first frame: changing detail
+                // length must not rewrap controls a frame after selection.
+                if (ImGui::BeginChild("InventoryDetailPane", detailPaneSize, sideBySide, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
+                    if (state.selectionChanged) ImGui::TextWrapped("%s", L(context, "Inventory", "sSelectionChanged", "Inventory changed. Select the items again."));
+                    const auto feedback = InventoryFeedback::Message(state.rejection, context.localize);
+                    if (!feedback.empty()) ImGui::TextWrapped("%s", feedback.c_str());
+                    ActionFeedback::Draw(state.admission, context.localize);
                     if (selectedEntry) {
                         DrawInventoryDetails(*selectedEntry, context);
                     } else {

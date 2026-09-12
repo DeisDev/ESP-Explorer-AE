@@ -62,6 +62,8 @@ Target version: **1.6.0**.
 
 ### Fixed
 
+- Inventory rows stay in place when selecting items or receiving action feedback,
+  and inventory and Plugin Browser details keep a steady width as their content changes.
 - Popouts stay above the workspace when browsing, fit the current screen, and
   keep modal dialogs above tool windows. Dialogs wait for existing popups to
   close, and long confirmation messages scroll above the action buttons.

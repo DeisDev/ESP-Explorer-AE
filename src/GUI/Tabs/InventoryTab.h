@@ -63,6 +63,10 @@ namespace ESPExplorerAE
         bool focusPending{};
         InventoryQuickState quick;
         bool selectionChanged{};
+        std::uint64_t detailsGroup{};
+        std::uint64_t detailsToken{};
+        ActionAdmission detailsAdmission{ ActionAdmission::Accepted };
+        InventoryRejection detailsRejection{ InventoryRejection::None };
         OrderedSelection<std::uint64_t> selection;
         std::unordered_map<std::uint64_t, std::uint64_t> instanceChoices;
         std::unordered_map<std::uint64_t, int> desiredCounts;
