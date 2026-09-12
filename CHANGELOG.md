@@ -62,6 +62,9 @@ Target version: **1.6.0**.
 
 ### Fixed
 
+- The menu recovers missed focus notifications after loading, so opening it no
+  longer depends on alt-tabbing. Rendering uses the current screen buffer even
+  when the game leaves a different drawing target active.
 - Inventory rows stay in place when selecting items or receiving action feedback,
   and inventory and Plugin Browser details keep a steady width as their content changes.
 - Popouts stay above the workspace when browsing, fit the current screen, and

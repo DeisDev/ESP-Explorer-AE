@@ -132,18 +132,6 @@ namespace ESPExplorerAE
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
 
-        if (auto* swapChain = Resources().SwapChain()) {
-            DXGI_SWAP_CHAIN_DESC scDesc{};
-            if (SUCCEEDED(swapChain->GetDesc(&scDesc))) {
-                ImGuiIO& ioRef = ImGui::GetIO();
-                const float bbW = static_cast<float>(scDesc.BufferDesc.Width);
-                const float bbH = static_cast<float>(scDesc.BufferDesc.Height);
-                if (bbW > 0.0f && bbH > 0.0f && ioRef.DisplaySize.x > 0.0f && ioRef.DisplaySize.y > 0.0f) {
-                    ioRef.DisplayFramebufferScale = ImVec2(bbW / ioRef.DisplaySize.x, bbH / ioRef.DisplaySize.y);
-                }
-            }
-        }
-
         ImGui::NewFrame();
 
         if (auto* font = FontManager::GetCurrentFont()) {
@@ -164,7 +152,11 @@ namespace ESPExplorerAE
         }
 
         ImGui::Render();
-        ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+        const auto result = Resources().RenderDrawData(ImGui::GetDrawData());
+        static HRESULT previousResult = S_OK;
+        if (FAILED(result) && result != previousResult) REX::WARN("Overlay back-buffer draw failed: 0x{:08X}", static_cast<std::uint32_t>(result));
+        else if (SUCCEEDED(result) && FAILED(previousResult)) REX::INFO("Overlay back-buffer drawing recovered");
+        previousResult = result;
     }
 
     RendererResources& ImGuiRenderer::Resources()

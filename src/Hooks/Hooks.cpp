@@ -224,6 +224,26 @@ namespace ESPExplorerAE
             trackedMouseButtons.fill(false);
         }
 
+        void UpdateWindowFocus(bool focused)
+        {
+            std::lock_guard lock(inputMutex);
+            OverlayController::SetFocused(focused);
+            if (focused) return;
+            trackedKeys.fill(false);
+            trackedMouseButtons.fill(false);
+            inputMessages.clear();
+            PerformanceProfile().Observe(ProfileGauge::InputQueue, 0);
+            inputResetRequested = true;
+        }
+
+        void RefreshWindowFocus(HWND window)
+        {
+            // Activation messages can be missed during startup or intercepted by
+            // another window hook. Reconcile with the actual foreground window;
+            // owned dialogs and other applications must still suspend capture.
+            UpdateWindowFocus(window && GetForegroundWindow() == window && !IsIconic(window));
+        }
+
     }
 
     void Hooks::UpdateCursorState()
@@ -271,7 +291,7 @@ namespace ESPExplorerAE
         gameWindow = window;
         hookedSwapChain = swapChain;
         OverlayController::SetVisible(Config::Get().showOnStartup);
-        OverlayController::SetFocused(GetForegroundWindow() == window);
+        RefreshWindowFocus(window);
         REX::INFO("Hooks installed: install thread {}, window thread {}, optional cursor import {}",
             GetCurrentThreadId(), GetWindowThreadProcessId(window, nullptr), cursorSlot != nullptr);
     }
@@ -287,7 +307,7 @@ namespace ESPExplorerAE
         }
         const auto forward = [&] { return previous ? previous(swapChain, syncInterval, flags) : S_OK; };
         static thread_local bool rendering{};
-        if (!active || rendering) return forward();
+        if (!active || rendering || (flags & DXGI_PRESENT_TEST)) return forward();
         std::unique_lock renderLock(renderMutex, std::try_to_lock);
         if (!renderLock.owns_lock()) return forward();
         // The first target Present owns all ImGui and UI state. Another Present
@@ -338,6 +358,7 @@ namespace ESPExplorerAE
                 Config::FlushPendingSaveIfDue();
                 const auto& settings = Config::Get();
                 toggleKey = settings.toggleKey;
+                RefreshWindowFocus(gameWindow);
                 ActionService::UpdatePolicy(settings.componentSubstitution, settings.allowGameplayActionsInMainMenu);
                 OverlayController::Configure({ settings.pauseGameWhenMenuOpen, settings.hidePlayerHUDWhenMenuOpen, settings.godModeWhenMenuOpen });
                 if (swapChain && !ImGuiRenderer::IsInitialized() && std::chrono::steady_clock::now() >= retryRenderer) {
@@ -451,18 +472,12 @@ namespace ESPExplorerAE
             UpdateTrackedKeyboardState(msg, wParam);
             UpdateTrackedMouseState(msg, wParam);
         }
-        if (msg == WM_ACTIVATEAPP) OverlayController::SetFocused(wParam != 0);
-        else if (msg == WM_ACTIVATE) OverlayController::SetFocused(LOWORD(wParam) != WA_INACTIVE);
-        else if (msg == WM_SETFOCUS) OverlayController::SetFocused(true);
-        else if (msg == WM_KILLFOCUS) OverlayController::SetFocused(false);
+        if (msg == WM_ACTIVATEAPP) UpdateWindowFocus(wParam != 0);
+        else if (msg == WM_ACTIVATE) UpdateWindowFocus(LOWORD(wParam) != WA_INACTIVE);
+        else if (msg == WM_SETFOCUS) UpdateWindowFocus(true);
+        else if (msg == WM_KILLFOCUS) UpdateWindowFocus(false);
+        else if (IsInputMessage(msg)) RefreshWindowFocus(hwnd);
         const auto facts = OverlayController::Facts();
-        if (!facts.focused) {
-            std::lock_guard lock(inputMutex);
-            trackedKeys.fill(false);
-            trackedMouseButtons.fill(false);
-            inputMessages.clear();
-            inputResetRequested = true;
-        }
         if (msg == WM_KEYUP && wParam == toggleKey && facts.focused && !facts.modal && !facts.keyboardDialog &&
             static_cast<ULONG_PTR>(GetMessageExtraInfo()) != kReleaseInputTag) {
             OverlayController::Toggle();

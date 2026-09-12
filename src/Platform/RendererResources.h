@@ -5,6 +5,7 @@
 #include <wrl/client.h>
 
 struct ImGuiContext;
+struct ImDrawData;
 
 namespace ESPExplorerAE
 {
@@ -21,6 +22,7 @@ namespace ESPExplorerAE
         RendererResources& operator=(const RendererResources&) = delete;
         bool Initialize(IDXGISwapChain* swapChain, HWND window, bool (*prepare)() = nullptr,
             void (*reset)() = nullptr, bool (*checkpoint)(RendererStage) = nullptr);
+        HRESULT RenderDrawData(ImDrawData* drawData);
         void Release();
         bool Ready() const { return ready; }
         ImGuiContext* Context() const { return imgui; }
