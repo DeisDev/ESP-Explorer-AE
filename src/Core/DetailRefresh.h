@@ -26,7 +26,9 @@ namespace ESPExplorerAE
         }
         std::optional<Ticket> Begin(std::uint64_t session, std::uint64_t catalogGeneration, bool catalogReady, Milliseconds now)
         {
-            if (inFlight || !requested || !catalogReady || !requested->formID || !requested->session || requested->session != session ||
+            // Session zero is the initial main menu, where the catalog can already
+            // be ready. Details require the current session, not a loaded game.
+            if (inFlight || !requested || !catalogReady || !requested->formID || requested->session != session ||
                 requested->catalogGeneration != catalogGeneration || now < refreshAt || now - requestedAt > RequestLease) return {};
             inFlight = Ticket{ *requested, revision };
             return inFlight;

@@ -62,6 +62,8 @@ Target version: **1.6.0**.
 
 ### Fixed
 
+- Plugin Browser record details no longer stay on "Loading record details..."
+  at the initial main menu before starting or loading a game.
 - Long detail values wrap within the pane, and changing records returns details
   to the top. Bulk giving remains available for eligible records when the active
   record in the selection is deleted.
