@@ -18,7 +18,7 @@ namespace ESPExplorerAE
         Give, GiveWithAmmo, Spawn, Place, AddSpell, RemoveSpell, AddPerk,
         RemovePerk, Outfit, ConstructedItem, CurrentAmmo, GodMode, Console, Teleport, Equip,
         StartQuest, CompleteQuest, SetWeather, PlaySound, SetGlobal,
-        InventoryRemove, InventoryDrop, InventoryEquip, InventoryUnequip, InventoryUse, InventoryAddBase, InventoryDuplicateWeapon,
+        InventoryRemove, InventoryDrop, InventoryEquip, InventoryUnequip, InventoryUse, InventoryAddBase, InventoryDuplicateItem,
         RestoreHealth, ToggleNoClip, SetPlayerLevel, AddPerkPoints, SetGameHour
     };
 
@@ -50,7 +50,7 @@ namespace ESPExplorerAE
         case ActionKind::InventoryEquip: return InventoryAction::Equip;
         case ActionKind::InventoryUnequip: return InventoryAction::Unequip;
         case ActionKind::InventoryUse: return InventoryAction::Use;
-        case ActionKind::InventoryDuplicateWeapon: return InventoryAction::DuplicateWeapon;
+        case ActionKind::InventoryDuplicateItem: return InventoryAction::DuplicateItem;
         default: return {};
         }
     }
@@ -63,7 +63,7 @@ namespace ESPExplorerAE
         case InventoryAction::Equip: return ActionKind::InventoryEquip;
         case InventoryAction::Unequip: return ActionKind::InventoryUnequip;
         case InventoryAction::Use: return ActionKind::InventoryUse;
-        case InventoryAction::DuplicateWeapon: return ActionKind::InventoryDuplicateWeapon;
+        case InventoryAction::DuplicateItem: return ActionKind::InventoryDuplicateItem;
         default: return static_cast<ActionKind>(-1);
         }
     }

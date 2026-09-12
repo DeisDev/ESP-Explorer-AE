@@ -6,7 +6,7 @@ namespace RE
 {
     class ExtraDataList;
     class TBO_InstanceData;
-    class TESObjectWEAP;
+    class TESBoundObject;
 }
 
 namespace ESPExplorerAE
@@ -20,6 +20,6 @@ namespace ESPExplorerAE
     // its own references. Cleanup also works when a prepared copy is abandoned.
     using OwnedInventoryExtra = std::unique_ptr<RE::ExtraDataList, InventoryExtraDeleter>;
 
-    OwnedInventoryExtra CopyWeaponInstanceExtra(RE::TESObjectWEAP& weapon,
+    OwnedInventoryExtra CopyInventoryInstanceExtra(RE::TESBoundObject& object,
         const RE::ExtraDataList* source, const RE::TBO_InstanceData* instance);
 }

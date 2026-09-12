@@ -47,6 +47,7 @@ namespace ESPExplorerAE
             InventoryTabState& state;
             const InventoryTabView& view;
             InventoryTabRequests& requests;
+            bool inventoryChanged{};
         public:
             InventoryView(InventoryTabState& value, const InventoryTabView& input, InventoryTabRequests& output) : state(value), view(input), requests(output) {}
 
@@ -145,10 +146,38 @@ namespace ESPExplorerAE
                 const bool unchanged = state.snapshot && next && state.snapshot->session == next->session && state.snapshot->generation == next->generation;
                 if (unchanged && state.catalogGeneration == context.catalog->generation) return;
                 if (!unchanged) {
+                    inventoryChanged = true;
+                    std::uint64_t retainedToken{};
+                    // Retain a single chosen stack across count changes or new
+                    // copies, never choose among different same-name instances.
+                    // Bulk selections and pending quantity edits still expire.
+                    if (state.snapshot && next && next->ready && state.snapshot->session == next->session &&
+                        next->generation >= state.snapshot->generation && state.selection.selected.size() == 1) {
+                        for (const auto& entry : state.cachedInventory) {
+                            if (!state.selection.selected.contains(entry.groupID)) continue;
+                            if (const auto chosen = SelectedInstance(entry)) {
+                                auto previous = entry.source->stacks[*chosen];
+                                if (const auto* current = next->Find(previous.token)) {
+                                    previous.count = current->count;
+                                    if (previous == *current) retainedToken = current->token;
+                                }
+                            }
+                            break;
+                        }
+                    }
                     state.selectionChanged = !state.selection.selected.empty();
                     state.selection.Clear();
                     state.instanceChoices.clear();
                     state.desiredCounts.clear();
+                    if (retainedToken) {
+                        for (const auto& group : next->groups) {
+                            if (std::ranges::none_of(group.stacks, [&](InventoryIndex index) { return next->stacks[index].token == retainedToken; })) continue;
+                            state.selection.Single(group.id);
+                            state.instanceChoices[group.id] = retainedToken;
+                            state.selectionChanged = false;
+                            break;
+                        }
+                    }
                 }
                 state.catalogGeneration = context.catalog->generation;
                 state.snapshot = next;
@@ -365,6 +394,7 @@ namespace ESPExplorerAE
 
             bool SubmitPrepared(const InventoryPreparation& prepared)
             {
+                if (inventoryChanged) return false;
                 state.rejection = prepared.rejection;
                 if (!prepared) return false;
                 if (prepared.plan.source->session != view.session) { state.admission = ActionAdmission::StaleSession; return false; }
@@ -375,6 +405,7 @@ namespace ESPExplorerAE
 
             void ConfirmEntries(std::span<const InventoryEntry> entries, InventoryAction action, std::string title, std::string message)
             {
+                if (inventoryChanged) return;
                 const auto prepared = PrepareEntries(entries, action);
                 state.rejection = prepared.rejection;
                 if (!prepared) return;
@@ -425,9 +456,9 @@ namespace ESPExplorerAE
                 return SubmitPrepared(PrepareEntries(std::span{ &entry, 1 }, InventoryAction::Use));
             }
 
-            bool DuplicateWeapon(const InventoryEntry& entry)
+            bool DuplicateItem(const InventoryEntry& entry)
             {
-                return SubmitPrepared(PrepareEntries(std::span{ &entry, 1 }, InventoryAction::DuplicateWeapon));
+                return SubmitPrepared(PrepareEntries(std::span{ &entry, 1 }, InventoryAction::DuplicateItem));
             }
 
             ImVec4 GetCategoryColor(std::string_view category, bool isQuestItem, bool isEquipped)
@@ -655,23 +686,8 @@ namespace ESPExplorerAE
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", L(context, "Inventory", "sTotalsHelp", "Totals include every instance in a row. Captured item weights may differ from Pip-Boy carry weight; values are not vendor prices."));
             }
 
-            void DrawInventoryDetails(const InventoryEntry& entry, const InventoryTabView& context)
+            void DrawInstanceSelector(const InventoryEntry& entry, const InventoryTabView& context)
             {
-                FormEntry formEntry{};
-                formEntry.formID = entry.formID;
-                formEntry.name = entry.name;
-                formEntry.category = ResolveCategoryLabel(entry.category, context);
-                formEntry.sourcePlugin = entry.sourcePlugin;
-
-                requests.details = DetailKey{ entry.formID, context.session, context.catalog->generation, context.advancedDetails };
-                FormDetailsViewContext detailsContext{
-                    .localize = context.localize,
-                    .showAdvancedDetailsView = context.advancedDetails,
-                    .catalog = context.catalog.get(),
-                    .details = context.details && context.details->key == *requests.details ? context.details : nullptr
-                };
-                ImGui::TextWrapped("%s", entry.name.empty() ? L(context, "General", "sUnnamed", "<Unnamed>") : entry.name.c_str());
-
                 if (entry.stacks.size() > 1) {
                     const auto chosen = SelectedInstance(entry);
                     const auto preview = chosen ? std::string(L(context, "Inventory", "sInstance", "Instance")) + " " + std::to_string(1 + (std::ranges::find(entry.stacks, *chosen) - entry.stacks.begin())) :
@@ -690,10 +706,30 @@ namespace ESPExplorerAE
                     }
                     if (!SelectedInstance(entry)) ImGui::TextWrapped("%s", L(context, "Inventory", "sInstanceRequired", "Choose an instance to equip, use, or duplicate. Group removal affects all captured stacks."));
                 }
+            }
+
+            void DrawInventoryDetails(const InventoryEntry& entry, const InventoryTabView& context)
+            {
+                FormEntry formEntry{};
+                formEntry.formID = entry.formID;
+                formEntry.name = entry.name;
+                formEntry.category = ResolveCategoryLabel(entry.category, context);
+                formEntry.sourcePlugin = entry.sourcePlugin;
+
+                requests.details = DetailKey{ entry.formID, context.session, context.catalog->generation, context.advancedDetails };
+                FormDetailsViewContext detailsContext{
+                    .localize = context.localize,
+                    .showAdvancedDetailsView = context.advancedDetails,
+                    .catalog = context.catalog.get(),
+                    .details = context.details && context.details->key == *requests.details ? context.details : nullptr
+                };
+                ImGui::TextWrapped("%s", entry.name.empty() ? L(context, "General", "sUnnamed", "<Unnamed>") : entry.name.c_str());
+
+                DrawInstanceSelector(entry, context);
                 const auto selected = SelectedInstance(entry);
                 const auto& instance = entry.source->stacks[selected.value_or(entry.representative)];
                 bool firstAction = true;
-                ImGui::BeginDisabled(!context.gameplayReady || !selected);
+                ImGui::BeginDisabled(inventoryChanged || !context.gameplayReady || !selected);
                 if (IsEquippable(entry)) {
                     if (ImGuiWidgetUtils::DrawWrappedButton(instance.isEquipped ? L(context, "Inventory", "sUnequipItem", "Unequip") : L(context, "Inventory", "sEquipItem", "Equip"), firstAction)) {
                         EquipInventoryEntry(entry, !instance.isEquipped);
@@ -701,16 +737,14 @@ namespace ESPExplorerAE
                 } else if (IsAidCategory(entry.category)) {
                     if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "Inventory", "sUseItem", "Use"), firstAction)) UseInventoryEntry(entry);
                 }
-                if (entry.category == "WEAP") {
-                    ImGui::BeginDisabled(!InventoryActionAllowed(instance, InventoryAction::DuplicateWeapon));
-                    if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "Inventory", "sDuplicateWeapon", "Duplicate Weapon"), firstAction)) DuplicateWeapon(entry);
-                    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", L(context, "Inventory", "sDuplicateWeaponHelp", "Adds one copy of the chosen weapon with its attachments, legendary effects, name, condition, and instance stats. The copy is not equipped or favorited."));
-                    ImGui::EndDisabled();
-                }
+                ImGui::BeginDisabled(!InventoryActionAllowed(instance, InventoryAction::DuplicateItem));
+                if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "Inventory", "sDuplicateItem", "Duplicate Item"), firstAction)) DuplicateItem(entry);
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", L(context, "Inventory", "sDuplicateItemHelp", "Adds one copy of the chosen item with its attachments, legendary effects, name, condition, and instance stats. The copy is not equipped or favorited."));
+                ImGui::EndDisabled();
                 ImGui::EndDisabled();
                 if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "General", "sActions", "Actions"), firstAction)) ImGui::OpenPopup("InventoryDetailActions");
                 if (ImGui::BeginPopup("InventoryDetailActions")) {
-                    if (state.selectionChanged) ImGui::CloseCurrentPopup();
+                    if (inventoryChanged || state.selectionChanged) ImGui::CloseCurrentPopup();
                     else DrawInventoryContextMenu(entry, context);
                     ImGui::EndPopup();
                 }
@@ -820,6 +854,7 @@ namespace ESPExplorerAE
                 const std::string formIDText = FormatUtils::FormID(entry.formID);
                 ImGui::TextDisabled("%s  |  %s", formIDText.c_str(), entry.sourcePlugin.c_str());
                 ImGui::Separator();
+                DrawInstanceSelector(entry, context);
 
                 if (!gameplayActionsAllowed) {
                     ImGui::BeginDisabled(true);
@@ -857,12 +892,6 @@ namespace ESPExplorerAE
                     if (ImGui::MenuItem(equipped ? L(context, "Inventory", "sUnequipItem", "Unequip") : L(context, "Inventory", "sEquipItem", "Equip"), nullptr, false, SelectedInstance(entry).has_value())) {
                         EquipInventoryEntry(entry, !equipped);
                     }
-                    if (entry.category == "WEAP") {
-                        const auto selected = SelectedInstance(entry);
-                        const bool allowed = selected && InventoryActionAllowed(entry.source->stacks[*selected], InventoryAction::DuplicateWeapon);
-                        if (ImGui::MenuItem(L(context, "Inventory", "sDuplicateWeapon", "Duplicate Weapon"), nullptr, false, allowed)) DuplicateWeapon(entry);
-                        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", L(context, "Inventory", "sDuplicateWeaponHelp", "Adds one copy of the chosen weapon with its attachments, legendary effects, name, condition, and instance stats. The copy is not equipped or favorited."));
-                    }
                     if (ImGui::MenuItem(L(context, "Inventory", "sAddBaseItem", "Add Base Item"))) {
                         AddBaseItems(entry, 1);
                     }
@@ -872,6 +901,11 @@ namespace ESPExplorerAE
                         UseInventoryEntry(entry);
                     }
                 }
+
+                const auto selected = SelectedInstance(entry);
+                const bool canDuplicate = selected && InventoryActionAllowed(entry.source->stacks[*selected], InventoryAction::DuplicateItem);
+                if (ImGui::MenuItem(L(context, "Inventory", "sDuplicateItem", "Duplicate Item"), nullptr, false, canDuplicate)) DuplicateItem(entry);
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", L(context, "Inventory", "sDuplicateItemHelp", "Adds one copy of the chosen item with its attachments, legendary effects, name, condition, and instance stats. The copy is not equipped or favorited."));
 
                 if (!gameplayActionsAllowed) {
                     ImGui::EndDisabled();
@@ -983,7 +1017,7 @@ namespace ESPExplorerAE
                         L(context, "General", "sSelected", "Selected"));
                 }
                 if (ImGui::BeginPopup("InventorySelectionMenu")) {
-                    if (state.selectionChanged || selectedEntries.size() < 2) ImGui::CloseCurrentPopup();
+                    if (inventoryChanged || state.selectionChanged || selectedEntries.size() < 2) ImGui::CloseCurrentPopup();
                     ImGui::Text("%s: %zu", L(context, "General", "sSelected", "Selected"), selectedEntries.size());
                     ImGui::Separator();
                     ImGui::BeginDisabled(!context.gameplayReady);
@@ -1133,7 +1167,7 @@ namespace ESPExplorerAE
                                 ImGui::PopStyleColor();
 
                                 if (ImGui::BeginPopup("InventoryRowContext")) {
-                                    if (state.selectionChanged) ImGui::CloseCurrentPopup();
+                                    if (inventoryChanged || state.selectionChanged) ImGui::CloseCurrentPopup();
                                     else DrawInventoryContextMenu(entry, context);
                                     ImGui::EndPopup();
                                 }

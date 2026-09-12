@@ -1,7 +1,7 @@
 #include "Game/InventoryRuntime.h"
 #include "pch.h"
 #include "Game/ActionExecutor.h"
-#include "Game/WeaponInstanceCopy.h"
+#include "Game/InventoryInstanceCopy.h"
 #include "Core/StandardForms.h"
 #include <RE/A/ActorEquipManager.h>
 
@@ -356,9 +356,8 @@ namespace ESPExplorerAE
         ActionEffect effect{ .formID = expected.formID, .count = request.count, .name = expected.name };
         const bool destructive = *operation == InventoryAction::Remove || *operation == InventoryAction::Drop;
         const bool equipAction = *operation == InventoryAction::Equip || *operation == InventoryAction::Unequip;
-        if (*operation == InventoryAction::DuplicateWeapon) {
-            auto* weapon = object->As<RE::TESObjectWEAP>();
-            auto copy = weapon ? CopyWeaponInstanceExtra(*weapon, identity.extra.get(), instance) : OwnedInventoryExtra{};
+        if (*operation == InventoryAction::DuplicateItem) {
+            auto copy = CopyInventoryInstanceExtra(*object, identity.extra.get(), instance);
             if (!copy) {
                 effect.status = ActionStatus::Failed;
             } else if (ready()) {
@@ -372,7 +371,7 @@ namespace ESPExplorerAE
                     try {
                         effect.after = player->GetInventoryObjectCount(object);
                         if (*effect.after == *effect.before + 1) effect.status = ActionStatus::VerifiedChanged;
-                    } catch (...) { REX::WARN("Weapon copy dispatched but count observation failed for {:08X}", expected.formID); }
+                    } catch (...) { REX::WARN("Inventory copy dispatched but count observation failed for {:08X}", expected.formID); }
                 }
             } else outcome.inventoryRejection = isCurrent() ? InventoryRejection::Unavailable : InventoryRejection::StaleSession;
         } else if (equipAction && expected.isEquipped == (*operation == InventoryAction::Equip)) {

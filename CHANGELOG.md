@@ -15,8 +15,8 @@ Target version: **1.6.0**.
 
 - Resizable Plugin Browser panes, selection clearing, and a compact Copy menu
   with EditorID and record-source copying for single and multiple selections.
-- Duplicate an inventory weapon with its attachments, legendary effects, custom
-  name, condition, and instance stats using the chosen instance's actions.
+- Duplicate inventory items, including weapons and armor, with their extra data,
+  attachments, legendary effects, custom name, condition, and instance stats.
 - Inventory filters for Pip-Boy favorites, legendary items, and quest items;
   sortable stack weight and value totals; and Select Visible/Clear Selection
   controls with selected quantity and weight totals.
@@ -62,6 +62,9 @@ Target version: **1.6.0**.
 
 ### Fixed
 
+- Inventory duplication remains available after making a copy. The selected
+  instance survives quantity changes and added stacks, and the context menu
+  lets you choose between different instances of the same item.
 - Plugin Browser record details no longer stay on "Loading record details..."
   at the initial main menu before starting or loading a game.
 - Long detail values wrap within the pane, and changing records returns details

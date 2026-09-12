@@ -1,4 +1,4 @@
-#include "Game/WeaponInstanceCopy.h"
+#include "Game/InventoryInstanceCopy.h"
 #include "pch.h"
 
 #include <RE/B/BGSObjectInstanceExtra.h>
@@ -32,28 +32,46 @@ namespace ESPExplorerAE
         RE::free(extra);
     }
 
-    OwnedInventoryExtra CopyWeaponInstanceExtra(RE::TESObjectWEAP& weapon,
+    OwnedInventoryExtra CopyInventoryInstanceExtra(RE::TESBoundObject& object,
         const RE::ExtraDataList* source, const RE::TBO_InstanceData* instance)
     {
-        if (instance && !RE::fallout_cast<const RE::TESObjectWEAP::InstanceData*>(instance)) return {};
+        const auto* baseInstance = object.GetBaseInstanceData();
+        const auto* sourceInstance = instance ? instance : baseInstance;
+        if (sourceInstance && object.As<RE::TESObjectWEAP>() && !RE::fallout_cast<const RE::TESObjectWEAP::InstanceData*>(sourceInstance)) return {};
+        const auto* armorInstance = sourceInstance ? RE::fallout_cast<const RE::TESObjectARMO::InstanceData*>(sourceInstance) : nullptr;
+        if (sourceInstance && object.As<RE::TESObjectARMO>() && !armorInstance) return {};
+        // Never silently lose a source instance if its resolved handle differs.
+        if (const auto* data = source ? source->GetByType<RE::ExtraInstanceData>() : nullptr;
+            data && data->data && data->data.get() != sourceInstance) return {};
         OwnedInventoryExtra copy{ new RE::ExtraDataList };
         copy->IncRef();
         if (source) copy->CopyList(source);
 
         // CopyList deep-copies BGSObjectInstanceExtra (including disabled mods,
         // attachment indices and ranks), but shares ExtraInstanceData::data.
-        // TESBoundObject::CreateInstanceData(source) dispatches the weapon's
-        // engine copy constructor: 1.11.240 RVA 0x478100 -> 0x473AF0. It copies
-        // all instance stats and owned arrays, without reapplying/rerolling mods.
-        RE::BSTSmartPointer<RE::TBO_InstanceData> copiedInstance{ weapon.CreateInstanceData(instance) };
-        if (!copiedInstance || copiedInstance.get() == instance || copiedInstance.get() == weapon.GetBaseInstanceData()) return {};
-        if (auto* data = copy->GetByType<RE::ExtraInstanceData>()) {
-            data->base = &weapon;
-            data->data = std::move(copiedInstance);
-        } else {
-            copy->AddExtra(new RE::ExtraInstanceData(&weapon, std::move(copiedInstance)));
+        // The bound object's virtual clone handles weapons and armor without
+        // reapplying mods. Other inventory items can have extras without any
+        // TBO instance stats; their null default clone is not a copy failure.
+        if (sourceInstance) {
+            auto* cloned = object.CreateInstanceData(sourceInstance);
+            // Reject borrowed/embedded handles before adopting ownership.
+            if (!cloned || cloned == sourceInstance || cloned == baseInstance) return {};
+            RE::BSTSmartPointer<RE::TBO_InstanceData> copiedInstance{ cloned };
+            if (armorInstance) {
+                auto* copiedArmor = RE::fallout_cast<RE::TESObjectARMO::InstanceData*>(cloned);
+                if (!copiedArmor) return {};
+                // 1.11.240's armor member copy (RVA 0x460A70) omits this
+                // declared field, leaving the constructor's default color.
+                copiedArmor->colorRemappingIndex = armorInstance->colorRemappingIndex;
+            }
+            if (auto* data = copy->GetByType<RE::ExtraInstanceData>()) {
+                data->base = &object;
+                data->data = std::move(copiedInstance);
+            } else {
+                copy->AddExtra(new RE::ExtraInstanceData(&object, std::move(copiedInstance)));
+            }
         }
-        // Even an unmodified weapon must suppress AddInventoryItem's template
+        // Even an unmodified item must suppress AddInventoryItem's template
         // generation. An explicit empty mod list preserves its current stats.
         if (!copy->HasType<RE::BGSObjectInstanceExtra>()) copy->AddExtra(new RE::BGSObjectInstanceExtra);
 

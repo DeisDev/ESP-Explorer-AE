@@ -58,7 +58,7 @@ namespace ESPExplorerAE
             case ActionKind::InventoryEquip: return L("Inventory", "sEquipItem", "Equip") + " " + name;
             case ActionKind::InventoryUnequip: return L("Inventory", "sUnequipItem", "Unequip") + " " + name;
             case ActionKind::InventoryUse: return L("Inventory", "sUseItem", "Use") + " " + name;
-            case ActionKind::InventoryDuplicateWeapon: return L("Inventory", "sDuplicateWeapon", "Duplicate Weapon") + " " + name;
+            case ActionKind::InventoryDuplicateItem: return L("Inventory", "sDuplicateItem", "Duplicate Item") + " " + name;
             case ActionKind::InventoryAddBase: return L("Inventory", "sAddBaseItem", "Add Base Item") + " " + name + " x" + std::to_string(request.count);
             }
             return name;
