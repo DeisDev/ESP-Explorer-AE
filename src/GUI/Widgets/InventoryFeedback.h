@@ -14,7 +14,7 @@ namespace ESPExplorerAE::InventoryFeedback
             return localize("Inventory", "sSelectionChanged", "Inventory changed. Select the items again.");
         case InventoryRejection::Invalid: return localize("Inventory", "sInvalidTarget", "The selected inventory action cannot be validated.");
         case InventoryRejection::QuestItem: return localize("Inventory", "sQuestRestriction", "Quest items cannot be removed or dropped.");
-        case InventoryRejection::AmbiguousInstance: return localize("Inventory", "sInstanceRequired", "Choose an instance to equip or use. Group removal affects all captured stacks.");
+        case InventoryRejection::AmbiguousInstance: return localize("Inventory", "sInstanceRequired", "Choose an instance to equip, use, or duplicate. Group removal affects all captured stacks.");
         case InventoryRejection::TooLarge: return localize("Inventory", "sReduceSelection", "Reduce the selected stacks or quantity, then try again.");
         }
         return {};

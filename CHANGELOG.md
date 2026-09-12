@@ -13,6 +13,8 @@ Target version: **1.6.0**.
 
 ### Added
 
+- Duplicate an inventory weapon with its attachments, legendary effects, custom
+  name, condition, and instance stats using the chosen instance's actions.
 - Inventory filters for Pip-Boy favorites, legendary items, and quest items;
   sortable stack weight and value totals; and Select Visible/Clear Selection
   controls with selected quantity and weight totals.

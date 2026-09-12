@@ -425,6 +425,11 @@ namespace ESPExplorerAE
                 return SubmitPrepared(PrepareEntries(std::span{ &entry, 1 }, InventoryAction::Use));
             }
 
+            bool DuplicateWeapon(const InventoryEntry& entry)
+            {
+                return SubmitPrepared(PrepareEntries(std::span{ &entry, 1 }, InventoryAction::DuplicateWeapon));
+            }
+
             ImVec4 GetCategoryColor(std::string_view category, bool isQuestItem, bool isEquipped)
             {
                 const auto& textColor = ImGui::GetStyleColorVec4(ImGuiCol_Text);
@@ -683,7 +688,7 @@ namespace ESPExplorerAE
                         }
                         ImGui::EndCombo();
                     }
-                    if (!SelectedInstance(entry)) ImGui::TextWrapped("%s", L(context, "Inventory", "sInstanceRequired", "Choose an instance to equip or use. Group removal affects all captured stacks."));
+                    if (!SelectedInstance(entry)) ImGui::TextWrapped("%s", L(context, "Inventory", "sInstanceRequired", "Choose an instance to equip, use, or duplicate. Group removal affects all captured stacks."));
                 }
                 const auto selected = SelectedInstance(entry);
                 const auto& instance = entry.source->stacks[selected.value_or(entry.representative)];
@@ -695,6 +700,12 @@ namespace ESPExplorerAE
                     }
                 } else if (IsAidCategory(entry.category)) {
                     if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "Inventory", "sUseItem", "Use"), firstAction)) UseInventoryEntry(entry);
+                }
+                if (entry.category == "WEAP") {
+                    ImGui::BeginDisabled(!InventoryActionAllowed(instance, InventoryAction::DuplicateWeapon));
+                    if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "Inventory", "sDuplicateWeapon", "Duplicate Weapon"), firstAction)) DuplicateWeapon(entry);
+                    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", L(context, "Inventory", "sDuplicateWeaponHelp", "Adds one copy of the chosen weapon with its attachments, legendary effects, name, condition, and instance stats. The copy is not equipped or favorited."));
+                    ImGui::EndDisabled();
                 }
                 ImGui::EndDisabled();
                 if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "General", "sActions", "Actions"), firstAction)) ImGui::OpenPopup("InventoryDetailActions");
@@ -845,6 +856,12 @@ namespace ESPExplorerAE
                     const bool equipped = SelectedInstanceEquipped(entry);
                     if (ImGui::MenuItem(equipped ? L(context, "Inventory", "sUnequipItem", "Unequip") : L(context, "Inventory", "sEquipItem", "Equip"), nullptr, false, SelectedInstance(entry).has_value())) {
                         EquipInventoryEntry(entry, !equipped);
+                    }
+                    if (entry.category == "WEAP") {
+                        const auto selected = SelectedInstance(entry);
+                        const bool allowed = selected && InventoryActionAllowed(entry.source->stacks[*selected], InventoryAction::DuplicateWeapon);
+                        if (ImGui::MenuItem(L(context, "Inventory", "sDuplicateWeapon", "Duplicate Weapon"), nullptr, false, allowed)) DuplicateWeapon(entry);
+                        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", L(context, "Inventory", "sDuplicateWeaponHelp", "Adds one copy of the chosen weapon with its attachments, legendary effects, name, condition, and instance stats. The copy is not equipped or favorited."));
                     }
                     if (ImGui::MenuItem(L(context, "Inventory", "sAddBaseItem", "Add Base Item"))) {
                         AddBaseItems(entry, 1);

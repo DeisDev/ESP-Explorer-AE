@@ -9,7 +9,7 @@
 
 namespace ESPExplorerAE
 {
-    enum class InventoryAction { Remove, Drop, Equip, Unequip, Use };
+    enum class InventoryAction { Remove, Drop, Equip, Unequip, Use, DuplicateWeapon };
     enum class InventoryRejection { None, Unavailable, StaleSession, Invalid, MissingStack, ChangedStack, QuestItem, AmbiguousInstance, TooLarge };
 
     struct InventoryStep
@@ -85,6 +85,7 @@ namespace ESPExplorerAE
         case InventoryAction::Remove: case InventoryAction::Drop: return !stack.isQuestItem;
         case InventoryAction::Equip: case InventoryAction::Unequip: return stack.category == "WEAP" || stack.category == "ARMO";
         case InventoryAction::Use: return stack.category == "ALCH" || stack.category == "BOOK" || stack.category == "NOTE";
+        case InventoryAction::DuplicateWeapon: return stack.category == "WEAP";
         default: return false;
         }
     }
@@ -138,7 +139,8 @@ namespace ESPExplorerAE
         if (expected != *actual) return InventoryRejection::ChangedStack;
         if ((plan.action == InventoryAction::Remove || plan.action == InventoryAction::Drop) && actual->isQuestItem) return InventoryRejection::QuestItem;
         if (!InventoryActionAllowed(*actual, plan.action) || step.count > actual->count ||
-            ((plan.action == InventoryAction::Equip || plan.action == InventoryAction::Unequip || plan.action == InventoryAction::Use) && step.count != 1)) return InventoryRejection::Invalid;
+            ((plan.action == InventoryAction::Equip || plan.action == InventoryAction::Unequip || plan.action == InventoryAction::Use ||
+                plan.action == InventoryAction::DuplicateWeapon) && step.count != 1)) return InventoryRejection::Invalid;
         return InventoryRejection::None;
     }
 }

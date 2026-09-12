@@ -1,6 +1,7 @@
 #include "Game/InventoryRuntime.h"
 #include "pch.h"
 #include "Game/ActionExecutor.h"
+#include "Game/WeaponInstanceCopy.h"
 #include "Core/StandardForms.h"
 #include <RE/A/ActorEquipManager.h>
 
@@ -355,7 +356,26 @@ namespace ESPExplorerAE
         ActionEffect effect{ .formID = expected.formID, .count = request.count, .name = expected.name };
         const bool destructive = *operation == InventoryAction::Remove || *operation == InventoryAction::Drop;
         const bool equipAction = *operation == InventoryAction::Equip || *operation == InventoryAction::Unequip;
-        if (equipAction && expected.isEquipped == (*operation == InventoryAction::Equip)) {
+        if (*operation == InventoryAction::DuplicateWeapon) {
+            auto* weapon = object->As<RE::TESObjectWEAP>();
+            auto copy = weapon ? CopyWeaponInstanceExtra(*weapon, identity.extra.get(), instance) : OwnedInventoryExtra{};
+            if (!copy) {
+                effect.status = ActionStatus::Failed;
+            } else if (ready()) {
+                effect.before = player->GetInventoryObjectCount(object);
+                // Pass a new owning engine handle while retaining our reference
+                // through dispatch/observation. Never hand the original extra
+                // list to an insertion API, or change the source stack count.
+                player->AddInventoryItem(object, RE::BSTSmartPointer<RE::ExtraDataList>{ copy.get() }, 1, nullptr, nullptr, nullptr);
+                effect.status = ActionStatus::Dispatched;
+                if (ready()) {
+                    try {
+                        effect.after = player->GetInventoryObjectCount(object);
+                        if (*effect.after == *effect.before + 1) effect.status = ActionStatus::VerifiedChanged;
+                    } catch (...) { REX::WARN("Weapon copy dispatched but count observation failed for {:08X}", expected.formID); }
+                }
+            } else outcome.inventoryRejection = isCurrent() ? InventoryRejection::Unavailable : InventoryRejection::StaleSession;
+        } else if (equipAction && expected.isEquipped == (*operation == InventoryAction::Equip)) {
             effect.status = ActionStatus::NoChange;
             effect.before = expected.isEquipped;
             effect.after = effect.before;
