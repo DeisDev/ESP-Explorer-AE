@@ -55,15 +55,15 @@ namespace ESPExplorerAE::PluginBrowserPanels
                 ImGui::BeginTooltip();
                 ImGui::PushTextWrapPos(ImGui::GetFontSize() * 28);
                 ImGui::TextUnformatted(localize("PluginBrowser", "sLoadedArchivesScope",
-                    "Archives in the engine's loaded archive registry at the last data refresh. This list is independent of record filters and plugin selection. Archive ownership and asset override order are not inferred."));
+                    "Archives loaded by the game at last refresh. Unaffected by plugin selection or filters."));
                 ImGui::PopTextWrapPos();
                 ImGui::EndTooltip();
             }
             if (!open) return;
             if (!cache.loadedArchives) {
-                ImGui::TextWrapped("%s", localize("PluginBrowser", "sArchivesUnavailable", "The engine archive registry is unavailable. Use Refresh Data to try again."));
+                ImGui::TextWrapped("%s", localize("PluginBrowser", "sArchivesUnavailable", "Archive list unavailable. Try Refresh Data."));
             } else if (cache.loadedArchives->empty()) {
-                ImGui::TextWrapped("%s", localize("PluginBrowser", "sNoLoadedArchives", "No loaded archives in the engine registry."));
+                ImGui::TextWrapped("%s", localize("PluginBrowser", "sNoLoadedArchives", "No loaded archives found."));
             } else {
                 SearchBar::Draw(localize("PluginBrowser", "sSearchArchives", "Search loaded archives"), context.state.archiveSearchBuffer.data(),
                     context.state.archiveSearchBuffer.size(), context.state.archiveSearch, nullptr, "ArchiveSearch", localize("General", "sClearSearchButton", "X"));
@@ -109,7 +109,7 @@ namespace ESPExplorerAE::PluginBrowserPanels
             drawOptionalCount("sOverrideCount", "Overrides", plugin.overrideCount);
             drawOptionalCount("sOverriddenByOthersCount", "Overridden By Others", plugin.overriddenByOthersCount);
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", view.localize("PluginBrowser", "sDiagnosticsScope",
-                "Runtime-known forms only. Source is the reported file; origin is the runtime FormID owner. Override history and complete file totals are unavailable."));
+                "Counts cover loaded records only. File totals and override history are unavailable."));
             ImGui::Text("%s: %zu", view.localize("PluginBrowser", "sMasterCount", "Masters"), plugin.masters.size());
 
             if (plugin.missingMasters.empty()) {
@@ -506,9 +506,18 @@ namespace ESPExplorerAE::PluginBrowserPanels
         if (context.view.drawInspector) {
             if (ImGui::BeginChild("PluginTreeDetails", {0, 0}, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
                 if (ImGui::Button(context.view.records.localize("PluginBrowser", "sPluginDiagnostics", "Plugin Diagnostics"))) ImGui::OpenPopup("SourceDiagnostics");
+                const auto workSize = ImGui::GetMainViewport()->WorkSize;
+                const auto padding = ImGui::GetStyle().WindowPadding;
+                const ImVec2 maximum{(std::max)(1.0f, workSize.x - 16.0f), (std::max)(1.0f, workSize.y - 16.0f)};
+                const float popupWidth = (std::min)(ImGui::GetFontSize() * 26.0f + padding.x * 2.0f, maximum.x);
+                // Wrapped empty-state text cannot establish an auto-sized popup's width.
+                ImGui::SetNextWindowSize({popupWidth, 0});
+                ImGui::SetNextWindowSizeConstraints({popupWidth, 0}, {popupWidth, maximum.y});
                 if (ImGui::BeginPopup("SourceDiagnostics")) {
                     if (const auto* plugin = FindPluginInfo(context.state.diagnosticsPlugin, plugins)) {
-                        if (ImGui::BeginChild("DiagnosticsInfo", {420, 320})) DrawPluginDiagnosticsContent(*plugin, context.view.records);
+                        const float contentHeight = (std::min)(320.0f, (std::max)(1.0f, maximum.y - padding.y * 2.0f));
+                        if (ImGui::BeginChild("DiagnosticsInfo", {0, contentHeight}, ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar))
+                            DrawPluginDiagnosticsContent(*plugin, context.view.records);
                         ImGui::EndChild();
                     } else ImGui::TextWrapped("%s", context.view.records.localize("PluginBrowser", "sChooseDiagnosticSource", "Select a plugin in Sources or the results tree to inspect its diagnostics."));
                     ImGui::EndPopup();

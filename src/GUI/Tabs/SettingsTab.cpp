@@ -391,7 +391,7 @@ namespace ESPExplorerAE
             changed = ImGui::Checkbox(L("Settings", "sGodModeWhenMenuOpen", "Enable God Mode While Menu Open"), &settings.godModeWhenMenuOpen) || changed;
             changed = ImGui::Checkbox(L("Settings", "sComponentSubstitution", "Auto-Substitute Component Items"), &settings.componentSubstitution) || changed;
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("%s", L("Settings", "sComponentSubstitutionTooltip", "When enabled, giving or spawning a component (CMPO) automatically substitutes the usable scrap item (MISC) so it works for crafting. Disable if you want to give the raw component form."));
+                ImGui::SetTooltip("%s", L("Settings", "sComponentSubstitutionTooltip", "Give or spawn components as usable crafting scrap."));
             }
             blockSpacing();
             changed = ImGui::Checkbox(L("Settings", "sIncludeAmmoWithWeapons", "Include Ammo With Weapons By Default"), &settings.includeAmmoWithWeapons) || changed;
@@ -401,7 +401,7 @@ namespace ESPExplorerAE
                 settings.defaultAmmoQuantity = (std::clamp)(settings.defaultAmmoQuantity, 0, 50000);
                 changed = true;
             }
-            ImGui::TextWrapped("%s", L("Settings", "sAmmoDefaultsHelp", "Used when opening Add Item for a weapon. Extra ammo is added once per weapon entry, not per copy. You can change it in the popup."));
+            ImGui::TextWrapped("%s", L("Settings", "sAmmoDefaultsHelp", "Ammo per weapon entry, not per copy. Adjustable in Add Item."));
             sectionSpacing();
             ImGui::TreePop();
         }
@@ -713,7 +713,7 @@ namespace ESPExplorerAE
             const char* unsafeCancelLabel = L("General", "sCancel", "Cancel");
             setConfirmationPopupSizing(unsafeConfirmLabel, unsafeCancelLabel);
             if (ImGui::BeginPopupModal(allowMainMenuActionsPopupId.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-                ImGui::TextWrapped("%s", L("Settings", "sAllowMainMenuActionsWarning", "Enabling gameplay actions while the main menu is open will likely cause unexpected behavior or crashes. Only use this for debugging."));
+                ImGui::TextWrapped("%s", L("Settings", "sAllowMainMenuActionsWarning", "Gameplay actions in the main menu can cause crashes. Enable only for debugging."));
                 ImGui::Spacing();
 
                 const float popupButtonWidth = ImGui::GetContentRegionAvail().x;

@@ -14,11 +14,11 @@ namespace ESPExplorerAE
         ModalUtils::PrepareToolWindow(title.c_str(), {900, 650}, {440, 300}, state.focusPending);
         if (ImGui::Begin(title.c_str(), &state.open, ImGuiWindowFlags_NoCollapse)) {
             if (ModalUtils::EscapeClosesCurrentWindow()) state.open = false;
-            ImGui::TextWrapped("%s", localize("Comparison", "sCapturedHint", "Read-only captured values. Base damage and instance damage are not player-effective damage. Unknown values remain unavailable. Capture again to update."));
-            if (!state.a || !state.b) ImGui::TextWrapped("%s", localize("Comparison", "sChooseTargets", "Use Pin A on a record or chosen inventory instance, then Compare B on another target."));
+            ImGui::TextWrapped("%s", localize("Comparison", "sCapturedHint", "Damage excludes player bonuses. Values stay fixed until you compare again."));
+            if (!state.a || !state.b) ImGui::TextWrapped("%s", localize("Comparison", "sChooseTargets", "Choose Pin A on one record, then Compare B on another."));
             if (state.a && state.b) {
                 const auto& a = *state.a; const auto& b = *state.b;
-                if (a.session != view.session || b.session != view.session) ImGui::TextWrapped("%s", localize("Comparison", "sExpired", "These captures belong to an earlier session. Capture current targets before navigating."));
+                if (a.session != view.session || b.session != view.session) ImGui::TextWrapped("%s", localize("Comparison", "sExpired", "Previous game session. Select both targets again to follow links."));
                 ImGui::Checkbox(localize("Comparison", "sDifferencesOnly", "Differences Only"), &state.differencesOnly);
                 const auto label = [&](ComparisonField field) {
                     switch (field) {

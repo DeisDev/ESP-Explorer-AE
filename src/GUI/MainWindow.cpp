@@ -1287,15 +1287,15 @@ namespace ESPExplorerAE
                     return {};
                 };
                 const auto selected = currentComparison();
-                commands.push_back({WorkspaceCommandKind::PinA, L("Comparison", "sPinA", "Pin A"), "", "", selected.has_value(), L("Comparison", "sChooseTargets", "Use Pin A on a record or chosen inventory instance, then Compare B on another target.")});
-                commands.push_back({WorkspaceCommandKind::CompareB, L("Comparison", "sCompareB", "Compare B"), "", "", selected.has_value() && comparison.a.has_value(), L("Comparison", "sChooseTargets", "Use Pin A on a record or chosen inventory instance, then Compare B on another target.")});
+                commands.push_back({WorkspaceCommandKind::PinA, L("Comparison", "sPinA", "Pin A"), "", "", selected.has_value(), L("Comparison", "sChooseTargets", "Choose Pin A on one record, then Compare B on another.")});
+                commands.push_back({WorkspaceCommandKind::CompareB, L("Comparison", "sCompareB", "Compare B"), "", "", selected.has_value() && comparison.a.has_value(), L("Comparison", "sChooseTargets", "Choose Pin A on one record, then Compare B on another.")});
                 const auto reference = [&](const char* label, const char* binding, const char* explanation) { commands.push_back({WorkspaceCommandKind::Reference, label, binding, "", false, explanation}); };
-                reference(L("Workspace", "sCommandPalette", "Commands & Shortcuts"), "Ctrl+K", L("Workspace", "sShortcutOwnership", "Bindings apply to the focused pane. Text edits, popups, and the Steam keyboard take priority."));
+                reference(L("Workspace", "sCommandPalette", "Commands & Shortcuts"), "Ctrl+K", L("Workspace", "sShortcutOwnership", "Shortcuts use the focused pane. Text fields, popups, and Steam keyboard take priority."));
                 reference(L("General", "sSearch", "Search"), "Ctrl+F", L("Workspace", "sFocusSearch", "Focus the current view's search field."));
                 reference(L("General", "sInspect", "Inspect"), "Enter", L("Workspace", "sInspectShortcut", "Inspect the focused result without a gameplay action."));
                 reference(L("General", "sActions", "Actions"), "Shift+F10 / X", L("Workspace", "sContextShortcut", "Open actions for the focused result."));
                 reference(L("General", "sBack", "Back"), "Alt+Left / Alt+Right", L("Workspace", "sHistoryShortcut", "Move through inspector history and restore its workspace."));
-                reference(L("General", "sSelectVisible", "Select Visible"), "Ctrl+A", L("Workspace", "sSelectShortcut", "Select all results in the focused table, including clipped rows."));
+                reference(L("General", "sSelectVisible", "Select Visible"), "Ctrl+A", L("Workspace", "sSelectShortcut", "Select all results in the focused table."));
                 reference(L("General", "sCopyFormID", "Copy FormID"), "Ctrl+C", L("Workspace", "sCopyShortcut", "Copy selected record IDs in the focused results table."));
                 reference(L("General", "sCancel", "Cancel"), "Escape / B", L("Workspace", "sDismissShortcut", "Dismiss the innermost edit, popup, or tool before the overlay."));
                 if (const auto command = DrawCommandPalette(commandPalette, commands, InspectorContext(catalog))) {

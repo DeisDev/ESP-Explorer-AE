@@ -54,7 +54,7 @@ namespace ESPExplorerAE
             BrowserWidgets::DrawContext(*record, BrowserWidgets::ContextScope::Single, state.quantities, view, requests.records);
             ImGui::EndPopup();
         }
-        if (outsideScope) ImGui::TextWrapped("%s", localize("FormDetails", "sOutsideScope", "Inspector target is outside the current results. Your query is unchanged."));
+        if (outsideScope) ImGui::TextWrapped("%s", localize("FormDetails", "sOutsideScope", "This record is outside the current results."));
         ImGui::Separator();
         if (state.restoreScroll) ImGui::SetNextWindowScroll({0.0f, location->scroll});
         if (ImGui::BeginChild("InspectorInformation", {0, 0}, ImGuiChildFlags_None, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {

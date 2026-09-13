@@ -71,7 +71,7 @@ namespace ESPExplorerAE
         ModalUtils::PrepareToolWindow(title.c_str(), {720, 660}, {420, 300}, state.focusPending);
         if (ImGui::Begin(title.c_str(), &state.open, ImGuiWindowFlags_NoCollapse)) {
             if (ModalUtils::EscapeClosesCurrentWindow()) state.open = false;
-            if (!writable) ImGui::TextWrapped("%s", localize("Workspace", "sReadOnly", "The workspace file could not be loaded safely. It will not be overwritten. Export remains available."));
+            if (!writable) ImGui::TextWrapped("%s", localize("Workspace", "sReadOnly", "Workspace could not be loaded. Saving is disabled; you can still export."));
             if (state.failed || state.storageFailed) ImGui::TextWrapped("%s", localize("Workspace", "sSaveFailed", "Changes could not be saved. Check names, input limits, and workspace file access."));
             ImGui::InputText(localize("General", "sName", "Name"), state.name.data(), state.name.size());
             SearchBar::ReadControllerText(localize("General", "sName", "Name"), state.name.data(), state.name.size());
@@ -225,7 +225,7 @@ namespace ESPExplorerAE
                         }
                     }
                     ImGui::EndChild();
-                    ImGui::TextWrapped("%s", localize("Workspace", "sImportHint", "Import adds entries and renames duplicate names. Missing records are retained. It never executes a kit."));
+                    ImGui::TextWrapped("%s", localize("Workspace", "sImportHint", "Adds entries and renames duplicates. Missing records are kept; kits are saved without giving items."));
                     ImGui::BeginDisabled(!writable);
                     if (ImGui::Button(localize("Workspace", "sImport", "Import Reviewed Workspace"))) {
                         auto merged = document;

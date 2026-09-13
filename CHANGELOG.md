@@ -57,6 +57,8 @@ Target version: **1.6.0**.
 
 ### Changed
 
+- Shorter, clearer info blocks and tooltips across browsers, inventory, filters,
+  comparisons, and saved kits in every shipped language.
 - Organized the workspace into Explore, Inventory, Player & World, and Tools.
   Explore has visible drag handles between Sources/Views, Results, and Inspector; character
   and world controls have their own destination. A wrapping toolbar and browser
@@ -95,6 +97,8 @@ Target version: **1.6.0**.
 
 ### Fixed
 
+- Plugin Diagnostics opens at a readable width when no plugin is selected,
+  and stays within the screen when showing long diagnostic lists.
 - Right-clicking a Plugin Browser record opens only that record's context menu,
   without repeated commands, conflicting controls, or changing the target to a sibling.
 

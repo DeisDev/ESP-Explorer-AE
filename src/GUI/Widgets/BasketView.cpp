@@ -35,13 +35,13 @@ namespace ESPExplorerAE
         ModalUtils::PrepareToolWindow(title.c_str(), {800, 680}, {440, 300}, state.focusPending);
         if (ImGui::Begin(title.c_str(), &open, ImGuiWindowFlags_NoCollapse)) {
             if (ModalUtils::EscapeClosesCurrentWindow()) open = false;
-            ImGui::TextWrapped("%s", localize("Workspace", "sBasketHint", "Base items only. Ammunition is added once per weapon entry, regardless of the number of copies."));
+            ImGui::TextWrapped("%s", localize("Workspace", "sBasketHint", "Base items only. Ammo is added per weapon entry, not per copy."));
             if (state.full) ImGui::TextWrapped("%s", IssueText(KitIssue::Capacity, view));
             if (state.submitted) {
-                ImGui::TextWrapped("%s", localize("Workspace", "sKitSubmitted", "Kit admitted to the queue once. Check Action History for observed results."));
+                ImGui::TextWrapped("%s", localize("Workspace", "sKitSubmitted", "Kit queued. Check Action History for results."));
                 if (ImGui::Button(localize("General", "sActionHistory", "Action History"))) requests.history = true;
             }
-            if (state.admission != ActionAdmission::Accepted) ImGui::TextWrapped("%s", localize("Workspace", "sKitRejected", "The kit was not admitted. Review current targets and queue availability before trying again."));
+            if (state.admission != ActionAdmission::Accepted) ImGui::TextWrapped("%s", localize("Workspace", "sKitRejected", "Kit not queued. Review the items and try again when pending actions finish."));
             auto preview = ReviewItemKit(kit, *view.catalog, view.session, view.gameplayReady, pending, view.componentSubstitution);
             bool edited{};
             std::optional<std::size_t> remove;
@@ -92,7 +92,7 @@ namespace ESPExplorerAE
             const ModalUtils::PopupSizing sizing({(std::min)(620.0f, maximum.x), (std::min)(500.0f, maximum.y)}, {(std::min)(400.0f, maximum.x), (std::min)(300.0f, maximum.y)}, maximum, false);
             if (ImGui::BeginPopupModal(reviewTitle.c_str(), nullptr, ImGuiWindowFlags_NoSavedSettings)) {
                 if (!GamepadInput::IsSteamKeyboardOpen() && ModalUtils::CancelPopupRequested()) ImGui::CloseCurrentPopup();
-                ImGui::TextWrapped("%s", localize("Workspace", "sReviewKitHint", "Review the aggregated base items below. This admits the whole request list or none. Once execution starts, results are independent and are never automatically retried."));
+                ImGui::TextWrapped("%s", localize("Workspace", "sReviewKitHint", "Check item totals before giving. Individual items may fail; failed actions are not retried."));
                 const bool matches = state.reviewed && SameKitReview(*state.reviewed, preview);
                 if (!matches) ImGui::TextWrapped("%s", IssueText(KitIssue::Stale, view));
                 if (ImGui::BeginChild("AggregatedKit", {0, -ImGui::GetFrameHeightWithSpacing() * 3}, ImGuiChildFlags_Borders)) {

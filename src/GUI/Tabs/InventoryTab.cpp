@@ -616,7 +616,7 @@ namespace ESPExplorerAE
                 ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
                 ImGui::ProgressBar((std::clamp)(ratio, 0.0f, 1.0f), ImVec2(-1.0f, ImGui::GetFontSize() * 0.3f), "");
                 ImGui::PopStyleColor();
-                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", L(context, "Inventory", "sTotalsHelp", "Totals include every instance in a row. Captured item weights may differ from Pip-Boy carry weight; values are not vendor prices."));
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", L(context, "Inventory", "sTotalsHelp", "Row totals. Weight may differ from the Pip-Boy; values are not sale prices."));
             }
 
             void DrawInstanceSelector(const InventoryEntry& entry, const InventoryTabView& context)
@@ -637,7 +637,7 @@ namespace ESPExplorerAE
                         }
                         ImGui::EndCombo();
                     }
-                    if (!SelectedInstance(entry)) ImGui::TextWrapped("%s", L(context, "Inventory", "sInstanceRequired", "Choose an instance to equip, use, or duplicate. Group removal affects all captured stacks."));
+                    if (!SelectedInstance(entry)) ImGui::TextWrapped("%s", L(context, "Inventory", "sInstanceRequired", "Choose an instance to equip, use, or duplicate. Removal applies to the group."));
                 }
             }
 
@@ -679,7 +679,7 @@ namespace ESPExplorerAE
                 }
                 ImGui::BeginDisabled(!InventoryActionAllowed(instance, InventoryAction::DuplicateItem));
                 if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "Inventory", "sDuplicateItem", "Duplicate Item"), firstAction)) DuplicateItem(entry);
-                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", L(context, "Inventory", "sDuplicateItemHelp", "Adds one copy of the chosen item with its attachments, legendary effects, name, condition, and instance stats. The copy is not equipped or favorited."));
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", L(context, "Inventory", "sDuplicateItemHelp", "Copies this item, including mods, effects, name, condition, and stats. The copy starts unequipped and unfavorited."));
                 ImGui::EndDisabled();
                 ImGui::EndDisabled();
                 if (ImGuiWidgetUtils::DrawWrappedButton(L(context, "General", "sActions", "Actions"), firstAction)) ImGui::OpenPopup("InventoryDetailActions");
@@ -825,7 +825,7 @@ namespace ESPExplorerAE
                 if (ImGui::MenuItem(applyCountLabel.c_str(), nullptr, false, countChangeAllowed)) {
                     AdjustInventoryEntryCount(entry, desiredCount);
                 }
-                if (static_cast<std::uint64_t>(desiredCount) > entry.count && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", L(context, "Inventory", "sBaseItemNotice", "Adds the base item without this instance’s modifications."));
+                if (static_cast<std::uint64_t>(desiredCount) > entry.count && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", L(context, "Inventory", "sBaseItemNotice", "Adds the base item without your modifications."));
 
                 if (IsEquippable(entry)) {
                     const bool equipped = SelectedInstanceEquipped(entry);
@@ -835,7 +835,7 @@ namespace ESPExplorerAE
                     if (ImGui::MenuItem(L(context, "Inventory", "sAddBaseItem", "Add Base Item"))) {
                         AddBaseItems(entry, 1);
                     }
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", L(context, "Inventory", "sBaseItemNotice", "Adds the base item without this instance’s modifications."));
+                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", L(context, "Inventory", "sBaseItemNotice", "Adds the base item without your modifications."));
                 } else if (IsAidCategory(entry.category)) {
                     if (ImGui::MenuItem(L(context, "Inventory", "sUseItem", "Use"), nullptr, false, SelectedInstance(entry).has_value())) {
                         UseInventoryEntry(entry);
@@ -845,7 +845,7 @@ namespace ESPExplorerAE
                 const auto selected = SelectedInstance(entry);
                 const bool canDuplicate = selected && InventoryActionAllowed(entry.source->stacks[*selected], InventoryAction::DuplicateItem);
                 if (ImGui::MenuItem(L(context, "Inventory", "sDuplicateItem", "Duplicate Item"), nullptr, false, canDuplicate)) DuplicateItem(entry);
-                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", L(context, "Inventory", "sDuplicateItemHelp", "Adds one copy of the chosen item with its attachments, legendary effects, name, condition, and instance stats. The copy is not equipped or favorited."));
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", L(context, "Inventory", "sDuplicateItemHelp", "Copies this item, including mods, effects, name, condition, and stats. The copy starts unequipped and unfavorited."));
 
                 if (!gameplayActionsAllowed) {
                     ImGui::EndDisabled();

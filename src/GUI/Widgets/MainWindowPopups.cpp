@@ -256,33 +256,33 @@ namespace ESPExplorerAE
             ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlayHotkeys", "Hotkeys"));
             ImGuiWidgetUtils::DrawWrappedBullet(std::string(toggleHelp) + ": " + toggleKeyName);
             ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayFocusSearch", "Ctrl+F: Focus the active search field"));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayHotkeysBody", "Use the configured toggle key to open or close the menu at any time."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayHotkeysBody", "Press the toggle key to open or close the menu."));
 
             ImGui::Spacing();
             ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlayFilters", "Filters"));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayFiltersBody", "Plugin filters narrow the left tree, while record filters hide or include playable, unnamed, deleted, and unknown records."));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlaySearchBody", "Global Search scans every loaded record. Turn it off when you want to stay inside the active plugin filter."));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayRuntimeRecordsBody", "ESP Explorer AE reads records after Fallout 4 has loaded and resolved them at runtime. Some values may differ from raw plugin data in xEdit."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayFiltersBody", "Plugin filters choose sources; record filters control which records appear."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlaySearchBody", "Search all plugins, selected plugins, or a collection using the scope menu."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayRuntimeRecordsBody", "Shows loaded game data, which may differ from xEdit."));
 
             ImGui::Spacing();
             ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlayFavorites", "Favorites And Recent"));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayFavoritesBody", "Add favorites from record actions or context menus to pin important forms across sessions."));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayRecentBody", "Recent Records tracks what you inspect most often, making it easy to jump back without searching again."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayFavoritesBody", "Right-click a record to save it as a favorite."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayRecentBody", "Recent Records lets you revisit recently inspected records."));
 
             ImGui::Spacing();
             ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlayAdvancedFilters", "Advanced Filters"));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayAdvancedFiltersBody", "Open Advanced Filters from a browser toolbar to hide records by name, EditorID, plugin, category, or keyword. Rules are shared across browsers and can be limited to selected plugins."));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayAdvancedFiltersExampleBody", "For example, you can hide all records containing 'SS2_Tag_' to declutter Sim Settlements content from your results."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayAdvancedFiltersBody", "Use Advanced Filters to hide matching records across browsers. Rules can target specific plugins."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayAdvancedFiltersExampleBody", "Example: hide records containing 'SS2_Tag_'."));
 
             ImGui::Spacing();
             ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlayInventory", "Inventory Tab"));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayInventoryBody", "The Inventory tab shows your current player inventory grouped by category. You can inspect, drop, or favorite items directly from it."));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayInventoryComponentBody", "Components are automatically substituted to their usable scrap form when given, so they work for crafting. This can be toggled in Settings > Gameplay."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayInventoryBody", "Filter and sort your inventory. Choose an instance to equip or use; open Actions to change quantities, drop, or remove."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayInventoryComponentBody", "Components are given as crafting scrap. Change this in Settings > Gameplay."));
 
             ImGui::Spacing();
             ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlaySafeActions", "Safe Actions"));
             ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlaySafeActionsBody", "Viewing details, copying IDs, and filtering are safe. Give, spawn, and teleport actions are explicit and important actions ask for confirmation."));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayMainMenuActionsBody", "Gameplay actions stay disabled in the main menu by default for stability. Only enable them if you understand the risks and want that behavior."));
+            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayMainMenuActionsBody", "Main menu gameplay actions are disabled by default; enabling them may cause crashes."));
             ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayHistoryBody", "Action History shows recent requests and their observed results."));
             ImGui::PopTextWrapPos();
         }

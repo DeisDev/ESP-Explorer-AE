@@ -24,7 +24,7 @@ namespace ESPExplorerAE
             auto available = commands;
             if (const auto id = ParseExactFormID(state.search)) available.insert(available.begin(), {WorkspaceCommandKind::Inspect,
                 std::string(localize("General", "sInspect", "Inspect")) + " " + state.search, "Enter", state.search, view.catalog->Find(*id) != nullptr,
-                localize("FormDetails", "sTargetUnavailable", "This target is not present in the current runtime catalog.")});
+                localize("FormDetails", "sTargetUnavailable", "Record not found in the loaded data.")});
             const auto matches = MatchWorkspaceCommands(available, state.search);
             state.selected = matches.empty() ? 0 : (std::min)(state.selected, matches.size() - 1);
             const bool keyboard = !GamepadInput::IsSteamKeyboardOpen();

@@ -94,7 +94,7 @@ namespace ESPExplorerAE
                 if (ImGui::Selectable((display + "###Reference").c_str())) context.open(form.formID);
                 ImGui::EndDisabled();
                 if (!available && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s",
-                    context.localize("FormDetails", "sTargetUnavailable", "This target is not present in the current runtime catalog."));
+                    context.localize("FormDetails", "sTargetUnavailable", "Record not found in the loaded data."));
                 if (ImGui::IsItemFocused() && !ImGui::IsAnyItemActive() && !GamepadInput::IsSteamKeyboardOpen() &&
                     ((ImGui::GetIO().KeyShift && ImGui::IsKeyPressed(ImGuiKey_F10, false)) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceLeft, false)))
                     ImGui::OpenPopup("ReferenceMenu");
@@ -507,7 +507,7 @@ namespace ESPExplorerAE
         }
         DrawUIntLine(context.localize("FormDetails", "sRuntimeReferenceCount", "Runtime-known references"), referenceCount, detailCopyPopupCounter, context);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", context.localize("FormDetails", "sRuntimeReferenceScope",
-            "References currently registered with the game; not all placed references in plugin files."));
+            "Counts references known to the game, not the full plugin files."));
         if (details.value) DrawIntLine(L(context, "General", "sValue"), *details.value, detailCopyPopupCounter, context);
         if (details.weight) DrawFloatLine(L(context, "General", "sWeight"), *details.weight, detailCopyPopupCounter, context);
         if (const auto* weapon = std::get_if<WeaponDetails>(&details.specific)) {
@@ -562,7 +562,7 @@ namespace ESPExplorerAE
                 DrawFormReferenceLine((std::string("x") + std::to_string(entry.quantity)).c_str(), entry.record, context, detailCopyPopupCounter);
             }
             if (entries.empty()) ImGui::TextDisabled("%s", L(context, "General", "sNone"));
-            if (truncated) ImGui::TextWrapped("%s", context.localize("FormDetails", "sListTruncated", "The capture limit was reached; this list is partial."));
+            if (truncated) ImGui::TextWrapped("%s", context.localize("FormDetails", "sListTruncated", "List shortened: too many entries."));
             ImGui::TreePop();
         };
         if (const auto* outfit = std::get_if<OutfitDetails>(&details.specific)) items(context.localize("FormDetails", "sOutfitItems", "Outfit Items"), outfit->items, outfit->truncated);
@@ -600,11 +600,11 @@ namespace ESPExplorerAE
                 }
                 ImGui::TreePop();
             }
-            ImGui::TextWrapped("%s", context.localize("FormDetails", "sStageUnavailable", "Stage numbers beyond the current stage and resolved alias references are unavailable."));
-            if (quest->truncated) ImGui::TextWrapped("%s", context.localize("FormDetails", "sListTruncated", "The capture limit was reached; this list is partial."));
+            ImGui::TextWrapped("%s", context.localize("FormDetails", "sStageUnavailable", "Only the current stage is available. Alias targets are unavailable."));
+            if (quest->truncated) ImGui::TextWrapped("%s", context.localize("FormDetails", "sListTruncated", "List shortened: too many entries."));
         }
         if (context.catalog && ImGui::TreeNode(context.localize("FormDetails", "sUsedBy", "Used By"))) {
-            ImGui::TextWrapped("%s", context.localize("FormDetails", "sIndexedCoverage", "Indexed runtime weapon-ammo and recipe relationships only. This is not a complete plugin-file reference graph or override history."));
+            ImGui::TextWrapped("%s", context.localize("FormDetails", "sIndexedCoverage", "Shows weapon ammo and crafting links only."));
             const auto found = context.catalog->incomingRelationships.find(selectedRecord.formID);
             if (found != context.catalog->incomingRelationships.end()) {
                 if (ImGui::BeginChild("IncomingRelationships", {0, 240}, ImGuiChildFlags_Borders)) {
@@ -624,7 +624,7 @@ namespace ESPExplorerAE
                 ImGui::EndChild();
             }
             else ImGui::TextDisabled("%s", L(context, "General", "sNone"));
-            if (context.catalog->relationshipsTruncated) ImGui::TextWrapped("%s", context.localize("FormDetails", "sListTruncated", "The capture limit was reached; this list is partial."));
+            if (context.catalog->relationshipsTruncated) ImGui::TextWrapped("%s", context.localize("FormDetails", "sListTruncated", "List shortened: too many entries."));
             ImGui::TreePop();
         }
         ImGui::PopID();

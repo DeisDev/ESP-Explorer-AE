@@ -31,12 +31,12 @@ namespace ESPExplorerAE
             state.session = review.session;
             state.tokens = std::move(tokens);
         }
-        ImGui::TextWrapped("%s", localize("Favorites", "sPersistence", "Favorites use plugin-relative identities. Unavailable entries are kept for when their plugins return."));
+        ImGui::TextWrapped("%s", localize("Favorites", "sPersistence", "Missing favorites are kept until their plugins return."));
         if (review.temporaryCount) ImGui::TextWrapped("%s: %zu", localize("Favorites", "sSessionOnly", "Favorites kept only for this session"), review.temporaryCount);
         if (state.stale) ImGui::TextWrapped("%s", localize("Favorites", "sReviewChanged", "The favorite review changed. Select the entries again."));
         if (!review.legacy.empty()) {
             ImGui::Separator();
-            ImGui::TextWrapped("%s", localize("Favorites", "sLegacyReview", "Legacy IDs do not store their original plugins. Review the current matches below. Select only records you recognize; accepting them uses the current load order. Other entries are retained. The original INI is backed up before the first save."));
+            ImGui::TextWrapped("%s", localize("Favorites", "sLegacyReview", "Older favorites may match different records after load-order changes. Select only matches you recognize. Unselected entries are kept; settings are backed up."));
             for (std::size_t index = 0; index < review.legacy.size(); ++index) {
                 const auto& entry = review.legacy[index];
                 ImGui::PushID(static_cast<int>(index));

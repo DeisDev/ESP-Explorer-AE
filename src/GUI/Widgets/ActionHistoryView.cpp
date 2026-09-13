@@ -19,7 +19,7 @@ namespace ESPExplorerAE
         const auto position = ImGui::GetWindowPos();
         if (ModalUtils::EscapeClosesCurrentWindow()) state.open = false;
         if (visible && state.open) {
-            ImGui::TextWrapped("%s", L("sActionHistoryHint", "Newest actions appear first. Dispatched means the request was sent; only verified changes confirm an observed result."));
+            ImGui::TextWrapped("%s", L("sActionHistoryHint", "Newest first. Dispatched requests may still fail; verified changes confirm success."));
             ImGui::SetNextItemWidth(-FLT_MIN);
             ImGui::InputTextWithHint("##HistorySearch", L("sSearchActionHistory", "Search actions, results, or details..."), state.search.data(), state.search.size());
             ImGui::Checkbox(L("sActionHistoryIssuesOnly", "Needs attention only"), &state.issuesOnly);

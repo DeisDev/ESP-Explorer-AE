@@ -174,7 +174,7 @@ namespace ESPExplorerAE
                     changed = !targetPlugins.empty();
                     targetPlugins.clear();
                 }
-                ImGui::TextWrapped("%s", localize("General", "sAdvancedFilterScopeHint", "Choose one or more plugins. An empty selection applies to all plugins."));
+                ImGui::TextWrapped("%s", localize("General", "sAdvancedFilterScopeHint", "Choose plugins, or leave empty for all."));
                 std::vector<std::string> choices = targetPlugins;
                 for (const auto index : editor.pluginOrder) {
                     const auto& plugin = editor.catalog->plugins[index].filename;
@@ -234,7 +234,7 @@ namespace ESPExplorerAE
         bool DrawHiddenPlugins(const RecordFiltersWidget::LocalizeFn& localize, RecordFilterState state, AdvancedFilterEditorState& editor)
         {
             bool changed = false;
-            ImGui::TextWrapped("%s", localize("General", "sHiddenPluginsHint", "Checked plugins are hidden from browser results. Uncheck a plugin to show its records again."));
+            ImGui::TextWrapped("%s", localize("General", "sHiddenPluginsHint", "Check plugins to hide their records."));
             ImGui::SetNextItemWidth(-FLT_MIN);
             ImGui::InputTextWithHint("##HiddenPluginSearch", localize("General", "sSearch", "Search..."), editor.hiddenPluginSearch, sizeof(editor.hiddenPluginSearch));
             ImGui::BeginDisabled(state.hiddenPlugins.empty());
@@ -294,7 +294,7 @@ namespace ESPExplorerAE
             }
             bool changed = false;
             bool undoing = false;
-            ImGui::TextWrapped("%s", localize("General", "sAdvancedFilterExplanation", "Shared across all browsers. A record is hidden if any enabled rule matches. Text matching ignores case. Changes are saved automatically."));
+            ImGui::TextWrapped("%s", localize("General", "sAdvancedFilterExplanation", "Matching rules hide records across browsers. Text ignores case; changes save automatically."));
             ImGui::TextDisabled("%zu %s | %zu %s", AdvancedRecordFilters::CountActiveRules(state.advancedRules),
                 localize("General", "sAdvancedFiltersActiveSummary", "active block rules"), state.hiddenPlugins.size(),
                 localize("General", "sAdvancedFiltersHiddenPluginsSummary", "hidden plugins"));
@@ -365,7 +365,7 @@ namespace ESPExplorerAE
                         if (editor.previewRule) {
                             ImGui::Text("%zu %s", editor.previewCount, localize("General", "sPreviewRuleCount", "matching runtime records"));
                             if (ImGui::TreeNode("##PreviewSamples", "%s", localize("General", "sPreviewRuleSamples", "Sample matches"))) {
-                                ImGui::TextWrapped("%s", localize("General", "sPreviewRuleHint", "Up to five matches in the loaded catalog, before other browser filters."));
+                                ImGui::TextWrapped("%s", localize("General", "sPreviewRuleHint", "Up to five matches before other filters apply."));
                                 for (const auto index : editor.previewSamples) {
                                     const auto& record = editor.catalog->records[index];
                                     ImGui::TextWrapped("%08X | %s | %s", record.formID, record.name.empty() ? record.editorID.c_str() : record.name.c_str(), record.sourcePlugin.c_str());
@@ -512,7 +512,7 @@ namespace ESPExplorerAE
             std::to_string(activeRules) + "+" + std::to_string(hiddenCount) + ")###Visibility" + std::string(idSuffix);
         const auto popup = "VisibilityOptions" + std::string(idSuffix);
         if (ImGui::Button(visibility.c_str())) ImGui::OpenPopup(popup.c_str());
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", localize("General", "sGlobalVisibilityHint", "Shared exclusions apply to every Explore page. Clear Search and Reset This View do not remove them."));
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", localize("General", "sGlobalVisibilityHint", "Applies across Explore. Clearing search or resetting a view keeps these rules."));
         if (ImGui::BeginPopup(popup.c_str())) {
             const auto nonPlayable = std::string(localize("General", "sIncludeNonPlayable", "Include Non-Playable")) + "##NonPlayable" + std::string(idSuffix);
             const auto unnamed = std::string(localize("General", "sIncludeUnnamed", "Include Unnamed")) + "##Unnamed" + std::string(idSuffix);

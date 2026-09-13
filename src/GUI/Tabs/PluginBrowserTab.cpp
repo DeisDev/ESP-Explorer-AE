@@ -70,7 +70,7 @@ namespace ESPExplorerAE
         ImGuiWidgetUtils::SameLineIfFits(ImGui::CalcTextSize(allLabel).x + ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x);
         ImGui::Checkbox(allLabel, &state.allRuntimeRecords);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", view.records.localize("PluginBrowser", "sAllRuntimeRecordsHint",
-            "Include unnamed, non-playable, deleted and unknown records, hidden plugins and records excluded by advanced rules in this browser. Search and scope still apply. Shared filter settings are preserved."));
+            "Shows hidden and excluded records here. Search and scope still apply."));
         filter.showPlayable = context.view.records.filters.showPlayableRecords;
         filter.showNonPlayable = context.view.records.filters.showNonPlayableRecords;
         filter.showNamed = context.view.records.filters.showNamedRecords;
