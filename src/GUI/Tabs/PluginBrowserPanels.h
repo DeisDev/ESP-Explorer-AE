@@ -4,6 +4,7 @@
 
 namespace ESPExplorerAE::PluginBrowserPanels
 {
+    void DrawDiagnostics(const PluginInfo& plugin, const BrowserView& view);
     void DrawTreePane(const std::vector<PluginInfo>& plugins, const CatalogSnapshot& cache, PluginBrowserHelpers::Context& context, float leftWidth);
     void DrawDetailsPane(const std::vector<PluginInfo>& plugins, const CatalogSnapshot& cache, PluginBrowserHelpers::Context& context);
 }

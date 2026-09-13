@@ -8,8 +8,8 @@
 
 namespace ESPExplorerAE
 {
-    inline constexpr std::array<std::string_view, 9> MainTabIDs{
-        "Plugin Browser", "Inventory", "Item Browser", "NPC Browser", "Cell Browser", "Object Browser", "Spells & Perks", "Settings", "Logs"
+    inline constexpr std::array<std::string_view, 12> MainTabIDs{
+        "Plugin Browser", "Inventory", "Item Browser", "NPC Browser", "Cell Browser", "Object Browser", "Spells & Perks", "Settings", "Logs", "Explore", "Player & World", "Tools"
     };
 
     inline bool ValidLanguageCode(std::string_view code)
@@ -71,7 +71,7 @@ namespace ESPExplorerAE
         const auto copy = ValidatedCopyFormat(static_cast<long>(value.multiCopyFormat));
         if (copy != value.multiCopyFormat) { value.multiCopyFormat = copy; adjusted.emplace_back("UI.iMultiCopyFormat"); }
         const auto tab = [&](std::string& field, const std::string& fallback, bool allowLast, const char* name) {
-            if (field == "Player") { field = "Inventory"; adjusted.emplace_back(name); }
+            if (field == "Player") { field = "Player & World"; adjusted.emplace_back(name); }
             else if (!(allowLast && field == "__last__") && std::ranges::find(MainTabIDs, field) == MainTabIDs.end()) { field = fallback; adjusted.emplace_back(name); }
         };
         tab(value.startupTab, defaults.startupTab, true, "UI.sStartupTab");

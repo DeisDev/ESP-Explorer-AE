@@ -25,10 +25,13 @@ namespace ESPExplorerAE
             ImGui::Checkbox(L("sActionHistoryIssuesOnly", "Needs attention only"), &state.issuesOnly);
             const auto history = FormatActionHistory(receipts, localize);
             std::size_t displayed{};
+            std::uint64_t lastGroup{};
             if (ImGui::BeginChild("##ActionHistoryList", { 0, 0 }, ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened)) {
                 for (const auto& entry : history) {
                     if (state.issuesOnly && entry.result != ActionStatus::Rejected && entry.result != ActionStatus::Failed && entry.result != ActionStatus::NoChange) continue;
-                    if (!TextContains(entry.description, state.search.data()) && !TextContains(entry.status, state.search.data()) && !TextContains(entry.details, state.search.data())) continue;
+                    if (!SearchContains(entry.description, state.search.data()) && !SearchContains(entry.status, state.search.data()) && !SearchContains(entry.details, state.search.data()) && !SearchContains(entry.groupName, state.search.data())) continue;
+                    if (entry.groupID && entry.groupID != lastGroup) ImGui::SeparatorText((entry.groupName + " #" + std::to_string(entry.groupID)).c_str());
+                    lastGroup = entry.groupID;
                     ++displayed;
                     const auto id = std::to_string(entry.id);
                     ImGui::PushID(id.c_str());
@@ -41,6 +44,10 @@ namespace ESPExplorerAE
                         if (ImGui::SmallButton(L("sCopy", "Copy"))) {
                             const auto text = "#" + id + " | " + entry.status + "\n" + entry.description + (entry.details.empty() ? "" : "\n" + entry.details);
                             ImGui::SetClipboardText(text.c_str());
+                        }
+                        if (entry.target) {
+                            ImGuiWidgetUtils::SameLineIfFits(ImGui::CalcTextSize(L("sInspect", "Inspect")).x + ImGui::GetFrameHeight());
+                            if (ImGui::SmallButton(L("sInspect", "Inspect"))) state.inspect = entry.target;
                         }
                         if (!entry.details.empty()) {
                             ImGuiWidgetUtils::SameLineIfFits(ImGui::CalcTextSize(L("sActionHistoryDetails", "Result details")).x + ImGui::GetFrameHeight());

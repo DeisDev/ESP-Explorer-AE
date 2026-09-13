@@ -15,6 +15,9 @@ namespace ESPExplorerAE
         std::size_t recentLimit{ 30 };
         MultiCopyFormat copyFormat{ MultiCopyFormat::Lines };
         std::size_t favoriteReviewCount{};
+        std::function<void()> drawInspector;
+        bool showInspector{true};
+        float inspectorWidth{380.0f};
     };
 
     struct PluginBrowserRequests
@@ -23,6 +26,7 @@ namespace ESPExplorerAE
         std::optional<std::string> pluginFilter;
         bool settingsChanged{};
         std::optional<DetailKey> details;
+        std::optional<float> resultsWidth;
     };
 
     class PluginBrowserTab

@@ -72,6 +72,7 @@ namespace ESPExplorerAE
 
     void NPCBrowserTab::Draw(NPCBrowserState& state, const BrowserView& view, BrowserRequests& requests)
     {
+        state.browser.activeCategory = "NPC_";
         BrowserWidgets::DrawControls(state.browser, view, requests, "NPCBrowser", "NPCs", "NPC Search");
         auto& rows = state.browser.categories["NPC_"];
         auto baseQuery = BrowserWidgets::MakeQuery(state.browser, view, rows, "NPC_");
@@ -175,13 +176,16 @@ namespace ESPExplorerAE
         }
         const FormTableConfig config{
             .tableId = "NPCTable", .primaryActionLabel = localize("NPCs", "sSpawnNPC", "Spawn"),
-            .allowFavorites = true, .gameplayActionsAllowed = view.gameplayReady, .copyFormat = view.copyFormat
+            .allowFavorites = true, .gameplayActionsAllowed = view.gameplayReady, .copyFormat = view.copyFormat, .doubleClickGameplayAction = view.doubleClickGameplayAction, .compactDensity = view.compactTableDensity
         };
         const FormTableActions actions{
             .primary = [&](const FormEntry& entry) { BrowserWidgets::Emit(requests, view, entry, ActionKind::Spawn); },
             .rowContext = [&](const FormEntry& entry, bool multiple) { BrowserWidgets::DrawContext(entry, multiple ? BrowserWidgets::ContextScope::Selection : BrowserWidgets::ContextScope::Single, rows.contextQuantities, view, requests); },
             .canPrimary = [](const FormEntry& entry) { return !entry.isDeleted && SupportsRecordAction(entry.category, ActionKind::Spawn); },
-            .selected = [&](auto id) { requests.recentSelections.push_back(id); }
+            .selected = [&](auto id) { requests.recentSelections.push_back(id); },
+            .inspect = [&](auto id) { requests.inspections.push_back(id); },
+            .basket = [&](const auto& entries) { for (const auto& entry : entries) requests.basket.push_back(entry.formID); },
+            .collect = [&](const auto& entries) { for (const auto& entry : entries) requests.collections.push_back(entry.formID); }
         };
         FormTable::DrawPrepared(rows.table, result, config, actions, &view.favorites);
     }

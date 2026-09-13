@@ -68,6 +68,9 @@ namespace ESPExplorerAE
         for (auto it = receipts.rbegin(); it != receipts.rend(); ++it) {
             ActionHistoryEntry entry{ .id = it->id, .description = describe(*it), .status = statusLabel(it->outcome.status) };
             entry.result = it->outcome.status;
+            entry.groupID = it->request.groupID;
+            entry.groupName = it->request.groupName;
+            entry.target = it->request.formID;
             entry.details = InventoryFeedback::Message(it->outcome.inventoryRejection, L);
             for (const auto& effect : it->outcome.effects) {
                 if (!entry.details.empty()) entry.details += "\n";

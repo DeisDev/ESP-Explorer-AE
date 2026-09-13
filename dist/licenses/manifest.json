@@ -71,6 +71,14 @@
       "sha256": "9407f57d550d1d36974de15c7aad3dbf21e59c4b3312fc762157f05fdea6ff41",
       "source": "https://github.com/ocornut/imgui/blob/v1.92.7/imstb_truetype.h",
       "version": "Dear ImGui 1.92.7 bundled copy"
+    },
+    {
+      "license": "Unicode-3.0",
+      "name": "Unicode case folding data",
+      "notice": "Unicode-LICENSE.txt",
+      "sha256": "bfb121a2aaa8fa3d77f3429ae2aaed879cc53cacad6fbe42a2513043b80fcb9a",
+      "source": "https://www.unicode.org/license.txt",
+      "version": "16.0.0"
     }
   ],
   "notes": [

@@ -5,6 +5,7 @@
 #include <map>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -60,6 +61,7 @@ namespace ESPExplorerAE
         std::uint32_t modCount{};
         std::vector<InventoryMod> mods;
         std::vector<InventoryEnchantment> enchantments;
+        std::optional<std::vector<std::uint32_t>> keywordIDs;
         friend bool operator==(const InventoryStack&, const InventoryStack&) = default;
     };
 

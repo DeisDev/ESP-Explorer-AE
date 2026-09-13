@@ -8,6 +8,7 @@ namespace ESPExplorerAE::ModalUtils
     void PrepareToolWindow(const char* name, ImVec2 initialSize, ImVec2 minimumSize,
         bool& focusPending, const ImVec2* initialPosition = nullptr);
     bool EscapeClosesCurrentWindow();
+    bool CancelPopupRequested();
     bool CanOpenPopup(const char* id);
 
     // Keep this scope alive through BeginPopupModal/EndPopup: ImGui invokes the

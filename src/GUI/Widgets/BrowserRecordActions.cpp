@@ -11,19 +11,26 @@ namespace ESPExplorerAE::BrowserWidgets
     {
         if (auto request = PrepareRecordAction(kind, entry, view.session, view.gameplayReady, count)) {
             if (kind == ActionKind::Equip) request->ammoCount = view.equipWeaponAmmoCount;
-            requests.actions.push_back({ std::move(*request), confirm, entry.name });
+            requests.actions.push_back({ std::move(*request), confirm || RecordActionNeedsConfirmation(entry, kind), entry.name });
         }
     }
 
     void DrawContext(const FormEntry& entry, ContextScope scope, std::unordered_map<std::uint32_t, int>& quantities, const BrowserView& view, BrowserRequests& requests)
     {
         const auto& localize = view.localize;
+        if (scope == ContextScope::Selection && !ImGui::BeginMenu(localize("PluginBrowser", "sActiveRecord", "Active record"))) return;
         const auto* name = entry.name.empty() ? localize("General", "sUnnamed", "<Unnamed>") : entry.name.c_str();
         const auto id = FormatUtils::FormID(entry.formID);
         ImGui::TextUnformatted(name);
         ImGui::TextDisabled("%s  |  %s  |  %s", id.c_str(), entry.sourcePlugin.c_str(), entry.category.c_str());
         if (!entry.editorID.empty()) ImGui::TextDisabled("%s: %s", localize("General", "sEditorID", "EditorID"), entry.editorID.c_str());
         ImGui::Separator();
+        if (ImGui::MenuItem(localize("General", "sInspect", "Inspect"))) requests.inspections.push_back(entry.formID);
+        if (ImGui::MenuItem(localize("General", "sPin", "Pin"))) requests.pins.push_back(entry.formID);
+        if (ImGui::MenuItem(localize("Comparison", "sPinA", "Pin A"))) requests.pinA.push_back(entry.formID);
+        if (ImGui::MenuItem(localize("Comparison", "sCompareB", "Compare B"))) requests.compareB.push_back(entry.formID);
+        if (ImGui::MenuItem(localize("General", "sAddToCollection", "Add to Collection"))) requests.collections.push_back(entry.formID);
+        if (ImGui::MenuItem(localize("Workspace", "sAddToBasket", "Add to Basket"), nullptr, false, SupportsRecordAction(entry.category, ActionKind::Give))) requests.basket.push_back(entry.formID);
         ImGui::BeginDisabled(!view.gameplayReady || scope == ContextScope::Selection || entry.isDeleted);
         if (SupportsRecordAction(entry.category, ActionKind::Give) && ImGui::MenuItem(localize("Items", "sGiveItem", "Give Item"))) {
             requests.grants.push_back({ view.session, { entry.formID } });
@@ -65,7 +72,7 @@ namespace ESPExplorerAE::BrowserWidgets
             ImGui::EndDisabled();
         }
         ImGui::EndDisabled();
-        if (scope != ContextScope::Single) return;
+        if (scope != ContextScope::Single) { if (scope == ContextScope::Selection) ImGui::EndMenu(); return; }
         ImGui::Separator();
         if (ImGui::MenuItem(localize("General", "sCopyFormID", "Copy FormID"))) ImGui::SetClipboardText(id.c_str());
         if (ImGui::MenuItem(localize("General", "sCopyRecordSource", "Copy Record Source"))) ImGui::SetClipboardText(entry.sourcePlugin.c_str());

@@ -1,6 +1,8 @@
 #pragma once
+#include "Core/RecordRelationships.h"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -25,6 +27,17 @@ namespace ESPExplorerAE
         std::vector<std::string> keywords;
         std::vector<std::string> factionNames;
         std::uint32_t weaponAmmoID{};
+        std::string weaponAmmoName;
+        std::optional<float> baseDamage;
+        std::optional<float> weight;
+        std::optional<std::int64_t> value;
+        std::optional<bool> cellInterior;
+        std::string worldspace;
+        std::uint32_t componentItemID{};
+        std::optional<float> armorRating;
+        std::vector<std::uint32_t> keywordIDs;
+        std::vector<RecordRelationship> relationships;
+        bool relationshipsTruncated{};
     };
 
 }

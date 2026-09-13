@@ -20,6 +20,7 @@ namespace ESPExplorerAE
             return result;
         }
         std::size_t IndexBytes() const { return result.order.capacity() * sizeof(RecordIndex); }
+        const CatalogQuery* Criteria() const { return key ? &key->query : nullptr; }
         void Clear() { key.reset(); result = {}; }
 
     private:

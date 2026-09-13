@@ -12,6 +12,9 @@ namespace ESPExplorerAE
         std::string status;
         std::string details;
         ActionStatus result{ ActionStatus::Dispatched };
+        std::uint64_t groupID{};
+        std::string groupName;
+        std::uint32_t target{};
     };
 
     using ActionHistoryLocalize = std::function<const char*(std::string_view, std::string_view, const char*)>;

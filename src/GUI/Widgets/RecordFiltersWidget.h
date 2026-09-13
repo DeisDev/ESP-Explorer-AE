@@ -2,6 +2,7 @@
 
 #include "Filters/AdvancedRecordFilters.h"
 #include "Core/CatalogSnapshot.h"
+#include "Core/CatalogQuery.h"
 
 #include <functional>
 #include <optional>
@@ -37,6 +38,7 @@ namespace ESPExplorerAE
         char hiddenPluginSearch[128]{};
         char ruleScopeSearch[128]{};
         char ruleSearch[256]{};
+        char hiddenFormID[9]{};
         std::vector<std::string> newTargetPlugins;
         std::optional<UndoState> undo;
         std::optional<UndoState> undoResult;
@@ -59,5 +61,7 @@ namespace ESPExplorerAE
             AdvancedFilterEditorState& editorState, std::shared_ptr<const CatalogSnapshot> catalog);
         static bool DrawEditor(const LocalizeFn& localize, std::string_view idSuffix, RecordFilterState state,
             AdvancedFilterEditorState& editorState, std::shared_ptr<const CatalogSnapshot> catalog);
+        static void DrawWhyHidden(const LocalizeFn& localize, std::string_view idSuffix, RecordFilterState state,
+            AdvancedFilterEditorState& editorState, const CatalogQuery& query, std::shared_ptr<const CatalogSnapshot> catalog);
     };
 }

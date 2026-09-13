@@ -12,6 +12,7 @@ namespace ESPExplorerAE
         bool focusPending{};
         bool issuesOnly{};
         std::array<char, 256> search{};
+        std::optional<std::uint32_t> inspect;
     };
 
     // Returns the current position for the caller's existing INI persistence.

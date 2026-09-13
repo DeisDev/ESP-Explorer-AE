@@ -36,7 +36,16 @@ and quest items. Sort by Stack Weight to find heavy item groups, or use Select
 Visible to select the filtered list, then open Actions beside the selection
 controls for bulk operations. Right-click a column header to choose which
 columns to show. The details pane offers equip/use controls and an Actions menu
-for count changes, dropping, removal, and inspection in Plugin Browser.
+### Navigation
+
+**Ctrl+K** opens the searchable Commands & Shortcuts palette, including exact-ID
+inspection and saved views. **Ctrl+F** focuses the current browser's search.
+In a focused results table, **Ctrl+A** selects all filtered results, including
+rows outside the visible area, and **Ctrl+C** copies selected IDs.
+**Alt+Left/Right** navigates inspector history. **Shift+F10** or controller
+**X** opens a focused record's context menu. **Escape/Back** dismisses the
+active edit, popup, or tool before closing the overlay. Text entry and the
+Steam keyboard take priority over workspace shortcuts.
 
 ## Repository Layout
 

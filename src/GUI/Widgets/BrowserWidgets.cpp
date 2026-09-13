@@ -5,6 +5,7 @@
 #include "GUI/Widgets/FormatUtils.h"
 #include "GUI/Widgets/RecordFiltersWidget.h"
 #include "GUI/Widgets/SearchBar.h"
+#include "GUI/Widgets/SearchControls.h"
 
 #include <imgui.h>
 
@@ -14,6 +15,9 @@ namespace ESPExplorerAE::BrowserWidgets
         const char* id, const char* section, const char* searchFallback)
     {
         auto& filters = view.filters;
+        SearchBar::Draw(view.localize(section, "sSearch", searchFallback), state.searchBuffer.data(), state.searchBuffer.size(), state.search, &state.focusPending, id,
+            view.localize("General", "sClearSearchButton", "X"));
+        DrawSearchControls(state.structuredSearch, state.scope, state.search, state.searchBuffer.data(), state.searchBuffer.size(), *view.catalog, view.localize);
         if (RecordFiltersWidget::Draw(view.localize, id, RecordFilterState{
                 .showNonPlayable = filters.showNonPlayableRecords, .showUnnamed = filters.showUnnamedRecords,
                 .showDeleted = filters.showDeletedRecords, .advancedRules = filters.advancedRecordFilters,
@@ -21,9 +25,13 @@ namespace ESPExplorerAE::BrowserWidgets
             ++filters.advancedRecordFilterRevision;
             requests.filtersChanged = true;
         }
-        SearchBar::Draw(view.localize(section, "sSearch", searchFallback), state.searchBuffer.data(), state.searchBuffer.size(), state.search, &state.focusPending, id,
-            view.localize("General", "sClearSearchButton", "X"));
-        if (view.drawPluginFilterStatus) view.drawPluginFilterStatus();
+        const BrowserCategoryState emptyRows;
+        auto explanation = MakeQuery(state, view, emptyRows, {});
+        if (const auto found = state.categories.find(state.activeCategory); found != state.categories.end()) {
+            if (const auto* previous = found->second.query.Criteria()) { explanation.type = previous->type; explanation.types = previous->types; explanation.npc = previous->npc; }
+        }
+        RecordFiltersWidget::DrawWhyHidden(view.localize, id, {filters.showNonPlayableRecords, filters.showUnnamedRecords, filters.showDeletedRecords,
+            filters.advancedRecordFilters, filters.hiddenPlugins}, state.filterEditor, explanation, view.catalog);
         ActionFeedback::Draw(state.admission, view.localize);
         ImGui::Separator();
     }
@@ -31,10 +39,11 @@ namespace ESPExplorerAE::BrowserWidgets
     CatalogQuery MakeQuery(const BrowserState& state, const BrowserView& view, const BrowserCategoryState& rows, std::string type)
     {
         const auto& filters = view.filters;
-        return { .type = std::move(type), .plugin = std::string(view.pluginFilter), .search = state.search,
+        return { .type = std::move(type), .search = state.search,
             .showPlayable = filters.showPlayableRecords, .showNonPlayable = filters.showNonPlayableRecords,
             .showNamed = filters.showNamedRecords, .showUnnamed = filters.showUnnamedRecords, .showDeleted = filters.showDeletedRecords,
-            .sortColumn = rows.table.sort.column, .ascending = rows.table.sort.ascending, .hiddenPlugins = filters.hiddenPlugins };
+            .sortColumn = rows.table.sort.column, .ascending = rows.table.sort.ascending, .hiddenPlugins = filters.hiddenPlugins,
+            .structuredSearch = state.structuredSearch, .scope = state.scope };
     }
 
     void DrawCategory(BrowserState& state, const BrowserView& view, BrowserRequests& requests,
@@ -49,13 +58,18 @@ namespace ESPExplorerAE::BrowserWidgets
             .primary = [&](const FormEntry& entry) { Emit(requests, view, entry, primary); },
             .rowContext = [&](const FormEntry& entry, bool multiple) { DrawContext(entry, multiple ? ContextScope::Selection : ContextScope::Single, rows.contextQuantities, view, requests); },
             .canPrimary = [primary](const FormEntry& entry) { return !entry.isDeleted && SupportsRecordAction(entry.category, primary); },
-            .selected = [&](auto id) { requests.recentSelections.push_back(id); }
+            .selected = [&](auto id) { requests.recentSelections.push_back(id); },
+            .inspect = [&](auto id) { requests.inspections.push_back(id); },
+            .basket = [&](const auto& entries) { for (const auto& entry : entries) requests.basket.push_back(entry.formID); },
+            .collect = [&](const auto& entries) { for (const auto& entry : entries) requests.collections.push_back(entry.formID); }
         };
         if (secondary) actions.bulkSecondary = [&](const std::vector<FormEntry>& entries) {
             for (const auto& entry : entries) Emit(requests, view, entry, *secondary);
         };
         auto tableConfig = config;
         tableConfig.copyFormat = view.copyFormat;
+        tableConfig.doubleClickGameplayAction = view.doubleClickGameplayAction;
+        tableConfig.compactDensity = view.compactTableDensity;
         FormTable::DrawPrepared(rows.table, result, tableConfig, actions, &view.favorites);
     }
 

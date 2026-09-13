@@ -17,9 +17,10 @@ namespace ESPExplorerAE
         if (!ImGui::BeginTabBar("SpellPerkCategories")) return;
         for (const auto& category : categories) {
             const auto label = std::string(view.localize("Spells", category.key, category.fallback)) + "###" + category.type;
-            const bool open = ImGui::BeginTabItem(label.c_str());
+            const bool open = ImGui::BeginTabItem(label.c_str(), nullptr, state.requestedCategory == category.type ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None);
             SharedUtils::DrawCurrentItemChrome(open, ImGui::IsItemHovered(), true, false);
             if (!open) continue;
+            if (state.requestedCategory == category.type) state.requestedCategory.clear();
             BrowserWidgets::ActivateCategory(state, view, category.type);
             const bool spell = category.add == ActionKind::AddSpell;
             const FormTableConfig config{

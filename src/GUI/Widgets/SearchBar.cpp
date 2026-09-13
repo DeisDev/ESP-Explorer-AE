@@ -7,6 +7,14 @@
 
 namespace ESPExplorerAE
 {
+    bool SearchBar::ReadControllerText(const char* label, char* buffer, std::size_t bufferSize)
+    {
+        if (ImGui::IsItemActivated() && GamepadInput::IsUsingGamepad() && !GamepadInput::IsSteamKeyboardOpen())
+            GamepadInput::ShowSteamKeyboard(ImGui::GetItemID(), label, buffer, bufferSize);
+        std::string result;
+        return GamepadInput::IsSteamKeyboardOpen() && GamepadInput::CheckSteamKeyboardResult(ImGui::GetItemID(), buffer, bufferSize, result);
+    }
+
     bool SearchBar::Draw(const char* label, char* buffer, std::size_t bufferSize, std::string& value, bool* shouldFocus, const char* stableId, const char* clearText, float width)
     {
         if (!label || !buffer || bufferSize == 0) {
@@ -26,13 +34,7 @@ namespace ESPExplorerAE
             changed = true;
         }
 
-        if (ImGui::IsItemActivated() && GamepadInput::IsUsingGamepad() && !GamepadInput::IsSteamKeyboardOpen()) {
-            GamepadInput::ShowSteamKeyboard(ImGui::GetItemID(), label, buffer, bufferSize);
-        }
-
-        if (GamepadInput::IsSteamKeyboardOpen()) {
-            changed |= GamepadInput::CheckSteamKeyboardResult(ImGui::GetItemID(), buffer, bufferSize, value);
-        }
+        changed |= ReadControllerText(label, buffer, bufferSize);
 
         ImGui::SameLine();
         const std::string clearLabel = std::string(clearText) + "##Clear" + (stableId ? stableId : label);

@@ -13,6 +13,22 @@ Target version: **1.6.0**.
 
 ### Added
 
+- Linked record inspectors with Back/Forward, three pins, and return to the
+  original query, layout, selection, and position.
+- Structured search with explicit multi-plugin/collection scope, field and
+  value suggestions, exact FormID and keyword lookup, numeric predicates,
+  Unicode-aware ordinary search, and Why Hidden? explanations.
+- Saved Explore views, named collections with notes, and clipboard workspace
+  import/export with a missing-record preview. Portable record identities
+  survive load-order changes and retain unresolved entries.
+- A cross-page item basket and saved base-item kits with quantities, per-entry
+  ammunition, aggregate review, and grouped results in Action History.
+- A Ctrl+K command palette and searchable keyboard/controller shortcut reference.
+- Base-record and chosen inventory-instance comparison with Differences Only
+  and copying, plus navigable outfit, container, recipe, quest objective/alias,
+  and indexed reverse-reference lists.
+- Remembered generic-table columns, technical/category fields, and a compact
+  density setting independent of font size.
 - Advanced filter rule search, bulk enable/disable, undo, plugin scopes when
   adding rules, and a preview of matching loaded records with examples.
 - Search, an attention filter, expandable result details, and copying in
@@ -31,11 +47,22 @@ Target version: **1.6.0**.
 - Log search with matching-line copying and a jump-to-latest button.
 - Optional bounded performance profiling for data capture, UI interactions, and
   lifecycle transitions.
-- Bundled font assets and redistribution notices, with matching debug symbols
-  retained in build output.
 
 ### Changed
 
+- Organized the workspace into Explore, Inventory, Player & World, and Tools.
+  Explore has visible drag handles between Sources/Views, Results, and Inspector; character
+  and world controls have their own destination. A wrapping toolbar and browser
+  picker leave more room for records. View contains pane visibility, Refresh Data,
+  and Reset This View; inspector actions keep secondary commands in Actions.
+  Inventory supports dragging its divider in both side-by-side and stacked layouts.
+- Selection, Enter, and double-click inspect records by default. Explicit
+  controls perform gameplay actions, with an opt-in setting for the previous
+  double-click behavior.
+- Workspace views, collections, kits, and layouts use
+  `Data/F4SE/Plugins/ESPExplorerAE.workspace.ini` alongside existing settings.
+  Keep both files when updating; newer or unreadable workspace schemas are
+  protected from overwrite.
 - Advanced Filters and Action History are resizable tool windows that remain
   available across menu pages. Filter rules use a compact, collapsible composer
   and scrolling cards; hidden plugins use a searchable checklist.
@@ -53,15 +80,19 @@ Target version: **1.6.0**.
 - The runtime check accepts Steam Fallout 4 1.11.191, 1.11.221, and 1.11.240,
   with F4SE 0.7.7, 0.7.8, and 0.7.9 respectively and the matching Address Library.
   Other executable versions remain excluded.
-- Redesigned the menu with sidebar navigation, a custom header, restrained
-  accents, and softer controls. Modern Charcoal is an optional shipped theme.
-- Separated status information from footer actions and removed the inactive
-  footer undo button; action results remain available in Action History.
+- The menu has a custom header, restrained accents, and softer controls.
+  Modern Charcoal is an optional shipped theme.
+- Status information and Action History share a compact footer.
 - Favorites now use plugin-relative identities. Legacy entries require review,
   with configuration backups before migration; unresolved favorites are retained.
 
 ### Fixed
 
+- Right-clicking a Plugin Browser record opens only that record's context menu,
+  without repeated commands, conflicting controls, or changing the target to a sibling.
+
+- Inventory count reductions confirm the affected group and removal amount.
+  Clear Search and Reset This View preserve shared visibility rules.
 - The menu recovers missed focus notifications after loading, so opening it no
   longer depends on alt-tabbing. Rendering uses the current screen buffer even
   when the game leaves a different drawing target active.

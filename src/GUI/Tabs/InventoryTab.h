@@ -4,6 +4,8 @@
 #include "Core/Actions.h"
 #include "Core/RecordSelection.h"
 #include "Core/RecordDetails.h"
+#include "Core/RecordComparison.h"
+#include "Core/WorkspaceNavigation.h"
 #include "GUI/BrowserState.h"
 #include <array>
 
@@ -42,9 +44,6 @@ namespace ESPExplorerAE
     {
         int currentAmmo{ 200 };
         int allAmmo{ 100 };
-        int perkPoints{ 1 };
-        int level{ 1 };
-        float gameHour{ 12.0f };
     };
 
     struct InventoryTabState
@@ -72,6 +71,8 @@ namespace ESPExplorerAE
         std::unordered_map<std::uint64_t, int> desiredCounts;
         ActionAdmission admission{ ActionAdmission::Accepted };
         InventoryRejection rejection{ InventoryRejection::None };
+        InventoryLocation layout;
+        bool restoreLayout{};
     };
 
     struct InventoryTabView
@@ -84,6 +85,7 @@ namespace ESPExplorerAE
         bool gameplayReady{};
         bool godMode{};
         bool advancedDetails{};
+        bool doubleClickGameplayAction{};
     };
 
     struct InventoryTabRequests
@@ -94,6 +96,8 @@ namespace ESPExplorerAE
         std::optional<std::uint32_t> inspect;
         std::optional<DetailKey> details;
         bool refresh{};
+        std::optional<ComparisonRecord> pinA;
+        std::optional<ComparisonRecord> compareB;
     };
 
     class InventoryTab
@@ -102,5 +106,7 @@ namespace ESPExplorerAE
         static void Draw(InventoryTabState& state, const InventoryTabView& view, InventoryTabRequests& requests);
         static void ResetFilters(InventoryTabState& state);
         static void ResetState(InventoryTabState& state);
+        static InventoryLocation CaptureLocation(const InventoryTabState& state);
+        static void RestoreLocation(InventoryTabState& state, const InventoryLocation& location);
     };
 }

@@ -56,7 +56,16 @@ namespace ESPExplorerAE::ModalUtils
         return ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
                !ImGui::IsAnyItemActive() &&
                !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel) &&
-               ImGui::IsKeyPressed(ImGuiKey_Escape, false);
+               (ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false));
+    }
+
+    bool CancelPopupRequested()
+    {
+        const auto& context = *ImGui::GetCurrentContext();
+        return !context.ActiveIdPreviousFrame && !ImGui::IsAnyItemActive() &&
+            context.OpenPopupStack.Size == context.BeginPopupStack.Size &&
+            ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+            (ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false));
     }
 
     void PrepareToolWindow(const char* name, ImVec2 initialSize, ImVec2 minimumSize,

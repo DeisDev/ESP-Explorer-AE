@@ -7,6 +7,9 @@
 #include <RE/B/BGSLightingTemplate.h>
 #include <RE/B/BGSLocation.h>
 #include <RE/B/BGSOutfit.h>
+#include <RE/B/BGSBaseAlias.h>
+#include <RE/B/BGSQuestObjective.h>
+#include <RE/T/TESQuestTarget.h>
 #include <RE/T/TESAmmo.h>
 #include <RE/T/TESDataHandler.h>
 #include <RE/T/TESFullName.h>
@@ -138,12 +141,12 @@ namespace ESPExplorerAE
             result.level = npcForm->GetLevel();
             result.resolvedRace = CaptureReference(npcForm->GetFormRace());
             result.attachmentParentCount = npcForm->attachParents.size;
+            result.defaultOutfit = CaptureReference(npcForm->defOutfit);
             if (!advanced) return result;
             result.height = npcForm->height;
             result.heightMax = npcForm->heightMax;
             result.npcClass = CaptureReference(npcForm->cl);
             result.combatStyle = CaptureReference(npcForm->combatStyle);
-            result.defaultOutfit = CaptureReference(npcForm->defOutfit);
             result.sleepOutfit = CaptureReference(npcForm->sleepOutfit);
             result.crimeFaction = CaptureReference(npcForm->crimeFaction);
             return result;
@@ -193,11 +196,14 @@ namespace ESPExplorerAE
             return result;
         }
 
-        OutfitDetails ReadOutfit(const RE::BGSOutfit* outfitForm, bool advanced)
+        OutfitDetails ReadOutfit(const RE::BGSOutfit* outfitForm, bool)
         {
             OutfitDetails result;
-            if (!advanced) return result;
             result.outfitItems = static_cast<std::uint32_t>(outfitForm->outfitItems.size());
+            for (const auto* item : outfitForm->outfitItems) {
+                if (result.items.size() >= 1024) { result.truncated = true; break; }
+                result.items.push_back({CaptureReference(item), 1});
+            }
             return result;
         }
 
@@ -231,6 +237,11 @@ namespace ESPExplorerAE
         ContainerDetails ReadContainer(const RE::TESObjectCONT* containerForm, bool advanced)
         {
             ContainerDetails result;
+            if (containerForm->containerObjects) containerForm->ForEachContainerObject([&](const RE::ContainerObject& entry) {
+                if (result.contents.size() >= 1024) { result.truncated = true; return false; }
+                result.contents.push_back({CaptureReference(entry.obj), entry.count});
+                return true;
+            });
             if (!advanced) return result;
             result.model = ReadString(containerForm->model.c_str());
             result.materialSwap = CaptureReference(containerForm->swapForm);
@@ -296,6 +307,7 @@ namespace ESPExplorerAE
         PerkDetails ReadPerk(const RE::BGSPerk* perkForm, bool advanced)
         {
             PerkDetails result;
+            result.nextPerk = CaptureReference(perkForm->nextPerk);
             if (!advanced) return result;
             result.trait = perkForm->data.trait;
             result.playable = perkForm->data.playable;
@@ -303,7 +315,6 @@ namespace ESPExplorerAE
             result.level = perkForm->data.level;
             result.numRanks = perkForm->data.numRanks;
             result.perkEntries = static_cast<std::uint32_t>(perkForm->perkEntries.size());
-            result.nextPerk = CaptureReference(perkForm->nextPerk);
             result.sound = CaptureReference(perkForm->sound);
             result.swfFile = ReadString(perkForm->swfFile.c_str());
             return result;
@@ -312,8 +323,13 @@ namespace ESPExplorerAE
         ConstructibleDetails ReadConstructible(const RE::BGSConstructibleObject* constructibleForm, bool advanced)
         {
             ConstructibleDetails result;
-            if (!advanced) return result;
             result.createdItem = CaptureReference(constructibleForm->createdItem);
+            result.constructedCount = constructibleForm->data.numConstructed;
+            if (constructibleForm->requiredItems) for (const auto& item : *constructibleForm->requiredItems) {
+                if (result.requirements.size() >= 1024) { result.truncated = true; break; }
+                result.requirements.push_back({CaptureReference(item.first), item.second.i});
+            }
+            if (!advanced) return result;
             result.benchKeyword = CaptureReference(constructibleForm->benchKeyword);
             result.requiredItems = constructibleForm->requiredItems ? constructibleForm->requiredItems->size() : 0;
             result.constructedCount = constructibleForm->data.numConstructed;
@@ -324,6 +340,25 @@ namespace ESPExplorerAE
         QuestDetails ReadQuest(const RE::TESQuest* questForm, bool advanced)
         {
             QuestDetails result;
+            result.stages = questForm->stages.size();
+            result.currentStage = questForm->currentStage;
+            {
+                const RE::BSAutoReadLock lock(const_cast<RE::TESQuest*>(questForm)->aliasAccessLock);
+                for (const auto* alias : questForm->aliases) {
+                    if (result.aliasList.size() >= 1024) { result.truncated = true; break; }
+                    if (alias) result.aliasList.push_back({alias->aliasID, ReadString(alias->aliasName.c_str()), alias->flags.underlying()});
+                }
+            }
+            for (const auto* objective : questForm->objectives) {
+                if (result.objectiveList.size() >= 1024) { result.truncated = true; break; }
+                if (!objective) continue;
+                DetailObjective captured{objective->index, ReadString(objective->displayText.c_str()), static_cast<unsigned char>(objective->state)};
+                if (objective->targets) for (std::uint32_t index = 0; index < objective->numTargets; ++index) {
+                    if (index >= 256) { result.truncated = true; break; }
+                    if (const auto* target = objective->targets[index]) captured.aliases.push_back(target->targetAlias);
+                }
+                result.objectiveList.push_back(std::move(captured));
+            }
             if (!advanced) return result;
             result.currentStage = questForm->currentStage;
             result.eventID = questForm->eventID;
@@ -342,9 +377,11 @@ namespace ESPExplorerAE
         CellDetails ReadCell(const RE::TESObjectCELL* cellForm, bool advanced)
         {
             CellDetails result;
+            result.interior = cellForm->IsInterior();
+            result.location = CaptureReference(cellForm->GetLocation());
+            if (cellForm->IsExterior()) result.worldSpace = CaptureReference(cellForm->worldSpace);
             if (!advanced) return result;
             auto* mutableCell = const_cast<RE::TESObjectCELL*>(cellForm);
-            result.interior = cellForm->IsInterior();
             result.hasWater = cellForm->HasWater();
             result.cantWaitHere = mutableCell->GetCantWaitHere();
             result.flags = cellForm->cellFlags.underlying();
@@ -353,13 +390,11 @@ namespace ESPExplorerAE
             result.x = mutableCell->GetDataX();
             result.y = mutableCell->GetDataY();
             result.encounterZone = CaptureReference(cellForm->GetEncounterZone());
-            result.location = CaptureReference(cellForm->GetLocation());
             result.owner = CaptureReference(mutableCell->GetOwner());
             result.waterType = CaptureReference(cellForm->GetWaterType());
             result.waterHeight = cellForm->waterHeight;
             result.lightingTemplate = CaptureReference(cellForm->lightingTemplate);
             result.referenceEntries = static_cast<std::uint32_t>(cellForm->references.size());
-            if (cellForm->IsExterior()) result.worldSpace = CaptureReference(cellForm->worldSpace);
             result.exterior = cellForm->IsExterior();
             return result;
         }

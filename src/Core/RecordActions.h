@@ -58,6 +58,19 @@ namespace ESPExplorerAE
         return entry.formID && entry.category == "CELL" && !entry.isDeleted && !entry.editorID.empty();
     }
 
+    inline bool RecordActionNeedsConfirmation(const FormEntry& entry, ActionKind kind)
+    {
+        switch (kind) {
+        case ActionKind::Spawn: return !SupportsRecordAction(entry.category, ActionKind::Give);
+        case ActionKind::Place: case ActionKind::Teleport:
+        case ActionKind::AddSpell: case ActionKind::RemoveSpell:
+        case ActionKind::AddPerk: case ActionKind::RemovePerk:
+        case ActionKind::StartQuest: case ActionKind::CompleteQuest:
+        case ActionKind::SetWeather: case ActionKind::Outfit: case ActionKind::ConstructedItem: return true;
+        default: return false;
+        }
+    }
+
     inline std::optional<CatalogResult> SelectGrantRecords(std::shared_ptr<const CatalogSnapshot> snapshot, std::span<const std::uint32_t> ids)
     {
         if (!snapshot || !snapshot->ready || ids.empty()) return {};

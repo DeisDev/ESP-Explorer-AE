@@ -71,6 +71,8 @@ namespace ESPExplorerAE
         settings.pluginShowUnknownCategories = ini.GetBoolValue("Filters", "bPluginShowUnknownCategories", false);
         settings.recentRecordsLimit = (std::clamp)(static_cast<int>(ini.GetLongValue("UI", "iRecentRecordsLimit", 25)), 5, 100);
         settings.autoFocusSearchBars = ini.GetBoolValue("UI", "bAutoFocusSearchBars", true);
+        settings.compactTableDensity = ini.GetBoolValue("UI", "bCompactTableDensity", false);
+        settings.doubleClickGameplayAction = ini.GetBoolValue("UI", "bDoubleClickGameplayAction", false);
         settings.showPlayerStatsInStatus = ini.GetBoolValue("UI", "bShowPlayerStatsInStatus", false);
         settings.showMenuResolutionInStatus = ini.GetBoolValue("UI", "bShowMenuResolutionInStatus", false);
         settings.pluginAdvancedDetailsView = ini.GetBoolValue("UI", "bPluginAdvancedDetailsView", false);
@@ -146,6 +148,8 @@ namespace ESPExplorerAE
         ini.SetBoolValue("Filters", "bPluginShowUnknownCategories", settingsSnapshot.pluginShowUnknownCategories);
         ini.SetLongValue("UI", "iRecentRecordsLimit", (std::clamp)(settingsSnapshot.recentRecordsLimit, 5, 100));
         ini.SetBoolValue("UI", "bAutoFocusSearchBars", settingsSnapshot.autoFocusSearchBars);
+        ini.SetBoolValue("UI", "bCompactTableDensity", settingsSnapshot.compactTableDensity);
+        ini.SetBoolValue("UI", "bDoubleClickGameplayAction", settingsSnapshot.doubleClickGameplayAction);
         ini.SetBoolValue("UI", "bShowPlayerStatsInStatus", settingsSnapshot.showPlayerStatsInStatus);
         ini.SetBoolValue("UI", "bShowMenuResolutionInStatus", settingsSnapshot.showMenuResolutionInStatus);
         ini.SetBoolValue("UI", "bPluginAdvancedDetailsView", settingsSnapshot.pluginAdvancedDetailsView);

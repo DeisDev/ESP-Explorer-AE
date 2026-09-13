@@ -34,6 +34,7 @@ namespace ESPExplorerAE
         bool substituteComponents{ true };
         bool allowMainMenu{};
         std::uint64_t nextReceipt{ 1 };
+        std::uint64_t nextGroup{ 1 };
         std::vector<ActionReceipt> receipts;
     }
 
@@ -81,7 +82,7 @@ namespace ESPExplorerAE
         if (!accepted) {
             request.inventory.reset();
             receipts.push_back({ nextReceipt++, queue.Session(), std::move(request), {} });
-            if (receipts.size() > 64) receipts.erase(receipts.begin());
+            if (receipts.size() > 512) receipts.erase(receipts.begin());
         }
         return accepted;
     }
@@ -96,7 +97,9 @@ namespace ESPExplorerAE
     {
         std::lock_guard lock(stateMutex);
         if (Lifecycle::Shutdown().Requested()) return ActionAdmission::Unavailable;
+        const auto group = std::ranges::any_of(requests, [](const auto& request) { return !request.groupName.empty(); }) ? nextGroup++ : 0;
         for (auto& request : requests) {
+            request.groupID = group;
             request.substituteComponents = substituteComponents;
             request.debugOverride = allowMainMenu;
             if (!request.session) request.session = queue.Session();
@@ -204,7 +207,7 @@ namespace ESPExplorerAE
                 if (request->session != queue.Session()) break;
                 request->inventory.reset(); // Receipts retain outcomes, not complete inventory snapshots.
                 receipts.push_back({ nextReceipt++, request->session, std::move(*request), std::move(outcome) });
-                if (receipts.size() > 64) receipts.erase(receipts.begin());
+                if (receipts.size() > 512) receipts.erase(receipts.begin());
             }
         } catch (const std::exception& error) {
             REX::WARN("Action pump failed: {}", error.what());

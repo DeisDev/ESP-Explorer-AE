@@ -4,6 +4,31 @@
 
 namespace ESPExplorerAE::ImGuiWidgetUtils
 {
+    float PaneDividerSize()
+    {
+        return (std::max)(10.0f, ImGui::GetFontSize() * 0.65f);
+    }
+
+    void PaneDivider(const char* id, float& leadingSize, float minimum, float maximum, const char* tooltip, bool vertical)
+    {
+        const float thickness = PaneDividerSize();
+        const auto available = ImGui::GetContentRegionAvail();
+        ImGui::InvisibleButton(id, vertical ? ImVec2(thickness, (std::max)(1.0f, available.y)) : ImVec2((std::max)(1.0f, available.x), thickness));
+        const bool hovered = ImGui::IsItemHovered();
+        const bool active = ImGui::IsItemActive();
+        if (hovered || active) ImGui::SetMouseCursor(vertical ? ImGuiMouseCursor_ResizeEW : ImGuiMouseCursor_ResizeNS);
+        if (active) leadingSize = std::clamp(leadingSize + (vertical ? ImGui::GetIO().MouseDelta.x : ImGui::GetIO().MouseDelta.y), minimum, maximum);
+        if (hovered && tooltip) ImGui::SetTooltip("%s", tooltip);
+        const auto min = ImGui::GetItemRectMin();
+        const auto max = ImGui::GetItemRectMax();
+        const ImVec2 center((min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f);
+        const float half = (std::min)(ImGui::GetFontSize() * 1.5f, (vertical ? max.y - min.y : max.x - min.x) * 0.35f);
+        auto* draw = ImGui::GetWindowDrawList();
+        const auto color = ImGui::GetColorU32(active ? ImGuiCol_SeparatorActive : hovered ? ImGuiCol_SeparatorHovered : ImGuiCol_TextDisabled);
+        draw->AddRectFilled(vertical ? ImVec2(center.x - 1.5f, center.y - half) : ImVec2(center.x - half, center.y - 1.5f),
+            vertical ? ImVec2(center.x + 1.5f, center.y + half) : ImVec2(center.x + half, center.y + 1.5f), color, 2.0f);
+    }
+
     void DrawWrappedBullet(std::string_view text)
     {
         ImGui::Bullet();

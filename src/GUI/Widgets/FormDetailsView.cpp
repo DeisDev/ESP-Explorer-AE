@@ -1,6 +1,8 @@
 #include "Core/Profiling.h"
+#include "Core/Workspace.h"
 #include "GUI/Widgets/FormDetailsView.h"
 #include "GUI/Widgets/FormatUtils.h"
+#include "Input/GamepadInput.h"
 
 #include <imgui.h>
 #include <cstdio>
@@ -84,7 +86,32 @@ namespace ESPExplorerAE
 
         void DrawFormReferenceLine(const char* label, const DetailReference& form, const FormDetailsViewContext& context, int& popupCounter)
         {
-            DrawTextLine(label, ResolveFormDisplay(form, context), popupCounter, context);
+            const auto display = std::string(label) + ": " + ResolveFormDisplay(form, context);
+            const bool available = form.formID && context.catalog && context.catalog->Find(form.formID);
+            ImGui::PushID(popupCounter++);
+            if (context.open && form.formID) {
+                ImGui::BeginDisabled(!available);
+                if (ImGui::Selectable((display + "###Reference").c_str())) context.open(form.formID);
+                ImGui::EndDisabled();
+                if (!available && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s",
+                    context.localize("FormDetails", "sTargetUnavailable", "This target is not present in the current runtime catalog."));
+                if (ImGui::IsItemFocused() && !ImGui::IsAnyItemActive() && !GamepadInput::IsSteamKeyboardOpen() &&
+                    ((ImGui::GetIO().KeyShift && ImGui::IsKeyPressed(ImGuiKey_F10, false)) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceLeft, false)))
+                    ImGui::OpenPopup("ReferenceMenu");
+                if (ImGui::BeginPopupContextItem("ReferenceMenu")) {
+                    if (ImGui::MenuItem(context.localize("General", "sOpen", "Open"), nullptr, false, available)) context.open(form.formID);
+                    if (context.pin && ImGui::MenuItem(context.localize("General", "sPin", "Pin"), nullptr, false, available && context.canPin)) context.pin(form.formID);
+                    if (context.pin && !context.canPin) ImGui::TextWrapped("%s", context.localize("FormDetails", "sPinLimit", "Three inspectors are pinned. Close one before pinning another."));
+                    if (ImGui::MenuItem(context.localize("General", "sCopyIdentity", "Copy Identity"))) {
+                        const auto target = context.catalog ? FavoriteIdentity(*context.catalog).Capture(form.formID) : FavoriteTarget{};
+                        const auto identity = target.key ? SerializeFavoriteKey(*target.key) : std::string(context.localize("Workspace", "sSessionOnly", "Session only; not restored as a target")) + ": " + FormatUtils::FormID(form.formID);
+                        ImGui::SetClipboardText(identity.c_str());
+                    }
+                    if (context.collect && ImGui::MenuItem(context.localize("General", "sAddToCollection", "Add to Collection"), nullptr, false, available)) context.collect(form.formID);
+                    ImGui::EndPopup();
+                }
+            } else ImGui::TextWrapped("%s", display.c_str());
+            ImGui::PopID();
         }
 
         void DrawAdvancedWeaponDetails(const WeaponDetails& details, const FormDetailsViewContext& context, int& popupCounter)
@@ -484,23 +511,30 @@ namespace ESPExplorerAE
         if (details.value) DrawIntLine(L(context, "General", "sValue"), *details.value, detailCopyPopupCounter, context);
         if (details.weight) DrawFloatLine(L(context, "General", "sWeight"), *details.weight, detailCopyPopupCounter, context);
         if (const auto* weapon = std::get_if<WeaponDetails>(&details.specific)) {
-            DrawUIntLine(L(context, "General", "sDamage"), weapon->damageBase, detailCopyPopupCounter, context);
+            DrawUIntLine(FD(context, "sDamageBase"), weapon->damageBase, detailCopyPopupCounter, context);
             if (weapon->fireRate) DrawFloatLine(L(context, "General", "sFireRate"), *weapon->fireRate, detailCopyPopupCounter, context);
             DrawFormReferenceLine(L(context, "Items", "sAmmo"), weapon->ammo, context, detailCopyPopupCounter);
             DrawUIntLine(FD(context, "sAmmoCapacity"), weapon->ammoCapacity, detailCopyPopupCounter, context);
             DrawUIntLine(FD(context, "sAttachmentParentCount"), weapon->attachmentParentCount, detailCopyPopupCounter, context);
         }
-        if (const auto* ammo = std::get_if<AmmoDetails>(&details.specific)) DrawFloatLine(L(context, "General", "sDamage"), ammo->damage, detailCopyPopupCounter, context);
+        if (const auto* ammo = std::get_if<AmmoDetails>(&details.specific)) DrawFloatLine(FD(context, "sDamageBase"), ammo->damage, detailCopyPopupCounter, context);
         if (const auto* armor = std::get_if<ArmorDetails>(&details.specific)) {
             DrawUIntLine(L(context, "General", "sArmorRating"), armor->armorRating, detailCopyPopupCounter, context);
             DrawUIntLine(FD(context, "sAttachmentParentCount"), armor->attachmentParentCount, detailCopyPopupCounter, context);
         }
         if (const auto* npc = std::get_if<NPCDetails>(&details.specific)) {
             DrawIntLine(L(context, "General", "sLevel"), npc->level, detailCopyPopupCounter, context);
+            DrawFormReferenceLine(FD(context, "sDefaultOutfit"), npc->defaultOutfit, context, detailCopyPopupCounter);
             DrawFormReferenceLine(L(context, "NPCs", "sResolvedRace"), npc->resolvedRace, context, detailCopyPopupCounter);
             DrawUIntLine(FD(context, "sAttachmentParentCount"), npc->attachmentParentCount, detailCopyPopupCounter, context);
         }
         if (const auto* sound = std::get_if<SoundDetails>(&details.specific)) DrawFormReferenceLine(L(context, "General", "sDescriptor"), sound->descriptor, context, detailCopyPopupCounter);
+        if (const auto* perk = std::get_if<PerkDetails>(&details.specific)) DrawFormReferenceLine(FD(context, "sNextPerk"), perk->nextPerk, context, detailCopyPopupCounter);
+        if (const auto* recipe = std::get_if<ConstructibleDetails>(&details.specific)) DrawFormReferenceLine(FD(context, "sCreatedItem"), recipe->createdItem, context, detailCopyPopupCounter);
+        if (const auto* cell = std::get_if<CellDetails>(&details.specific)) {
+            DrawFormReferenceLine(FD(context, "sLocation"), cell->location, context, detailCopyPopupCounter);
+            DrawFormReferenceLine(FD(context, "sWorldSpace"), cell->worldSpace, context, detailCopyPopupCounter);
+        }
         if (context.showAdvancedDetailsView) {
             if (const auto* value = std::get_if<WeaponDetails>(&details.specific)) DrawAdvancedWeaponDetails(*value, context, detailCopyPopupCounter);
             if (const auto* value = std::get_if<ArmorDetails>(&details.specific)) DrawAdvancedArmorDetails(*value, context, detailCopyPopupCounter);
@@ -522,6 +556,77 @@ namespace ESPExplorerAE
             if (const auto* value = std::get_if<CellDetails>(&details.specific)) DrawAdvancedCellDetails(*value, context, detailCopyPopupCounter);
         }
         DrawKeywordDetails(details.keywords, context);
+        const auto items = [&](const char* label, const std::vector<DetailItem>& entries, bool truncated) {
+            if (!ImGui::TreeNode(label)) return;
+            for (const auto& entry : entries) {
+                DrawFormReferenceLine((std::string("x") + std::to_string(entry.quantity)).c_str(), entry.record, context, detailCopyPopupCounter);
+            }
+            if (entries.empty()) ImGui::TextDisabled("%s", L(context, "General", "sNone"));
+            if (truncated) ImGui::TextWrapped("%s", context.localize("FormDetails", "sListTruncated", "The capture limit was reached; this list is partial."));
+            ImGui::TreePop();
+        };
+        if (const auto* outfit = std::get_if<OutfitDetails>(&details.specific)) items(context.localize("FormDetails", "sOutfitItems", "Outfit Items"), outfit->items, outfit->truncated);
+        if (const auto* container = std::get_if<ContainerDetails>(&details.specific)) items(context.localize("FormDetails", "sContainerContents", "Container Contents"), container->contents, container->truncated);
+        if (const auto* recipe = std::get_if<ConstructibleDetails>(&details.specific)) {
+            DrawUIntLine(FD(context, "sConstructedCount"), recipe->constructedCount, detailCopyPopupCounter, context);
+            items(context.localize("FormDetails", "sRecipeRequirements", "Recipe Requirements"), recipe->requirements, recipe->truncated);
+        }
+        if (const auto* quest = std::get_if<QuestDetails>(&details.specific)) {
+            DrawUIntLine(FD(context, "sCurrentStage"), quest->currentStage, detailCopyPopupCounter, context);
+            if (ImGui::TreeNode(context.localize("FormDetails", "sObjectives", "Objectives"))) {
+                for (const auto& objective : quest->objectiveList) {
+                    ImGui::PushID(static_cast<int>(objective.index));
+                    if (ImGui::TreeNode("Objective", "%u: %s", objective.index, objective.text.c_str())) {
+                        DrawUIntLine(context.localize("FormDetails", "sCapturedState", "Captured State"), objective.state, detailCopyPopupCounter, context);
+                        for (auto aliasID : objective.aliases) {
+                            const auto found = std::ranges::find(quest->aliasList, aliasID, &DetailAlias::id);
+                            if (found != quest->aliasList.end()) ImGui::BulletText("%s %u: %s", FD(context, "sAliases"), aliasID, found->name.c_str());
+                            else ImGui::BulletText("%s %u: %s", FD(context, "sAliases"), aliasID, context.localize("General", "sUnavailable", "Unavailable"));
+                        }
+                        ImGui::TreePop();
+                    }
+                    ImGui::PopID();
+                }
+                ImGui::TreePop();
+            }
+            if (ImGui::TreeNode(context.localize("FormDetails", "sAliases", "Aliases"))) {
+                for (const auto& alias : quest->aliasList) {
+                    ImGui::PushID(static_cast<int>(alias.id));
+                    if (ImGui::TreeNode("Alias", "%u: %s", alias.id, alias.name.c_str())) {
+                        DrawUIntLine(FD(context, "sFlags"), alias.flags, detailCopyPopupCounter, context);
+                        ImGui::TreePop();
+                    }
+                    ImGui::PopID();
+                }
+                ImGui::TreePop();
+            }
+            ImGui::TextWrapped("%s", context.localize("FormDetails", "sStageUnavailable", "Stage numbers beyond the current stage and resolved alias references are unavailable."));
+            if (quest->truncated) ImGui::TextWrapped("%s", context.localize("FormDetails", "sListTruncated", "The capture limit was reached; this list is partial."));
+        }
+        if (context.catalog && ImGui::TreeNode(context.localize("FormDetails", "sUsedBy", "Used By"))) {
+            ImGui::TextWrapped("%s", context.localize("FormDetails", "sIndexedCoverage", "Indexed runtime weapon-ammo and recipe relationships only. This is not a complete plugin-file reference graph or override history."));
+            const auto found = context.catalog->incomingRelationships.find(selectedRecord.formID);
+            if (found != context.catalog->incomingRelationships.end()) {
+                if (ImGui::BeginChild("IncomingRelationships", {0, 240}, ImGuiChildFlags_Borders)) {
+                    ImGuiListClipper clipper;
+                    clipper.Begin(static_cast<int>(found->second.size()));
+                    const auto firstID = detailCopyPopupCounter;
+                    while (clipper.Step()) for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+                        const auto& link = found->second[row];
+                        const auto* source = context.catalog->Find(link.source);
+                        const auto* label = link.kind == RelationshipKind::WeaponAmmo ? context.localize("FormDetails", "sWeaponUsesAmmo", "Weapon Uses Ammo") :
+                            link.kind == RelationshipKind::RecipeInput ? context.localize("FormDetails", "sRecipeUsesItem", "Recipe Uses Item") : context.localize("FormDetails", "sRecipeCreatesItem", "Recipe Creates Item");
+                        auto rowID = firstID + row;
+                        DrawFormReferenceLine(label, {link.source, source ? source->name : "", source ? source->editorID : ""}, context, rowID);
+                    }
+                    detailCopyPopupCounter += static_cast<int>(found->second.size());
+                }
+                ImGui::EndChild();
+            }
+            else ImGui::TextDisabled("%s", L(context, "General", "sNone"));
+            if (context.catalog->relationshipsTruncated) ImGui::TextWrapped("%s", context.localize("FormDetails", "sListTruncated", "The capture limit was reached; this list is partial."));
+            ImGui::TreePop();
+        }
         ImGui::PopID();
     }
 }

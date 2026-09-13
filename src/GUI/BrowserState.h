@@ -32,11 +32,14 @@ namespace ESPExplorerAE
     struct BrowserState
     {
         AdvancedFilterEditorState filterEditor;
-        std::array<char, 256> searchBuffer{};
+        std::array<char, 1025> searchBuffer{};
         std::string search;
+        bool structuredSearch{};
+        RecordScope scope;
         bool focusPending{};
         std::unordered_map<std::string, BrowserCategoryState> categories;
         std::string activeCategory;
+        std::string requestedCategory;
         ActionAdmission admission{ ActionAdmission::Accepted };
 
         void ResetSession()
@@ -65,6 +68,9 @@ namespace ESPExplorerAE
         bool autoFocusSearch{};
         std::uint32_t equipWeaponAmmoCount{};
         MultiCopyFormat copyFormat{ MultiCopyFormat::Lines };
+        bool doubleClickGameplayAction{};
+        bool compactTableDensity{};
+        bool componentSubstitution{true};
     };
 
     struct BrowserRequests
@@ -75,6 +81,12 @@ namespace ESPExplorerAE
         struct Grant { std::uint64_t session; std::vector<std::uint32_t> forms; };
         std::vector<Grant> grants;
         std::vector<std::uint32_t> recentSelections;
+        std::vector<std::uint32_t> inspections;
+        std::vector<std::uint32_t> pins;
+        std::vector<std::uint32_t> collections;
+        std::vector<std::uint32_t> basket;
+        std::vector<std::uint32_t> pinA;
+        std::vector<std::uint32_t> compareB;
         struct GlobalValue { std::uint64_t session; std::uint32_t formID; };
         std::vector<GlobalValue> globalValues;
     };

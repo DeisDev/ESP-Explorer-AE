@@ -40,6 +40,8 @@ namespace ESPExplorerAE
         std::shared_ptr<const InventorySnapshot> inventory;
         InventoryIndex inventoryStack{};
         std::vector<InventoryIndex> inventoryGroup;
+        std::uint64_t groupID{};
+        std::string groupName;
     };
 
     inline std::optional<InventoryAction> InventoryOperation(ActionKind kind)
@@ -169,6 +171,7 @@ namespace ESPExplorerAE
 
         static bool Valid(const ActionRequest& request)
         {
+            if (request.groupName.size() > 128) return false;
             if (request.kind < ActionKind::Give || request.kind > ActionKind::SetGameHour) return false;
             if (request.count == 0 || request.count > MaxQuantity || request.ammoCount > MaxQuantity) return false;
             if (request.kind == ActionKind::SetGlobal && !std::isfinite(request.value)) return false;

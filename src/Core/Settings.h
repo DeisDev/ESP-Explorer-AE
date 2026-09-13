@@ -30,6 +30,8 @@ namespace ESPExplorerAE
         bool pluginGlobalSearchMode{ false };
         bool pluginShowUnknownCategories{ false };
         bool autoFocusSearchBars{ true };
+        bool doubleClickGameplayAction{};
+        bool compactTableDensity{};
         bool showPlayerStatsInStatus{ false };
         bool showMenuResolutionInStatus{ false };
         MultiCopyFormat multiCopyFormat{ MultiCopyFormat::Lines };

@@ -14,7 +14,9 @@ namespace ESPExplorerAE
     {
         AdvancedFilterEditorState filterEditor;
         std::string search;
-        std::array<char, 256> searchBuffer{};
+        bool structuredSearch{};
+        RecordScope scope;
+        std::array<char, 1025> searchBuffer{};
         std::string diagnosticsPlugin;
         bool focusPending{};
         bool showUnknown{};
@@ -28,6 +30,9 @@ namespace ESPExplorerAE
         TreeSelection selection;
         std::deque<std::uint32_t> recent;
         PluginQuery query;
+        float scroll{};
+        float resultsWidth{};
+        bool restoreScroll{};
 
         void TrackRecent(std::uint32_t id, std::size_t limit)
         {

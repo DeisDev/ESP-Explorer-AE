@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/RecordDetails.h"
+#include <algorithm>
 #include <memory>
 
 namespace ESPExplorerAE
@@ -12,51 +13,67 @@ namespace ESPExplorerAE
         struct Ticket { DetailKey key; std::uint64_t revision; bool operator==(const Ticket&) const = default; };
         static constexpr Milliseconds RefreshInterval = 500;
         static constexpr Milliseconds RequestLease = 250;
+        static constexpr std::size_t Capacity = 16;
 
         std::shared_ptr<const RecordDetails> Request(DetailKey key, Milliseconds now)
         {
-            if (!requested || *requested != key) {
-                requested = key;
-                ++revision;
-                current.reset();
-                refreshAt = now;
+            std::erase_if(entries, [&](const Entry& entry) {
+                return entry.key.session != key.session || entry.key.catalogGeneration != key.catalogGeneration;
+            });
+            auto found = Find(key);
+            if (found == entries.end()) {
+                if (entries.size() == Capacity) entries.erase(std::ranges::min_element(entries, {}, &Entry::requestedAt));
+                entries.push_back({ key, ++revision, now, now, {} });
+                found = std::prev(entries.end());
             }
-            requestedAt = now;
-            return current;
+            found->requestedAt = now;
+            return found->current;
         }
         std::optional<Ticket> Begin(std::uint64_t session, std::uint64_t catalogGeneration, bool catalogReady, Milliseconds now)
         {
             // Session zero is the initial main menu, where the catalog can already
             // be ready. Details require the current session, not a loaded game.
-            if (inFlight || !requested || !catalogReady || !requested->formID || requested->session != session ||
-                requested->catalogGeneration != catalogGeneration || now < refreshAt || now - requestedAt > RequestLease) return {};
-            inFlight = Ticket{ *requested, revision };
+            if (inFlight || !catalogReady) return {};
+            Entry* next{};
+            for (auto& entry : entries) {
+                if (!entry.key.formID || entry.key.session != session || entry.key.catalogGeneration != catalogGeneration ||
+                    now < entry.refreshAt || now - entry.requestedAt > RequestLease) continue;
+                if (!next || entry.refreshAt < next->refreshAt) next = &entry;
+            }
+            if (next) inFlight = Ticket{ next->key, next->revision };
             return inFlight;
         }
         bool Finish(Ticket ticket, std::shared_ptr<const RecordDetails> result, Milliseconds now)
         {
             if (!inFlight || *inFlight != ticket) return false;
             inFlight.reset();
-            if (!requested || ticket.revision != revision || ticket.key != *requested) return false;
-            refreshAt = now + RefreshInterval;
+            const auto found = Find(ticket.key);
+            if (found == entries.end() || found->revision != ticket.revision) return false;
+            found->refreshAt = now + RefreshInterval;
             if (!result || result->key != ticket.key) return false;
-            current = std::move(result);
+            found->current = std::move(result);
             return true;
         }
         void Clear()
         {
-            requested.reset();
-            current.reset();
+            entries.clear();
+            inFlight.reset();
             ++revision;
-            refreshAt = 0;
         }
+        std::size_t RetainedCount() const { return entries.size(); }
 
     private:
-        std::optional<DetailKey> requested;
-        std::shared_ptr<const RecordDetails> current;
+        struct Entry
+        {
+            DetailKey key;
+            std::uint64_t revision;
+            Milliseconds requestedAt;
+            Milliseconds refreshAt;
+            std::shared_ptr<const RecordDetails> current;
+        };
+        std::vector<Entry> entries;
         std::uint64_t revision{};
-        Milliseconds requestedAt{};
-        Milliseconds refreshAt{};
         std::optional<Ticket> inFlight;
+        std::vector<Entry>::iterator Find(DetailKey key) { return std::ranges::find(entries, key, &Entry::key); }
     };
 }

@@ -1,13 +1,73 @@
 #include "GUI/Widgets/MenuChrome.h"
 
 #include "GUI/Icons.h"
+#include "GUI/Widgets/ImGuiWidgetUtils.h"
 #include "Localization/FontManager.h"
 
 #include <imgui.h>
 #include <algorithm>
+#include <string>
 
 namespace ESPExplorerAE::MenuChrome
 {
+    ToolbarRequests WorkspaceToolbar(std::span<const ToolbarPage> pages, std::size_t basketCount,
+        bool explore, bool sourcesShown, bool inspectorShown, bool refreshing,
+        const std::function<const char*(std::string_view, std::string_view, const char*)>& localize)
+    {
+        ToolbarRequests requests;
+        ImGui::Spacing();
+        bool first = true;
+        if (!pages.empty()) {
+            float width = 0.0f;
+            const char* preview = pages.front().label;
+            for (const auto& page : pages) {
+                width = (std::max)(width, ImGui::CalcTextSize(page.label).x);
+                if (page.selected) preview = page.label;
+            }
+            ImGui::SetNextItemWidth((std::min)(width + ImGui::GetFrameHeight() + ImGui::GetStyle().FramePadding.x * 2, ImGui::GetContentRegionAvail().x));
+            if (ImGui::BeginCombo("##WorkspaceCategory", preview)) {
+                for (const auto& page : pages) {
+                    ImGui::PushID(page.id);
+                    if (ImGui::Selectable(page.label, page.selected)) requests.page = page.id;
+                    if (page.selected) ImGui::SetItemDefaultFocus();
+                    ImGui::PopID();
+                }
+                ImGui::EndCombo();
+            }
+            first = false;
+        }
+        const auto button = [&](const char* label) { return ImGuiWidgetUtils::DrawWrappedButton(label, first); };
+        requests.commands = button(localize("Workspace", "sCommandPalette", "Commands & Shortcuts"));
+        requests.basket = button((std::string(localize("Workspace", "sBasket", "Basket")) + " (" + std::to_string(basketCount) + ")###OpenBasket").c_str());
+        requests.compare = button(localize("Comparison", "sCompare", "Compare"));
+        if (button(localize("General", "sViewOptions", "View"))) ImGui::OpenPopup("WorkspaceViewOptions");
+        if (ImGui::BeginPopup("WorkspaceViewOptions")) {
+            if (explore) {
+                requests.sources = ImGui::MenuItem(localize("General", "sSourcesViews", "Sources/Views"), nullptr, sourcesShown);
+                requests.inspector = ImGui::MenuItem(localize("General", "sInspector", "Inspector"), nullptr, inspectorShown);
+            }
+            requests.diagnostics = ImGui::MenuItem(localize("PluginBrowser", "sPluginDiagnostics", "Plugin Diagnostics"));
+            ImGui::Separator();
+            requests.refresh = ImGui::MenuItem(localize("General", "sRefreshData", "Refresh Data"), nullptr, false, !refreshing);
+            requests.reset = ImGui::MenuItem(localize("General", "sResetThisView", "Reset This View"));
+            ImGui::EndPopup();
+        }
+        ImGui::Spacing();
+        return requests;
+    }
+
+    int Destinations(const std::array<const char*, 4>& labels, int selected)
+    {
+        constexpr std::array icons{Icons::Puzzle, Icons::Backpack, Icons::UsersRound, Icons::SlidersHorizontal};
+        if (ImGui::BeginTable("WorkspaceDestinations", 4, ImGuiTableFlags_SizingStretchSame)) {
+            for (int index = 0; index < 4; ++index) {
+                ImGui::TableNextColumn();
+                if (NavigationItem(std::to_string(index).c_str(), labels[index], "", icons[index], selected == index)) selected = index;
+            }
+            ImGui::EndTable();
+        }
+        return selected;
+    }
     namespace
     {
         void Icon(ImDrawList* draw, ImVec2 position, float size, const char* icon, ImU32 color)

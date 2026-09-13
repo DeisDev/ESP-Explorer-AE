@@ -20,9 +20,10 @@ namespace ESPExplorerAE
         if (!ImGui::BeginTabBar("ObjectCategories")) return;
         for (const auto& category : categories) {
             const auto label = std::string(view.localize(category.section, category.key, category.fallback)) + "###" + category.id;
-            const bool open = ImGui::BeginTabItem(label.c_str());
+            const bool open = ImGui::BeginTabItem(label.c_str(), nullptr, state.requestedCategory == category.id ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None);
             SharedUtils::DrawCurrentItemChrome(open, ImGui::IsItemHovered(), true, false);
             if (!open) continue;
+            if (state.requestedCategory == category.id) state.requestedCategory.clear();
             BrowserWidgets::ActivateCategory(state, view, category.id);
             const FormTableConfig config{
                 .tableId = category.table, .primaryActionLabel = view.localize("Objects", "sPlace", "Place"),

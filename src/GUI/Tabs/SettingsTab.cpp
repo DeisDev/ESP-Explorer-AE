@@ -173,6 +173,9 @@ namespace ESPExplorerAE
 
             static constexpr StartupTabOption kStartupTabOptions[] = {
                 { kStartupTabLastActive, "Settings", "sStartupTabLastActive", "Last Active Tab" },
+                { "Explore", "General", "sExplore", "Explore" },
+                { "Player & World", "General", "sPlayerWorld", "Player & World" },
+                { "Tools", "General", "sNavigationTools", "Tools" },
                 { "Plugin Browser", "PluginBrowser", "sBrowserTab", "Plugin Browser" },
                 { "Inventory", "Inventory", "sTabName", "Inventory" },
                 { "Item Browser", "Items", "sBrowserTab", "Item Browser" },
@@ -412,6 +415,8 @@ namespace ESPExplorerAE
             changed = ImGui::Checkbox(L("Settings", "sShowFPSStatus", "Show FPS In Status Bar"), &settings.showFPSInStatus) || changed;
             changed = ImGui::Checkbox(L("Settings", "sShowPlayerStats", "Show Player Stats In Status Bar"), &settings.showPlayerStatsInStatus) || changed;
             changed = ImGui::Checkbox(L("Settings", "sAutoFocusSearch", "Auto-Focus Search Bars"), &settings.autoFocusSearchBars) || changed;
+            changed = ImGui::Checkbox(L("Settings", "sCompactTableDensity", "Compact result rows"), &settings.compactTableDensity) || changed;
+            changed = ImGui::Checkbox(L("Settings", "sDoubleClickGameplayAction", "Double-click performs gameplay actions"), &settings.doubleClickGameplayAction) || changed;
             changed = ImGui::Checkbox(L("Settings", "sAdvancedPluginDetails", "Advanced Plugin Browser Details"), &settings.pluginAdvancedDetailsView) || changed;
             sectionSpacing();
             fieldLabel(L("Settings", "sRecentRecordsLimit", "Max Recent Records Displayed"));

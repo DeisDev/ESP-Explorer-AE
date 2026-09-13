@@ -4,6 +4,7 @@
 #include "Core/CopyFormat.h"
 #include "Core/QueryIdentity.h"
 #include "Core/RecordSelection.h"
+#include "Core/RecordColumns.h"
 
 #include <functional>
 #include <optional>
@@ -20,6 +21,8 @@ namespace ESPExplorerAE
         bool disableBulkPrimaryAction{ false };
         bool gameplayActionsAllowed{};
         MultiCopyFormat copyFormat{ MultiCopyFormat::Lines };
+        bool doubleClickGameplayAction{};
+        bool compactDensity{};
     };
 
     struct FormTableState
@@ -31,6 +34,10 @@ namespace ESPExplorerAE
         std::optional<ResultRevision> orderRevision;
         std::vector<std::uint32_t> displayedIDs;
         std::unordered_map<std::uint32_t, std::size_t> displayedPositions;
+        float scroll{};
+        bool restoreScroll{};
+        RecordTableLayout columns{ DefaultRecordColumns() };
+        bool restoreColumns{ true };
     };
 
     struct FormTableActions
@@ -42,6 +49,9 @@ namespace ESPExplorerAE
         std::function<void(const FormEntry&, bool)> rowContext;
         std::function<bool(const FormEntry&)> canPrimary;
         std::function<void(std::uint32_t)> selected;
+        std::function<void(std::uint32_t)> inspect;
+        std::function<void(const std::vector<FormEntry>&)> basket;
+        std::function<void(const std::vector<FormEntry>&)> collect;
     };
 
     class FormTable

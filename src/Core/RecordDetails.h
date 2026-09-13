@@ -22,6 +22,9 @@ namespace ESPExplorerAE
         std::string name;
         std::string editorID;
     };
+    struct DetailItem { DetailReference record; std::int64_t quantity{}; };
+    struct DetailAlias { std::uint32_t id{}; std::string name; std::uint32_t flags{}; };
+    struct DetailObjective { std::uint32_t index{}; std::string text; std::uint32_t state{}; std::vector<std::uint32_t> aliases; };
     struct DetailFormValue { DetailReference form; float value{}; };
 
     struct WeaponDetails
@@ -135,6 +138,8 @@ namespace ESPExplorerAE
     struct OutfitDetails
     {
         std::uint32_t outfitItems{};
+        std::vector<DetailItem> items;
+        bool truncated{};
     };
 
     struct WeatherDetails
@@ -171,6 +176,8 @@ namespace ESPExplorerAE
         DetailReference closeSound{};
         DetailReference takeAllSound{};
         DetailReference containsOnlyList{};
+        std::vector<DetailItem> contents;
+        bool truncated{};
     };
 
     struct StaticDetails
@@ -229,6 +236,8 @@ namespace ESPExplorerAE
         std::uint32_t requiredItems{};
         std::uint32_t constructedCount{};
         std::uint32_t workshopPriority{};
+        std::vector<DetailItem> requirements;
+        bool truncated{};
     };
 
     struct QuestDetails
@@ -244,6 +253,9 @@ namespace ESPExplorerAE
         int priority{};
         int questType{};
         std::uint32_t flags{};
+        std::vector<DetailAlias> aliasList;
+        std::vector<DetailObjective> objectiveList;
+        bool truncated{};
     };
 
     struct CellDetails

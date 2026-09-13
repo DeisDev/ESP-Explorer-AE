@@ -3,6 +3,7 @@
 #include "GUI/Tabs/PluginBrowserPanels.h"
 
 #include "GUI/Widgets/SearchBar.h"
+#include "GUI/Widgets/SearchControls.h"
 #include "GUI/Widgets/ImGuiWidgetUtils.h"
 
 #include "GUI/Widgets/RecordFiltersWidget.h"
@@ -30,33 +31,13 @@ namespace ESPExplorerAE
         SearchBar::Draw(view.records.localize("PluginBrowser", "sSearch", "Search name, FormID, EditorID, plugin or type"), state.searchBuffer.data(), state.searchBuffer.size(),
             state.search, &state.focusPending, "PluginSearchInput", clearLabel);
 
-        if (ImGui::Checkbox(context.view.records.localize("PluginBrowser", "sGlobalSearch", "Global Search"), &context.state.globalSearch)) {
-            context.requests.settingsChanged = true;
-        }
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", view.records.localize("PluginBrowser", "sGlobalSearchHint",
-            "Search all visible plugins, ignoring the active plugin filter. Record filters still apply."));
+        DrawSearchControls(state.structuredSearch, state.scope, state.search, state.searchBuffer.data(), state.searchBuffer.size(), *snapshot, view.records.localize);
         {
             const char* unknownLabel = context.view.records.localize("PluginBrowser", "sShowUnknownCategories", "Show Unknown Categories");
             ImGuiWidgetUtils::SameLineIfFits(ImGui::CalcTextSize(unknownLabel).x + ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x);
             if (ImGui::Checkbox(unknownLabel, &context.state.showUnknown)) {
                 listFilterSettingsChanged = true;
                 context.requests.settingsChanged = true;
-            }
-        }
-
-        if (!context.view.records.pluginFilter.empty()) {
-            const std::string activePluginLabel = BuildPluginDisplayName(context.view.records.pluginFilter, plugins);
-            const auto filterLabel = activePluginLabel + "  " + clearLabel + "###PluginFilter";
-            bool first = false;
-            if (state.globalSearch) ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-            if (ImGuiWidgetUtils::DrawWrappedButton(filterLabel.c_str(), first)) context.requests.pluginFilter = std::string{};
-            if (state.globalSearch) ImGui::PopStyleColor();
-            if (ImGui::IsItemHovered()) {
-                ImGui::BeginTooltip();
-                ImGui::TextUnformatted(activePluginLabel.c_str());
-                ImGui::TextUnformatted(view.records.localize("PluginBrowser", "sClearFilter", "Clear Plugin Filter"));
-                if (state.globalSearch) ImGui::TextUnformatted(view.records.localize("PluginBrowser", "sFilterBypassed", "Global Search is ignoring this plugin filter."));
-                ImGui::EndTooltip();
             }
         }
 
@@ -78,8 +59,11 @@ namespace ESPExplorerAE
         }
 
         CatalogQuery filter;
-        filter.plugin = context.requests.pluginFilter ? *context.requests.pluginFilter : std::string(context.view.records.pluginFilter);
+        filter.scope = state.scope;
+        filter.structuredSearch = state.structuredSearch;
         filter.search = context.state.search;
+        RecordFiltersWidget::DrawWhyHidden(view.records.localize, "PluginBrowser", {view.records.filters.showNonPlayableRecords, view.records.filters.showUnnamedRecords,
+            view.records.filters.showDeletedRecords, view.records.filters.advancedRecordFilters, view.records.filters.hiddenPlugins}, state.filterEditor, filter, snapshot);
         filter.showPlayable = context.view.records.filters.showPlayableRecords;
         filter.showNonPlayable = context.view.records.filters.showNonPlayableRecords;
         filter.showNamed = context.view.records.filters.showNamedRecords;
@@ -91,16 +75,20 @@ namespace ESPExplorerAE
         context.state.selection.Reconcile(result.eligibleIDs);
 
         const float totalWidth = ImGui::GetContentRegionAvail().x;
-        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+        if (!view.showInspector) { DrawTreePane(plugins, cache, context, totalWidth); return; }
+        const float spacing = ImGuiWidgetUtils::PaneDividerSize();
         const float minLeftWidth = (std::min)(ImGui::GetFontSize() * 12.0f, totalWidth * 0.35f);
-        const float minDetailsWidth = (std::min)(ImGui::GetFontSize() * 26.0f, totalWidth * 0.60f);
+        const float minDetailsWidth = (std::min)(ImGui::GetFontSize() * (view.drawInspector ? 20.0f : 26.0f), totalWidth * 0.60f);
         const float maxLeftWidth = (std::max)(minLeftWidth, totalWidth - minDetailsWidth - spacing);
-        const float leftWidth = (std::clamp)(totalWidth * 0.44f, minLeftWidth, maxLeftWidth);
-        // Constrain the draggable tree edge so it cannot squeeze actions out of
-        // the details pane; the limits also adapt when the menu/font size changes.
-        ImGui::SetNextWindowSizeConstraints(ImVec2(minLeftWidth, 0.0f), ImVec2(maxLeftWidth, (std::numeric_limits<float>::max)()));
+        float leftWidth = (std::clamp)(view.drawInspector ? totalWidth - view.inspectorWidth - spacing :
+            state.resultsWidth > 0 ? state.resultsWidth : totalWidth * 0.44f, minLeftWidth, maxLeftWidth);
         DrawTreePane(plugins, cache, context, leftWidth);
-        ImGui::SameLine();
+        ImGui::SameLine(0, 0);
+        ImGuiWidgetUtils::PaneDivider("##PluginResultsDivider", leftWidth, minLeftWidth, maxLeftWidth,
+            view.records.localize("General", "sResizePanes", "Drag to resize panes"));
+        state.resultsWidth = leftWidth;
+        requests.resultsWidth = leftWidth;
+        ImGui::SameLine(0, 0);
         DrawDetailsPane(plugins, cache, context);
     }
 }

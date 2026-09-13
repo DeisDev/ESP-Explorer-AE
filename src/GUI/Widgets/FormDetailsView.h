@@ -13,6 +13,10 @@ namespace ESPExplorerAE
         bool showAdvancedDetailsView{ false };
         const CatalogSnapshot* catalog{};
         std::shared_ptr<const RecordDetails> details;
+        std::function<void(std::uint32_t)> open;
+        std::function<void(std::uint32_t)> pin;
+        std::function<void(std::uint32_t)> collect;
+        bool canPin{ true };
     };
 
     class FormDetailsView

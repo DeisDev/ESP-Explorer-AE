@@ -25,9 +25,10 @@ namespace ESPExplorerAE
         if (!ImGui::BeginTabBar("ItemCategories")) return;
         for (const auto& category : categories) {
             const auto label = std::string(view.localize(category.section, category.key, category.fallback)) + "###" + category.id;
-            const bool open = ImGui::BeginTabItem(label.c_str());
+            const bool open = ImGui::BeginTabItem(label.c_str(), nullptr, state.requestedCategory == category.id ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None);
             SharedUtils::DrawCurrentItemChrome(open, ImGui::IsItemHovered(), true, false);
             if (!open) continue;
+            if (state.requestedCategory == category.id) state.requestedCategory.clear();
             BrowserWidgets::ActivateCategory(state, view, category.id);
             auto& rows = state.categories[category.id];
             auto query = BrowserWidgets::MakeQuery(state, view, rows, {});
@@ -36,7 +37,7 @@ namespace ESPExplorerAE
             const FormTableConfig config{
                 .tableId = category.id, .primaryActionLabel = view.localize("Items", "sGiveItem", "Give Item"),
                 .quantityActionLabel = view.localize("NPCs", "sSpawnAtPlayer", "Spawn At Player"),
-                .allowFavorites = true, .gameplayActionsAllowed = view.gameplayReady, .copyFormat = view.copyFormat
+                .allowFavorites = true, .gameplayActionsAllowed = view.gameplayReady, .copyFormat = view.copyFormat, .doubleClickGameplayAction = view.doubleClickGameplayAction, .compactDensity = view.compactTableDensity
             };
             const FormTableActions actions{
                 .primary = [&](const FormEntry& entry) { requests.grants.push_back({ view.session, { entry.formID } }); },
@@ -48,7 +49,10 @@ namespace ESPExplorerAE
                 .quantity = [&](const FormEntry& entry, int quantity) { BrowserWidgets::Emit(requests, view, entry, ActionKind::Spawn, false, quantity); },
                 .rowContext = [&](const FormEntry& entry, bool multiple) { BrowserWidgets::DrawContext(entry, multiple ? BrowserWidgets::ContextScope::Selection : BrowserWidgets::ContextScope::Single, rows.contextQuantities, view, requests); },
                 .canPrimary = [](const FormEntry& entry) { return !entry.isDeleted && SupportsRecordAction(entry.category, ActionKind::Give); },
-            .selected = [&](auto id) { requests.recentSelections.push_back(id); }
+            .selected = [&](auto id) { requests.recentSelections.push_back(id); },
+            .inspect = [&](auto id) { requests.inspections.push_back(id); },
+            .basket = [&](const auto& entries) { for (const auto& entry : entries) requests.basket.push_back(entry.formID); },
+            .collect = [&](const auto& entries) { for (const auto& entry : entries) requests.collections.push_back(entry.formID); }
             };
             FormTable::DrawPrepared(rows.table, result, config, actions, &view.favorites);
             ImGui::EndTabItem();

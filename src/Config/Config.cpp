@@ -3,6 +3,7 @@
 #include "Core/SaveSchedule.h"
 #include "Core/MigrationWrite.h"
 #include "Platform/AtomicFile.h"
+#include "App/WorkspaceService.h"
 
 #include <mutex>
 #include <fstream>
@@ -58,6 +59,7 @@ namespace ESPExplorerAE
 
     bool Config::Load()
     {
+        WorkspaceService::Load();
         persistenceAllowed = false;
         legacyBackup.reset();
         configPath = ResolveConfigPath();
@@ -109,6 +111,7 @@ namespace ESPExplorerAE
 
     bool Config::FlushPendingSaveIfDue()
     {
+        WorkspaceService::Flush();
         std::lock_guard lock(persistenceMutex);
         if (!persistenceAllowed) return false;
         if (!saveSchedule.IsDue(SaveSchedule::Clock::now())) {
@@ -121,6 +124,7 @@ namespace ESPExplorerAE
 
     bool Config::FlushPendingSave()
     {
+        WorkspaceService::Flush(true);
         std::lock_guard lock(persistenceMutex);
         if (!persistenceAllowed) return false;
         if (!saveSchedule.IsDirty()) {

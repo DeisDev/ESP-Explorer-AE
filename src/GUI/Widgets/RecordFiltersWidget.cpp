@@ -456,38 +456,76 @@ namespace ESPExplorerAE
         }
     }
 
+    void RecordFiltersWidget::DrawWhyHidden(const LocalizeFn& localize, std::string_view idSuffix, RecordFilterState state,
+        AdvancedFilterEditorState& editor, const CatalogQuery& query, std::shared_ptr<const CatalogSnapshot> catalog)
+    {
+        ImGuiWidgetUtils::DrawWrappedSameLine(localize("Search", "sWhyHidden", "Why Hidden?"));
+        ImGui::PushID(idSuffix.data());
+        if (ImGui::Button(localize("Search", "sWhyHidden", "Why Hidden?"))) ImGui::OpenPopup("WhyHidden");
+        if (ImGui::BeginPopup("WhyHidden")) {
+            ImGui::SetNextItemWidth(220);
+            ImGui::InputTextWithHint("##HiddenID", localize("Search", "sExactID", "Eight-digit FormID"), editor.hiddenFormID, sizeof(editor.hiddenFormID), ImGuiInputTextFlags_CharsHexadecimal);
+            const auto id = ParseExactFormID(editor.hiddenFormID);
+            const auto* record = id && catalog ? catalog->Find(*id) : nullptr;
+            if (record) {
+                ImGui::TextWrapped("%s", record->name.c_str());
+                auto local = query;
+                local.hiddenPlugins.clear(); local.showPlayable = true; local.showNonPlayable = true;
+                local.showNamed = true; local.showUnnamed = true; local.showDeleted = true;
+                if (!local.Matches(*record, PreparedRecordFilters{})) ImGui::TextWrapped("%s", localize("Search", "sOutsideQuery", "Excluded by this view's query, category, or scope."));
+                bool blocked = false;
+                if (state.hiddenPlugins.contains(record->sourcePlugin)) { blocked = true; ImGui::TextWrapped("%s", localize("Search", "sPluginHidden", "The source plugin is hidden by a shared rule.")); }
+                if ((!record->isPlayable && !state.showNonPlayable) || (record->name.empty() && !state.showUnnamed) || (record->isDeleted && !state.showDeleted)) {
+                    blocked = true; ImGui::TextWrapped("%s", localize("Search", "sVisibilityHidden", "Excluded by the shared playable/name/deleted visibility controls."));
+                }
+                for (std::size_t index = 0; index < state.advancedRules.size(); ++index) {
+                    const auto& rule = state.advancedRules[index];
+                    if (PreparedRecordFilters(std::span(&rule, 1)).Passes(*record)) continue;
+                    blocked = true;
+                    ImGui::PushID(static_cast<int>(index));
+                    ImGui::TextWrapped("#%zu: %s", index + 1, rule.value.c_str());
+                    if (ImGui::Button(localize("Search", "sReviewRule", "Review rule and preview"))) {
+                        editor.UpdateChoices(catalog);
+                        editor.newField = static_cast<int>(rule.field); editor.newMatch = static_cast<int>(rule.match);
+                        std::snprintf(editor.newValue, sizeof(editor.newValue), "%s", rule.value.c_str());
+                        editor.newTargetPlugins = rule.targetPlugins;
+                        editor.open = true; editor.focusPending = true;
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::PopID();
+                }
+                if (!blocked) ImGui::TextWrapped("%s", localize("Search", "sNoGlobalExclusion", "No shared visibility rule excludes this record."));
+            } else ImGui::TextWrapped("%s", localize("Search", "sRecordNotFound", "Enter a valid ID present in the current runtime catalog."));
+            ImGui::EndPopup();
+        }
+        ImGui::PopID();
+    }
+
     bool RecordFiltersWidget::Draw(const LocalizeFn& localize, std::string_view idSuffix, RecordFilterState state,
         AdvancedFilterEditorState& editorState, std::shared_ptr<const CatalogSnapshot> catalog)
     {
         bool changed = false;
 
-        const std::string nonPlayableLabel = std::string(localize("General", "sIncludeNonPlayable", "Include Non-Playable")) + "##NonPlayable" + std::string(idSuffix);
-        if (ImGui::Checkbox(nonPlayableLabel.c_str(), &state.showNonPlayable)) {
-            changed = true;
-        }
-
-        ImGuiWidgetUtils::DrawWrappedSameLine(localize("General", "sIncludeUnnamed", "Include Unnamed"));
-        const std::string unnamedLabel = std::string(localize("General", "sIncludeUnnamed", "Include Unnamed")) + "##Unnamed" + std::string(idSuffix);
-        if (ImGui::Checkbox(unnamedLabel.c_str(), &state.showUnnamed)) {
-            changed = true;
-        }
-
-        ImGuiWidgetUtils::DrawWrappedSameLine(localize("General", "sIncludeDeleted", "Include Deleted"));
-        const std::string deletedLabel = std::string(localize("General", "sIncludeDeleted", "Include Deleted")) + "##Deleted" + std::string(idSuffix);
-        if (ImGui::Checkbox(deletedLabel.c_str(), &state.showDeleted)) {
-            changed = true;
-        }
-
         const auto activeRules = AdvancedRecordFilters::CountActiveRules(state.advancedRules);
         const auto hiddenCount = state.hiddenPlugins.size();
-        const auto visibleLabel = std::string(localize("General", "sAdvancedRecordFilters", "Advanced Filters")) + " (" +
-            std::to_string(activeRules) + (hiddenCount ? "+" + std::to_string(hiddenCount) : "") + ")";
+        const auto visibility = std::string(localize("General", "sGlobalVisibilityRules", "Global Visibility Rules")) + " (" +
+            std::to_string(activeRules) + "+" + std::to_string(hiddenCount) + ")###Visibility" + std::string(idSuffix);
+        const auto popup = "VisibilityOptions" + std::string(idSuffix);
+        if (ImGui::Button(visibility.c_str())) ImGui::OpenPopup(popup.c_str());
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", localize("General", "sGlobalVisibilityHint", "Shared exclusions apply to every Explore page. Clear Search and Reset This View do not remove them."));
+        if (ImGui::BeginPopup(popup.c_str())) {
+            const auto nonPlayable = std::string(localize("General", "sIncludeNonPlayable", "Include Non-Playable")) + "##NonPlayable" + std::string(idSuffix);
+            const auto unnamed = std::string(localize("General", "sIncludeUnnamed", "Include Unnamed")) + "##Unnamed" + std::string(idSuffix);
+            const auto deleted = std::string(localize("General", "sIncludeDeleted", "Include Deleted")) + "##Deleted" + std::string(idSuffix);
+            changed = ImGui::Checkbox(nonPlayable.c_str(), &state.showNonPlayable) || changed;
+            changed = ImGui::Checkbox(unnamed.c_str(), &state.showUnnamed) || changed;
+            changed = ImGui::Checkbox(deleted.c_str(), &state.showDeleted) || changed;
+            ImGui::EndPopup();
+        }
+        const auto visibleLabel = std::string(localize("General", "sAdvancedRecordFilters", "Advanced Filters"));
         const auto advancedButtonLabel = visibleLabel + "###AdvancedFilters" + std::string(idSuffix);
         ImGuiWidgetUtils::DrawWrappedSameLine(visibleLabel.c_str());
-        if (ImGui::Button(advancedButtonLabel.c_str())) {
-            editorState.open = true;
-            editorState.focusPending = true;
-        }
+        if (ImGui::Button(advancedButtonLabel.c_str())) { editorState.open = true; editorState.focusPending = true; }
 
         // Editors are submitted by the window owner after the active browser,
         // so changing tabs does not hide an open tool window.

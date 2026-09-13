@@ -40,6 +40,8 @@ namespace ESPExplorerAE
         std::unordered_map<std::string, std::vector<RecordIndex>> byPlugin;
         std::unordered_map<std::uint32_t, std::uint32_t> runtimeReferenceCounts;
         std::vector<std::string> availableKeywords;
+        std::unordered_map<std::uint32_t, std::vector<IncomingRelationship>> incomingRelationships;
+        bool relationshipsTruncated{};
 
         const FormEntry* Find(std::uint32_t id) const
         {
@@ -54,12 +56,24 @@ namespace ESPExplorerAE
             byID.clear();
             byType.clear();
             byPlugin.clear();
+            incomingRelationships.clear();
+            relationshipsTruncated = false;
+            std::size_t relationshipCount{};
+            const auto relationship = [&](std::uint32_t source, RecordRelationship link) {
+                if (!link.target) return;
+                if (relationshipCount >= 262144) { relationshipsTruncated = true; return; }
+                incomingRelationships[link.target].push_back({link.kind, source, link.quantity});
+                ++relationshipCount;
+            };
             std::ranges::sort(records, {}, &FormEntry::formID);
             for (RecordIndex i = 0; i < records.size(); ++i) {
                 const auto& record = records[i];
                 if (!record.formID || !byID.emplace(record.formID, i).second) throw std::invalid_argument("catalog identity must be nonzero and unique");
                 byType[record.category].push_back(i);
                 byPlugin[record.sourcePlugin].push_back(i);
+                relationship(record.formID, {RelationshipKind::WeaponAmmo, record.weaponAmmoID, 0});
+                for (const auto& link : record.relationships) relationship(record.formID, link);
+                relationshipsTruncated |= record.relationshipsTruncated;
             }
             std::ranges::sort(availableKeywords);
             availableKeywords.erase(std::unique(availableKeywords.begin(), availableKeywords.end()), availableKeywords.end());

@@ -194,6 +194,19 @@ namespace ESPExplorerAE
             else if (const auto* weapon = item.object->As<RE::TESObjectWEAP>()) result.damage = weapon->weaponData.attackDamage;
             if (const auto* data = instance ? RE::fallout_cast<const RE::TESObjectARMO::InstanceData*>(instance) : nullptr) result.armorRating = data->rating;
             else if (const auto* armor = item.object->As<RE::TESObjectARMO>()) result.armorRating = armor->armorData.rating;
+            const RE::BGSKeywordForm* capturedKeywords{};
+            if (const auto* data = instance ? RE::fallout_cast<const RE::TESObjectWEAP::InstanceData*>(instance) : nullptr) capturedKeywords = data->keywords;
+            else if (const auto* armorData = instance ? RE::fallout_cast<const RE::TESObjectARMO::InstanceData*>(instance) : nullptr) capturedKeywords = armorData->keywords;
+            else capturedKeywords = item.object->As<RE::BGSKeywordForm>();
+            if (capturedKeywords) {
+                result.keywordIDs.emplace();
+                capturedKeywords->ForEachKeyword([&](RE::BGSKeyword* keyword) {
+                    if (keyword) result.keywordIDs->push_back(keyword->GetFormID());
+                    return RE::BSContainer::ForEachResult::kContinue;
+                });
+                std::ranges::sort(*result.keywordIDs);
+                result.keywordIDs->erase(std::unique(result.keywordIDs->begin(), result.keywordIDs->end()), result.keywordIDs->end());
+            }
             if (auto* extra = identity.extra.get()) {
                 result.isFavorited = extra->IsFavorite();
                 result.healthPercent = extra->GetHealthPerc();

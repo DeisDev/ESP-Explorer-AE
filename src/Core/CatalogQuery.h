@@ -3,6 +3,8 @@
 #include "Core/CatalogSnapshot.h"
 #include "Core/FilterRule.h"
 #include "Core/NPCFilters.h"
+#include "Core/RecordColumns.h"
+#include "Core/SearchQuery.h"
 
 #include <array>
 #include <cstdio>
@@ -95,22 +97,27 @@ namespace ESPExplorerAE
         std::unordered_set<std::string> hiddenPlugins;
         NPCQuery npc;
         bool searchNPCMetadata{ true };
+        bool structuredSearch{};
+        RecordScope scope;
         bool operator==(const CatalogQuery&) const = default;
 
-        bool Matches(const FormEntry& record, const PreparedRecordFilters& filters) const
+        bool Matches(const FormEntry& record, const PreparedRecordFilters& filters, const ParsedSearch* parsed = nullptr) const
         {
             if ((!type.empty() && type != record.category) || (!plugin.empty() && plugin != record.sourcePlugin) ||
                 hiddenPlugins.contains(record.sourcePlugin) || (record.isDeleted && !showDeleted) ||
                 (record.isPlayable ? !showPlayable : !showNonPlayable) || (record.name.empty() ? !showUnnamed : !showNamed)) return false;
             if (!types.empty() && std::ranges::find(types, record.category) == types.end()) return false;
+            if (scope.kind == SearchScope::SelectedPlugins && !std::ranges::any_of(scope.plugins, [&](const auto& name) { return SearchIdentityEquals(name, record.sourcePlugin); })) return false;
+            if (scope.kind == SearchScope::Collection && std::ranges::find(scope.records, record.formID) == scope.records.end()) return false;
             if (!filters.Passes(record)) return false;
             if (!npc.Matches(record)) return false;
+            if (structuredSearch) return MatchesSearch(record, parsed ? *parsed : ParseSearch(search), caseSensitive);
             if (search.empty()) return true;
             char id[9]{};
             std::snprintf(id, sizeof(id), "%08X", record.formID);
             const std::array<std::string_view, 7> values{ record.name, record.sourcePlugin, record.category,
                 searchNPCMetadata ? record.race : std::string_view{}, searchNPCMetadata ? record.factions : std::string_view{}, record.editorID, id };
-            return std::ranges::any_of(values, [&](auto value) { return TextContains(value, search, caseSensitive); });
+            return std::ranges::any_of(values, [&](auto value) { return SearchContains(value, search, caseSensitive); });
         }
     };
 
@@ -119,8 +126,10 @@ namespace ESPExplorerAE
     {
         CatalogResult result{ std::move(snapshot), revision, {} };
         if (!result.snapshot || !result.snapshot->ready) return result;
+        const auto parsed = query.structuredSearch ? ParseSearch(query.search) : ParsedSearch{};
+        if (!parsed) return result;
         const auto append = [&](RecordIndex index) {
-            if (query.Matches(result.snapshot->records[index], filters)) result.order.push_back(index);
+            if (query.Matches(result.snapshot->records[index], filters, &parsed)) result.order.push_back(index);
         };
         if (!query.type.empty()) {
             const auto found = result.snapshot->byType.find(query.type);
@@ -141,8 +150,13 @@ namespace ESPExplorerAE
         std::ranges::sort(result.order, [&](RecordIndex a, RecordIndex b) {
             const auto& left = result.snapshot->records[a];
             const auto& right = result.snapshot->records[b];
-            const int order = query.sortColumn == 0 ? (left.formID > right.formID) - (left.formID < right.formID) :
-                query.sortColumn == 2 ? left.sourcePlugin.compare(right.sourcePlugin) : left.name.compare(right.name);
+            int order{};
+            if (query.sortColumn == 0) order = (left.formID > right.formID) - (left.formID < right.formID);
+            else if (RecordColumnNumeric(query.sortColumn)) {
+                const auto l = RecordColumnNumber(left, query.sortColumn), r = RecordColumnNumber(right, query.sortColumn);
+                if (l.has_value() != r.has_value()) return l.has_value();
+                if (l && r) order = (*l > *r) - (*l < *r);
+            } else order = RecordColumnText(left, query.sortColumn).compare(RecordColumnText(right, query.sortColumn));
             return order == 0 ? left.formID < right.formID : query.ascending ? order < 0 : order > 0;
         });
         return result;

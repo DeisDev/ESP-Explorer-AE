@@ -11,6 +11,8 @@
 #include <unordered_map>
 
 #include <RE/T/TESAmmo.h>
+#include <RE/B/BGSComponent.h>
+#include <RE/B/BGSConstructibleObject.h>
 #include <RE/T/TESDataHandler.h>
 #include <RE/T/TESFullName.h>
 #include <RE/T/TESFurniture.h>
@@ -24,6 +26,9 @@
 #include <RE/T/TESObjectWEAP.h>
 #include <RE/T/TESNPC.h>
 #include <RE/T/TESRace.h>
+#include <RE/T/TESWeightForm.h>
+#include <RE/T/TESValueForm.h>
+#include <RE/T/TESWorldSpace.h>
 
 #include <RE/B/BGSPerk.h>
 #include <RE/B/BGSKeywordForm.h>
@@ -231,11 +236,39 @@ namespace ESPExplorerAE
             entry.sourcePlugin = GetSourcePluginName(form);
             entry.isDeleted = form->IsDeleted();
             entry.isPlayable = IsPlayable(form);
+            if (const auto* component = form->As<RE::BGSComponent>(); component && component->scrapItem) entry.componentItemID = component->scrapItem->GetFormID();
             if (const auto* signature = form->GetFormTypeString()) entry.category = signature;
             if (const auto* editorID = form->GetFormEditorID()) entry.editorID = editorID;
-            if (const auto* weapon = form->As<RE::TESObjectWEAP>(); weapon && weapon->weaponData.ammo) entry.weaponAmmoID = weapon->weaponData.ammo->GetFormID();
+            if (const auto* weight = form->As<RE::TESWeightForm>()) entry.weight = weight->GetFormWeight();
+            if (const auto* value = form->As<RE::TESValueForm>()) entry.value = value->GetFormValue();
+            if (const auto* weapon = form->As<RE::TESObjectWEAP>()) {
+                entry.baseDamage = weapon->weaponData.attackDamage;
+                entry.weight = weapon->weaponData.weight;
+                entry.value = weapon->weaponData.value;
+                if (const auto* ammo = weapon->weaponData.ammo) {
+                    entry.weaponAmmoID = ammo->GetFormID();
+                    entry.weaponAmmoName = RE::TESFullName::GetFullName(*ammo);
+                    if (entry.weaponAmmoName.empty() && ammo->GetFormEditorID()) entry.weaponAmmoName = ammo->GetFormEditorID();
+                }
+            }
+            if (const auto* armor = form->As<RE::TESObjectARMO>()) { entry.weight = armor->armorData.weight; entry.value = armor->armorData.value; entry.armorRating = armor->armorData.rating; }
+            if (const auto* recipe = form->As<RE::BGSConstructibleObject>()) {
+                if (recipe->createdItem) entry.relationships.push_back({RelationshipKind::RecipeOutput, recipe->createdItem->GetFormID(), recipe->data.numConstructed});
+                if (recipe->requiredItems) for (const auto& pair : *recipe->requiredItems) {
+                    if (entry.relationships.size() >= 1024) { entry.relationshipsTruncated = true; break; }
+                    if (pair.first) entry.relationships.push_back({RelationshipKind::RecipeInput, pair.first->GetFormID(), pair.second.i});
+                }
+            }
+            if (const auto* cell = form->As<RE::TESObjectCELL>()) {
+                entry.cellInterior = cell->IsInterior();
+                if (cell->IsExterior() && cell->worldSpace) {
+                    entry.worldspace = RE::TESFullName::GetFullName(*cell->worldSpace);
+                    if (entry.worldspace.empty() && cell->worldSpace->GetFormEditorID()) entry.worldspace = cell->worldSpace->GetFormEditorID();
+                }
+            }
             if (const auto* keywords = form->As<RE::BGSKeywordForm>()) {
                 keywords->ForEachKeyword([&](RE::BGSKeyword* keyword) {
+                    if (keyword) entry.keywordIDs.push_back(keyword->GetFormID());
                     if (keyword && !keyword->formEditorID.empty()) entry.keywords.emplace_back(keyword->formEditorID.c_str());
                     return RE::BSContainer::ForEachResult::kContinue;
                 });

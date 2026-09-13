@@ -44,34 +44,34 @@ namespace ESPExplorerAE::PluginBrowserPanels
             return std::string(label) + " (" + std::to_string(count) + ")###" + id;
         }
 
-        void DrawPluginDiagnosticsContent(const PluginInfo& plugin, Context& context)
+        void DrawPluginDiagnosticsContent(const PluginInfo& plugin, const BrowserView& view)
         {
-            ImGui::Text("%s: %s", context.view.records.localize("General", "sPlugin", "Plugin"), plugin.filename.c_str());
-            ImGui::Text("%s: %s", context.view.records.localize("General", "sType", "Type"), plugin.type.c_str());
-            ImGui::Text("%s: %s", context.view.records.localize("PluginBrowser", "sPluginPrefix", "Form Prefix"), plugin.formIDPrefix.c_str());
-            ImGui::Text("%s: %u", context.view.records.localize("PluginBrowser", "sRuntimeSourceRecords", "Runtime source records"), plugin.runtimeSourceRecords);
-            ImGui::Text("%s: %u", context.view.records.localize("PluginBrowser", "sRuntimeFormIDOrigins", "Runtime FormID origins"), plugin.runtimeOriginRecords);
+            ImGui::Text("%s: %s", view.localize("General", "sPlugin", "Plugin"), plugin.filename.c_str());
+            ImGui::Text("%s: %s", view.localize("General", "sType", "Type"), plugin.type.c_str());
+            ImGui::Text("%s: %s", view.localize("PluginBrowser", "sPluginPrefix", "Form Prefix"), plugin.formIDPrefix.c_str());
+            ImGui::Text("%s: %u", view.localize("PluginBrowser", "sRuntimeSourceRecords", "Runtime source records"), plugin.runtimeSourceRecords);
+            ImGui::Text("%s: %u", view.localize("PluginBrowser", "sRuntimeFormIDOrigins", "Runtime FormID origins"), plugin.runtimeOriginRecords);
             const auto drawOptionalCount = [&](const char* key, const char* fallback, std::optional<std::uint32_t> count) {
-                const auto* label = context.view.records.localize("PluginBrowser", key, fallback);
+                const auto* label = view.localize("PluginBrowser", key, fallback);
                 if (count) ImGui::Text("%s: %u", label, *count);
-                else ImGui::Text("%s: %s", label, context.view.records.localize("PluginBrowser", "sDiagnosticUnavailable", "Unavailable"));
+                else ImGui::Text("%s: %s", label, view.localize("PluginBrowser", "sDiagnosticUnavailable", "Unavailable"));
             };
             drawOptionalCount("sOverrideCount", "Overrides", plugin.overrideCount);
             drawOptionalCount("sOverriddenByOthersCount", "Overridden By Others", plugin.overriddenByOthersCount);
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", context.view.records.localize("PluginBrowser", "sDiagnosticsScope",
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", view.localize("PluginBrowser", "sDiagnosticsScope",
                 "Runtime-known forms only. Source is the reported file; origin is the runtime FormID owner. Override history and complete file totals are unavailable."));
-            ImGui::Text("%s: %zu", context.view.records.localize("PluginBrowser", "sMasterCount", "Masters"), plugin.masters.size());
+            ImGui::Text("%s: %zu", view.localize("PluginBrowser", "sMasterCount", "Masters"), plugin.masters.size());
 
             if (plugin.missingMasters.empty()) {
-                ImGui::Text("%s: %s", context.view.records.localize("PluginBrowser", "sMissingMasters", "Missing Masters"), context.view.records.localize("General", "sNo", "No"));
+                ImGui::Text("%s: %s", view.localize("PluginBrowser", "sMissingMasters", "Missing Masters"), view.localize("General", "sNo", "No"));
             } else {
-                ImGui::TextColored(ImVec4(0.96f, 0.40f, 0.36f, 1.0f), "%s: %zu", context.view.records.localize("PluginBrowser", "sMissingMasters", "Missing Masters"), plugin.missingMasters.size());
+                ImGui::TextColored(ImVec4(0.96f, 0.40f, 0.36f, 1.0f), "%s: %zu", view.localize("PluginBrowser", "sMissingMasters", "Missing Masters"), plugin.missingMasters.size());
                 for (const auto& master : plugin.missingMasters) {
                     ImGui::BulletText("%s", master.c_str());
                 }
             }
 
-            if (!plugin.masters.empty() && ImGui::TreeNodeEx(context.view.records.localize("PluginBrowser", "sMasterList", "Master List"), ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (!plugin.masters.empty() && ImGui::TreeNodeEx(view.localize("PluginBrowser", "sMasterList", "Master List"), ImGuiTreeNodeFlags_DefaultOpen)) {
                 for (const auto& master : plugin.masters) {
                     ImGui::BulletText("%s", master.c_str());
                 }
@@ -86,20 +86,24 @@ namespace ESPExplorerAE::PluginBrowserPanels
                 const bool diagnosticsOpen = ImGui::CollapsingHeader(context.view.records.localize("PluginBrowser", "sPluginDiagnostics", "Plugin Diagnostics"));
                 context.state.collapseDiagnostics = !diagnosticsOpen;
                 if (diagnosticsOpen) {
-                    DrawPluginDiagnosticsContent(plugin, context);
+                    DrawPluginDiagnosticsContent(plugin, context.view.records);
                 }
                 return;
             }
 
             ImGui::TextUnformatted(context.view.records.localize("PluginBrowser", "sPluginDiagnostics", "Plugin Diagnostics"));
             ImGui::Separator();
-            DrawPluginDiagnosticsContent(plugin, context);
+            DrawPluginDiagnosticsContent(plugin, context.view.records);
         }
 
         void DrawRecordSelectable(const FormEntry& record, const char* idPrefix,
             const CatalogSnapshot& cache, Context& context, TreeFrame& frame)
         {
             const TreeRow row{ idPrefix, record.formID };
+            // A popup belongs to this occurrence of the record, including its
+            // section. A Selectable's label does not scope the following items.
+            ImGui::PushID(idPrefix);
+            ImGui::PushID(static_cast<int>(record.formID));
             const auto* displayName = record.name.empty() ? context.view.records.localize("General", "sUnnamed", "<Unnamed>") : record.name.c_str();
             const auto formIDText = FormatUtils::FormID(record.formID);
             const auto recordLabel = std::string(displayName) + " [" + formIDText + "]###" + idPrefix + formIDText;
@@ -108,6 +112,8 @@ namespace ESPExplorerAE::PluginBrowserPanels
                 // Apply after all expanded sections supply their complete order.
                 frame.click = TreeFrame::Click{ row, ImGui::GetIO().KeyCtrl, ImGui::GetIO().KeyShift };
             }
+            if (ImGui::IsItemFocused() && ImGui::IsKeyPressed(ImGuiKey_Enter, false)) context.requests.records.inspections.push_back(record.formID);
+            if (ImGui::IsItemFocused() && (ImGui::IsKeyPressed(ImGuiKey_GamepadFaceLeft, false) || (ImGui::GetIO().KeyShift && ImGui::IsKeyPressed(ImGuiKey_F10, false)))) ImGui::OpenPopup("##RecordContext");
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
                 ImGui::BeginTooltip();
                 ImGui::TextUnformatted(displayName);
@@ -116,7 +122,7 @@ namespace ESPExplorerAE::PluginBrowserPanels
                 if (!record.editorID.empty()) ImGui::TextUnformatted(record.editorID.c_str());
                 ImGui::EndTooltip();
             }
-            if (ImGui::BeginPopupContextItem()) {
+            if (ImGui::BeginPopupContextItem("##RecordContext")) {
                 if (!context.state.selection.records.selected.contains(record.formID)) {
                     context.state.selection.Single(row);
                     context.state.collapseDiagnostics = true;
@@ -126,9 +132,11 @@ namespace ESPExplorerAE::PluginBrowserPanels
                 DrawRecordContextMenu(record, true, cache, context);
                 ImGui::EndPopup();
             }
-            if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && SupportsRecordAction(record.category, ActionKind::Give) && !record.isDeleted && context.view.records.gameplayReady) {
+            if (context.view.records.doubleClickGameplayAction && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && SupportsRecordAction(record.category, ActionKind::Give) && !record.isDeleted && context.view.records.gameplayReady) {
                 context.requests.records.grants.push_back({ context.view.records.session, { record.formID } });
             }
+            ImGui::PopID();
+            ImGui::PopID();
         }
 
         void DrawRecordSection(const std::vector<RecordIndex>& records, const char* idPrefix,
@@ -153,7 +161,23 @@ namespace ESPExplorerAE::PluginBrowserPanels
         TreeFrame frame;
         const auto& result = context.state.query.Result();
 
-        if (ImGui::BeginChild("PluginTreeLeft", ImVec2(leftWidth, 0.0f), ImGuiChildFlags_Borders | ImGuiChildFlags_ResizeX, ImGuiWindowFlags_NoSavedSettings)) {
+        if (context.state.restoreScroll) ImGui::SetNextWindowScroll({0.0f, context.state.scroll});
+        if (ImGui::BeginChild("PluginTreeLeft", ImVec2(leftWidth, 0.0f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoSavedSettings)) {
+            context.requests.resultsWidth = ImGui::GetWindowWidth();
+            context.state.restoreScroll = false;
+            context.state.scroll = ImGui::GetScrollY();
+            if (ImGui::IsWindowFocused() && !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
+                !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel)) {
+                if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A, false)) {
+                    context.state.selection.records.selected = result.eligibleIDs;
+                }
+                if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C, false)) {
+                    std::vector<std::uint32_t> ordered(context.state.selection.records.selected.begin(), context.state.selection.records.selected.end());
+                    std::ranges::sort(ordered);
+                    std::vector<std::string> ids; for (auto id : ordered) ids.push_back(FormatUtils::FormID(id));
+                    ImGui::SetClipboardText(FormatUtils::MultiCopyList(ids, context.view.copyFormat).c_str());
+                }
+            }
             const std::string globalResultsHeader = CopyLabel(context.view.records.localize("PluginBrowser", "sGlobalSearchResults", "Global Search Results"), result.records.order.size(), "PluginGlobalSearchResults");
             if (context.state.globalSearch && !context.state.search.empty() && ImGui::TreeNodeEx(globalResultsHeader.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding)) {
                 DrawRecordSection(result.records.order, "GlobalResult", cache, context, frame);
@@ -231,7 +255,8 @@ namespace ESPExplorerAE::PluginBrowserPanels
                 }
                 if (!ImGui::IsItemToggledOpen() && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                     context.state.diagnosticsPlugin = pluginName;
-                    context.requests.pluginFilter = pluginName;
+                    context.state.scope.kind = SearchScope::SelectedPlugins;
+                    context.state.scope.plugins = {pluginName};
                     context.state.selection.Clear();
                     context.state.collapseDiagnostics = false;
                 }
@@ -259,11 +284,12 @@ namespace ESPExplorerAE::PluginBrowserPanels
                         }
                         categoryLabel += "###Category:" + category;
                         ImGui::PushStyleColor(ImGuiCol_Text, CategoryColor(category));
-                        if (ImGui::TreeNodeEx(categoryLabel.c_str(), ImGuiTreeNodeFlags_SpanAvailWidth)) {
+                        const bool categoryOpen = ImGui::TreeNodeEx(categoryLabel.c_str(), ImGuiTreeNodeFlags_SpanAvailWidth);
+                        ImGui::PopStyleColor();
+                        if (categoryOpen) {
                             DrawRecordSection(categoryIt->second, ("TreeRecord/" + pluginName + "/" + category).c_str(), cache, context, frame);
                             ImGui::TreePop();
                         }
-                        ImGui::PopStyleColor();
                     }
 
                     ImGui::TreePop();
@@ -418,8 +444,28 @@ namespace ESPExplorerAE::PluginBrowserPanels
         }
     }
 
+    void DrawDiagnostics(const PluginInfo& plugin, const BrowserView& view)
+    {
+        DrawPluginDiagnosticsContent(plugin, view);
+    }
+
     void DrawDetailsPane(const std::vector<PluginInfo>& plugins, const CatalogSnapshot& cache, Context& context)
     {
+        if (context.view.drawInspector) {
+            if (ImGui::BeginChild("PluginTreeDetails", {0, 0}, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+                if (ImGui::Button(context.view.records.localize("PluginBrowser", "sPluginDiagnostics", "Plugin Diagnostics"))) ImGui::OpenPopup("SourceDiagnostics");
+                if (ImGui::BeginPopup("SourceDiagnostics")) {
+                    if (const auto* plugin = FindPluginInfo(context.state.diagnosticsPlugin, plugins)) {
+                        if (ImGui::BeginChild("DiagnosticsInfo", {420, 320})) DrawPluginDiagnosticsContent(*plugin, context.view.records);
+                        ImGui::EndChild();
+                    } else ImGui::TextWrapped("%s", context.view.records.localize("PluginBrowser", "sChooseDiagnosticSource", "Select a plugin in Sources or the results tree to inspect its diagnostics."));
+                    ImGui::EndPopup();
+                }
+                context.view.drawInspector();
+            }
+            ImGui::EndChild();
+            return;
+        }
         // Only the information child scrolls. Toolbar height is established this
         // frame, so wrapping/localization never relies on a previous measurement.
         if (ImGui::BeginChild("PluginTreeDetails", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders,

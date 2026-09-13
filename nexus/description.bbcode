@@ -17,6 +17,11 @@ Browse your loaded plugins, find items, manage your inventory, or spawn an NPC w
 [*]Search across plugins and records, with advanced filters for larger mod lists.[/*]
 [*]Save favorites, revisit recent records, and copy names or IDs from the menu.[/*]
 [*]View record details, plugin diagnostics, action history, and searchable logs.[/*]
+[*]Use Explore, Inventory, Player & World, and Tools, with adjustable source, results, and inspector panes.[/*]
+[*]Follow record links, pin inspectors, compare base records or inventory instances, and return to the original search and layout.[/*]
+[*]Save views and collections with notes. Search selected plugins or collections with structured fields and Unicode-aware ordinary search.[/*]
+[*]Assemble base items across searches in the basket, save reusable kits, review the aggregate items and ammunition, and inspect grouped results in Action History.[/*]
+[*]Open Commands & Shortcuts with Ctrl+K, including exact FormID lookup and saved views.[/*]
 [*]Customize the interface with themes, font sizes, languages, and optional Pip-Boy color sync.[/*]
 [*]Keyboard, mouse, and optional gamepad navigation.[/*]
 [/list]
@@ -40,7 +45,9 @@ Settings also let you rebind the menu key, choose a startup tab, and adjust how 
 
 Load a save or start a game, then press INSERT to open the menu. You can change the key in Settings.
 
-Your preferences and favorites are saved in Data/F4SE/Plugins/ESPExplorerAE.ini. Keep this file when updating.
+Your preferences and favorites are saved in Data/F4SE/Plugins/ESPExplorerAE.ini. Saved views, collections, kits, and layouts use ESPExplorerAE.workspace.ini in the same folder. Keep both files when updating. The workspace manager supports clipboard import/export with a preview of missing records; importing or loading a kit never executes it.
+
+Selection and double-click inspect by default. Gameplay actions have explicit controls; Settings offers an opt-in for the previous double-click actions. The basket gives base items; Duplicate Item copies a chosen live inventory instance. Review Kit shows aggregated quantities and ammunition before giving anything, and Action History reports each result without automatic retries.
 
 [center][img]https://i.imgur.com/QaWstlC.png[/img][/center]
 
