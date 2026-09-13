@@ -433,6 +433,7 @@ namespace ESPExplorerAE
             } else if (activeMainTab == "Plugin Browser") {
                 location.query.search = pluginBrowser.search;
                 location.query.structuredSearch = pluginBrowser.structuredSearch;
+                location.allRuntimeRecords = pluginBrowser.allRuntimeRecords;
                 location.resultsScroll = pluginBrowser.scroll;
                 location.active = pluginBrowser.selection.records.active;
                 location.selection.assign(pluginBrowser.selection.records.selected.begin(), pluginBrowser.selection.records.selected.end());
@@ -470,6 +471,7 @@ namespace ESPExplorerAE
             else if (location.page == "Plugin Browser") {
                 pluginBrowser.search = location.query.search;
                 pluginBrowser.structuredSearch = location.query.structuredSearch;
+                pluginBrowser.allRuntimeRecords = location.allRuntimeRecords;
                 std::snprintf(pluginBrowser.searchBuffer.data(), pluginBrowser.searchBuffer.size(), "%s", pluginBrowser.search.c_str());
                 pluginBrowser.selection.Single({"History", location.active});
                 pluginBrowser.selection.records.selected = {location.selection.begin(), location.selection.end()};

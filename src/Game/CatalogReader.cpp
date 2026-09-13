@@ -1,5 +1,6 @@
 #include "Core/Profiling.h"
 #include "Game/CatalogReader.h"
+#include "Game/ArchiveReader.h"
 #include "Core/RuntimeDiagnostics.h"
 #include "pch.h"
 
@@ -237,7 +238,12 @@ namespace ESPExplorerAE
             entry.isDeleted = form->IsDeleted();
             entry.isPlayable = IsPlayable(form);
             if (const auto* component = form->As<RE::BGSComponent>(); component && component->scrapItem) entry.componentItemID = component->scrapItem->GetFormID();
-            if (const auto* signature = form->GetFormTypeString()) entry.category = signature;
+            // The signature table is indexed by the engine enum, so guard
+            // runtime-only values outside the ordinary form-type range.
+            const auto type = std::to_underlying(form->GetFormType());
+            if (type >= 0 && type < std::to_underlying(RE::ENUM_FORM_ID::kTotal)) {
+                if (const auto* signature = form->GetFormTypeString()) entry.category = signature;
+            }
             if (const auto* editorID = form->GetFormEditorID()) entry.editorID = editorID;
             if (const auto* weight = form->As<RE::TESWeightForm>()) entry.weight = weight->GetFormWeight();
             if (const auto* value = form->As<RE::TESValueForm>()) entry.value = value->GetFormValue();
@@ -297,21 +303,12 @@ namespace ESPExplorerAE
             snapshot->records.reserve(allForms->size());
             for (const auto& [id, form] : *allForms) capture(form);
         }
-        // Preserve the typed-array fallback used by the old browsers, but merge
-        // it by identity into the single canonical record store.
-        for (auto* form : dataHandler->GetFormArray<RE::TESObjectWEAP>()) capture(form);
-        for (auto* form : dataHandler->GetFormArray<RE::TESObjectARMO>()) capture(form);
-        for (auto* form : dataHandler->GetFormArray<RE::TESAmmo>()) capture(form);
-        for (auto* form : dataHandler->GetFormArray<RE::TESObjectMISC>()) capture(form);
-        for (auto* form : dataHandler->GetFormArray<RE::TESNPC>()) capture(form);
-        for (auto* form : dataHandler->GetFormArray<RE::TESObjectACTI>()) capture(form);
-        for (auto* form : dataHandler->GetFormArray<RE::TESObjectCONT>()) capture(form);
-        for (auto* form : dataHandler->GetFormArray<RE::TESObjectSTAT>()) capture(form);
-        for (auto* form : dataHandler->GetFormArray<RE::TESFurniture>()) capture(form);
-        for (auto* form : dataHandler->GetFormArray<RE::SpellItem>()) capture(form);
-        for (auto* form : dataHandler->GetFormArray<RE::BGSPerk>()) capture(form);
-        for (auto* form : dataHandler->GetFormArray<RE::TESObjectCELL>()) capture(form);
-        for (auto* form : dataHandler->GetFormArray<RE::BGSKeyword>()) capture(form);
+        // TESDataHandler::GetFormArray<T>() indexes these same TESForm* arrays.
+        // Merge every populated type, including types without a dedicated
+        // browser or concrete CommonLib wrapper, into the canonical store.
+        for (const auto& forms : dataHandler->formArrays) {
+            for (auto* form : forms) capture(form);
+        }
 
         for (auto* file : dataHandler->compiledFileCollection.files) {
             if (!file) {
@@ -359,6 +356,7 @@ namespace ESPExplorerAE
         newPlugins.insert(newPlugins.end(), lightPlugins.begin(), lightPlugins.end());
 
         snapshot->plugins = std::move(newPlugins);
+        snapshot->loadedArchives = ArchiveReader::Capture();
         PopulateRuntimeDiagnostics(*snapshot);
         snapshot->BuildIndexes();
         snapshot->ready = true;

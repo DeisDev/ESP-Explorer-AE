@@ -17,9 +17,12 @@ namespace ESPExplorerAE
         bool structuredSearch{};
         RecordScope scope;
         std::array<char, 1025> searchBuffer{};
+        std::array<char, 257> archiveSearchBuffer{};
+        std::string archiveSearch;
         std::string diagnosticsPlugin;
         bool focusPending{};
         bool showUnknown{};
+        bool allRuntimeRecords{};
         bool globalSearch{};
         bool collapseDiagnostics{};
         int spawnQuantity{ 1 };

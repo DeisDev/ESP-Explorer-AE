@@ -32,6 +32,7 @@ namespace ESPExplorerAE
             state.search, &state.focusPending, "PluginSearchInput", clearLabel);
 
         DrawSearchControls(state.structuredSearch, state.scope, state.search, state.searchBuffer.data(), state.searchBuffer.size(), *snapshot, view.records.localize);
+        ImGui::BeginDisabled(state.allRuntimeRecords);
         {
             const char* unknownLabel = context.view.records.localize("PluginBrowser", "sShowUnknownCategories", "Show Unknown Categories");
             ImGuiWidgetUtils::SameLineIfFits(ImGui::CalcTextSize(unknownLabel).x + ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x);
@@ -57,13 +58,19 @@ namespace ESPExplorerAE
             ++context.view.records.filters.advancedRecordFilterRevision;
             context.requests.records.filtersChanged = true;
         }
+        ImGui::EndDisabled();
 
         CatalogQuery filter;
         filter.scope = state.scope;
         filter.structuredSearch = state.structuredSearch;
         filter.search = context.state.search;
-        RecordFiltersWidget::DrawWhyHidden(view.records.localize, "PluginBrowser", {view.records.filters.showNonPlayableRecords, view.records.filters.showUnnamedRecords,
+        if (!state.allRuntimeRecords) RecordFiltersWidget::DrawWhyHidden(view.records.localize, "PluginBrowser", {view.records.filters.showNonPlayableRecords, view.records.filters.showUnnamedRecords,
             view.records.filters.showDeletedRecords, view.records.filters.advancedRecordFilters, view.records.filters.hiddenPlugins}, state.filterEditor, filter, snapshot);
+        const auto* allLabel = view.records.localize("PluginBrowser", "sAllRuntimeRecords", "All runtime records");
+        ImGuiWidgetUtils::SameLineIfFits(ImGui::CalcTextSize(allLabel).x + ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x);
+        ImGui::Checkbox(allLabel, &state.allRuntimeRecords);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", view.records.localize("PluginBrowser", "sAllRuntimeRecordsHint",
+            "Include unnamed, non-playable, deleted and unknown records, hidden plugins and records excluded by advanced rules in this browser. Search and scope still apply. Shared filter settings are preserved."));
         filter.showPlayable = context.view.records.filters.showPlayableRecords;
         filter.showNonPlayable = context.view.records.filters.showNonPlayableRecords;
         filter.showNamed = context.view.records.filters.showNamedRecords;
@@ -71,7 +78,7 @@ namespace ESPExplorerAE
         filter.showDeleted = context.view.records.filters.showDeletedRecords;
         filter.hiddenPlugins = context.view.records.filters.hiddenPlugins;
         const auto& result = context.state.query.Update(snapshot, std::move(filter), context.view.records.filters.advancedRecordFilters,
-            context.view.records.filters.advancedRecordFilterRevision, context.state.showUnknown, context.state.globalSearch);
+            context.view.records.filters.advancedRecordFilterRevision, context.state.showUnknown, context.state.globalSearch, state.allRuntimeRecords);
         context.state.selection.Reconcile(result.eligibleIDs);
 
         const float totalWidth = ImGui::GetContentRegionAvail().x;

@@ -29,6 +29,7 @@ namespace ESPExplorerAE::StorageEstimate
         auto bytes = sizeof(value) + Storage(value.records) + Storage(value.plugins) + Strings(value.availableKeywords) +
             Hash(value.byID) + Hash(value.byType) + Hash(value.byPlugin) + Hash(value.runtimeReferenceCounts) + Hash(value.incomingRelationships);
         for (const auto& [id, links] : value.incomingRelationships) bytes += Storage(links);
+        if (value.loadedArchives) bytes += Strings(*value.loadedArchives);
         for (const auto& record : value.records) bytes += Heap(record.name) + Heap(record.category) + Heap(record.sourcePlugin) +
             Heap(record.weaponAmmoName) + Heap(record.worldspace) + Heap(record.race) + Heap(record.factions) + Heap(record.editorID) + Strings(record.keywords) + Strings(record.factionNames) + Storage(record.keywordIDs) + Storage(record.relationships);
         for (const auto& plugin : value.plugins) bytes += Heap(plugin.filename) + Heap(plugin.type) + Heap(plugin.formIDPrefix) +

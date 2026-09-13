@@ -35,6 +35,7 @@ namespace ESPExplorerAE
         float inspectorWidth{ 380.0f };
         bool sourcesOpen{ true };
         bool inspectorOpen{ true };
+        bool allRuntimeRecords{};
         RecordTableLayout columns{ DefaultRecordColumns() };
         std::optional<InventoryLocation> inventory;
     };

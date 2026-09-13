@@ -35,6 +35,7 @@ namespace ESPExplorerAE
         bool ready{};
         std::vector<FormEntry> records;
         std::vector<PluginInfo> plugins;
+        std::optional<std::vector<std::string>> loadedArchives;
         std::unordered_map<std::uint32_t, RecordIndex> byID;
         std::unordered_map<std::string, std::vector<RecordIndex>> byType;
         std::unordered_map<std::string, std::vector<RecordIndex>> byPlugin;

@@ -17,14 +17,29 @@ namespace ESPExplorerAE
     {
     public:
         const PluginQueryResult& Update(std::shared_ptr<const CatalogSnapshot> snapshot, CatalogQuery filter,
-            std::span<const AdvancedFilterRule> rules, std::uint64_t filterRevision, bool showUnknown, bool globalSearch)
+            std::span<const AdvancedFilterRule> rules, std::uint64_t filterRevision, bool showUnknown, bool globalSearch,
+            bool allRuntimeRecords = false)
         {
+            if (allRecords != allRuntimeRecords) {
+                // Rebuild prepared rules even when their shared revision has
+                // not changed while this browser's visibility override was on.
+                query.Clear();
+                allRecords = allRuntimeRecords;
+            }
+            if (allRuntimeRecords) {
+                filter.showPlayable = filter.showNonPlayable = true;
+                filter.showNamed = filter.showUnnamed = filter.showDeleted = true;
+                filter.hiddenPlugins.clear();
+                rules = {};
+                showUnknown = true;
+            }
             // Favorites/recent records deliberately ignore the cross-tab plugin
             // filter. They share visibility/search rules with the tree.
             const auto plugin = filter.plugin;
             filter.plugin.clear();
             filter.sortColumn = 0;
             filter.searchNPCMetadata = false;
+            const auto pluginCriteria = filter;
             const auto& eligible = query.Update(std::move(snapshot), std::move(filter), rules, filterRevision);
             if (sourceRevision == eligible.revision && selectedPlugin == plugin && unknown == showUnknown && global == globalSearch) return result;
             const ProfileScope profileScope(ProfileMetric::PluginGrouping);
@@ -40,6 +55,15 @@ namespace ESPExplorerAE
             }
             std::unordered_set<std::string> seen;
             if (eligible.snapshot) for (const auto& info : eligible.snapshot->plugins) {
+                // Empty/archive-only plugins remain inspectable. Record-specific
+                // searches and collections still require matching records.
+                const bool sourceMatches = pluginCriteria.scope.kind != SearchScope::Collection &&
+                    (pluginCriteria.scope.kind != SearchScope::SelectedPlugins || std::ranges::any_of(pluginCriteria.scope.plugins,
+                        [&](const auto& name) { return SearchIdentityEquals(name, info.filename); })) &&
+                    (globalSearch || plugin.empty() || plugin == info.filename) &&
+                    !pluginCriteria.hiddenPlugins.contains(info.filename) && pluginCriteria.type.empty() && pluginCriteria.types.empty() &&
+                    (pluginCriteria.search.empty() || (!pluginCriteria.structuredSearch && SearchContains(info.filename, pluginCriteria.search, pluginCriteria.caseSensitive)));
+                if (eligible.snapshot->ready && sourceMatches) next.groups.try_emplace(info.filename);
                 if (next.groups.contains(info.filename)) { next.plugins.push_back(info.filename); seen.insert(info.filename); }
             }
             // Unknown/runtime-only origins follow load-order plugins in stable
@@ -69,5 +93,6 @@ namespace ESPExplorerAE
         std::string selectedPlugin;
         bool unknown{};
         bool global{};
+        bool allRecords{};
     };
 }

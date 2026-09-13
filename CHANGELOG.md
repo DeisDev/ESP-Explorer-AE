@@ -13,6 +13,11 @@ Target version: **1.6.0**.
 
 ### Added
 
+- An All runtime records option in Plugin Browser, covering every captured
+  record type while preserving shared visibility settings. Unnamed records
+  display their EditorID when available, and empty plugins remain selectable.
+- A searchable Loaded archives list in Plugin Browser, captured from the
+  engine's archive registry, with individual-name and list copying.
 - Linked record inspectors with Back/Forward, three pins, and return to the
   original query, layout, selection, and position.
 - Structured search with explicit multi-plugin/collection scope, field and

@@ -8,6 +8,7 @@
 #include "GUI/Widgets/FormatUtils.h"
 #include "GUI/Widgets/FormDetailsView.h"
 #include "GUI/Widgets/ImGuiWidgetUtils.h"
+#include "GUI/Widgets/SearchBar.h"
 
 #include <imgui.h>
 
@@ -42,6 +43,55 @@ namespace ESPExplorerAE::PluginBrowserPanels
         std::string CopyLabel(const char* label, std::size_t count, const char* id)
         {
             return std::string(label) + " (" + std::to_string(count) + ")###" + id;
+        }
+
+        void DrawLoadedArchives(const CatalogSnapshot& cache, Context& context)
+        {
+            const auto localize = context.view.records.localize;
+            const auto label = std::string(localize("PluginBrowser", "sLoadedArchives", "Loaded archives")) +
+                (cache.loadedArchives ? " (" + std::to_string(cache.loadedArchives->size()) + ")" : "") + "###LoadedArchives";
+            const bool open = ImGui::TreeNodeEx(label.c_str(), ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding);
+            if (ImGui::IsItemHovered()) {
+                ImGui::BeginTooltip();
+                ImGui::PushTextWrapPos(ImGui::GetFontSize() * 28);
+                ImGui::TextUnformatted(localize("PluginBrowser", "sLoadedArchivesScope",
+                    "Archives in the engine's loaded archive registry at the last data refresh. This list is independent of record filters and plugin selection. Archive ownership and asset override order are not inferred."));
+                ImGui::PopTextWrapPos();
+                ImGui::EndTooltip();
+            }
+            if (!open) return;
+            if (!cache.loadedArchives) {
+                ImGui::TextWrapped("%s", localize("PluginBrowser", "sArchivesUnavailable", "The engine archive registry is unavailable. Use Refresh Data to try again."));
+            } else if (cache.loadedArchives->empty()) {
+                ImGui::TextWrapped("%s", localize("PluginBrowser", "sNoLoadedArchives", "No loaded archives in the engine registry."));
+            } else {
+                SearchBar::Draw(localize("PluginBrowser", "sSearchArchives", "Search loaded archives"), context.state.archiveSearchBuffer.data(),
+                    context.state.archiveSearchBuffer.size(), context.state.archiveSearch, nullptr, "ArchiveSearch", localize("General", "sClearSearchButton", "X"));
+                std::vector<const std::string*> matches;
+                for (const auto& name : *cache.loadedArchives) if (SearchContains(name, context.state.archiveSearch)) matches.push_back(&name);
+                if (ImGui::Button(localize("PluginBrowser", "sCopyArchiveList", "Copy archive list"))) {
+                    std::string text;
+                    for (const auto* name : matches) { if (!text.empty()) text += '\n'; text += *name; }
+                    ImGui::SetClipboardText(text.c_str());
+                }
+                if (ImGui::BeginChild("ArchiveNames", {0, ImGui::GetTextLineHeightWithSpacing() * 9}, ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar)) {
+                    ImGuiListClipper clipper;
+                    clipper.Begin(static_cast<int>(matches.size()));
+                    while (clipper.Step()) for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+                        const auto& name = *matches[static_cast<std::size_t>(row)];
+                        ImGui::PushID(name.c_str());
+                        ImGui::TextUnformatted(name.c_str());
+                        if (ImGui::BeginPopupContextItem("ArchiveContext")) {
+                            if (ImGui::MenuItem(localize("General", "sCopyName", "Copy Name"))) ImGui::SetClipboardText(name.c_str());
+                            ImGui::EndPopup();
+                        }
+                        ImGui::PopID();
+                    }
+                    if (matches.empty()) ImGui::TextWrapped("%s", localize("PluginBrowser", "sNoArchiveMatches", "No archives match the search."));
+                }
+                ImGui::EndChild();
+            }
+            ImGui::TreePop();
         }
 
         void DrawPluginDiagnosticsContent(const PluginInfo& plugin, const BrowserView& view)
@@ -104,7 +154,8 @@ namespace ESPExplorerAE::PluginBrowserPanels
             // section. A Selectable's label does not scope the following items.
             ImGui::PushID(idPrefix);
             ImGui::PushID(static_cast<int>(record.formID));
-            const auto* displayName = record.name.empty() ? context.view.records.localize("General", "sUnnamed", "<Unnamed>") : record.name.c_str();
+            const auto* displayName = !record.name.empty() ? record.name.c_str() : !record.editorID.empty() ? record.editorID.c_str() :
+                context.view.records.localize("General", "sUnnamed", "<Unnamed>");
             const auto formIDText = FormatUtils::FormID(record.formID);
             const auto recordLabel = std::string(displayName) + " [" + formIDText + "]###" + idPrefix + formIDText;
             const bool isSelected = context.state.selection.records.selected.contains(record.formID);
@@ -166,6 +217,7 @@ namespace ESPExplorerAE::PluginBrowserPanels
             context.requests.resultsWidth = ImGui::GetWindowWidth();
             context.state.restoreScroll = false;
             context.state.scroll = ImGui::GetScrollY();
+            DrawLoadedArchives(cache, context);
             if (ImGui::IsWindowFocused() && !ImGui::GetIO().WantTextInput && !ImGui::IsAnyItemActive() &&
                 !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel)) {
                 if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A, false)) {

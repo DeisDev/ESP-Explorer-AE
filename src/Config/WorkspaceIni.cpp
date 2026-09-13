@@ -85,6 +85,7 @@ namespace ESPExplorerAE
                 Number(section, "Scroll", location.resultsScroll, 0.0f, 100000000.0f);
                 Number(section, "SourcesWidth", location.sourceWidth, 100.0f, 4096.0f); Number(section, "InspectorWidth", location.inspectorWidth, 100.0f, 4096.0f);
                 Flag(section, "SourcesOpen", location.sourcesOpen); Flag(section, "InspectorOpen", location.inspectorOpen);
+                if (!reading || ini.GetValue(section.c_str(), "AllRuntimeRecords", nullptr)) Flag(section, "AllRuntimeRecords", location.allRuntimeRecords);
                 std::set<int> orders;
                 for (std::size_t i = 0; i < location.columns.size(); ++i) {
                     auto& column = location.columns[i]; const auto s = section + ".Column." + std::to_string(i);
