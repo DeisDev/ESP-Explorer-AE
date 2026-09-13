@@ -41,9 +41,6 @@ namespace ESPExplorerAE
                 ImGui::EndChild();
                 ImGui::EndPopup();
             }
-            if (scope.plugins.empty()) ImGui::TextWrapped("%s", L("sEmptyPlugins", "No plugins selected. This scope has no results."));
-        } else if (scope.kind == SearchScope::Collection) {
-            ImGui::TextWrapped("%s: %s", scopes[2], scope.collection.empty() ? L("sChooseCollection", "Choose a collection in Sources/Views.") : scope.collection.c_str());
         }
         ImGuiWidgetUtils::DrawWrappedSameLine(L("sStructured", "Structured search"));
         ImGui::Checkbox(L("sStructured", "Structured search"), &structured);
@@ -97,6 +94,14 @@ namespace ESPExplorerAE
                 ImGui::TextUnformatted(L("sExamples", "type:WEAP plugin:\"Example Weapons.esp\" -name:debug\nkeyword:WeaponTypeRifle\neditorid:MyMod_\nid:01234567\nweight:<10"));
                 ImGui::PopTextWrapPos(); ImGui::EndTooltip();
             }
+        }
+    }
+
+    void DrawSearchFeedback(bool structured, const RecordScope& scope, std::string_view search,
+        const std::function<const char*(std::string_view, std::string_view, const char*)>& localize)
+    {
+        const auto L = [&](const char* key, const char* fallback) { return localize("Search", key, fallback); };
+        if (structured) {
             const auto parsed = ParseSearch(search);
             if (!parsed) {
                 const char* error{};
@@ -110,6 +115,11 @@ namespace ESPExplorerAE
                 }
                 ImGui::TextWrapped("%s", error);
             }
+        }
+        if (scope.kind == SearchScope::SelectedPlugins && scope.plugins.empty()) {
+            ImGui::TextWrapped("%s", L("sEmptyPlugins", "No plugins selected. This scope has no results."));
+        } else if (scope.kind == SearchScope::Collection) {
+            ImGui::TextWrapped("%s: %s", L("sCollection", "Collection"), scope.collection.empty() ? L("sChooseCollection", "Choose a collection in Sources/Views.") : scope.collection.c_str());
         }
     }
 }

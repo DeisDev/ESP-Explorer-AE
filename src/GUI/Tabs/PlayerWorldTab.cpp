@@ -17,9 +17,11 @@ namespace ESPExplorerAE
             request.session = view.session;
             if (view.gameplayReady && ActionQueue::Valid(request)) requests.actions.push_back({std::move(request), false, {}});
         };
-        ActionFeedback::Draw(state.admission, localize);
-        if (player.ready && player.session == view.session) ImGui::Text("%s: %d | %s: %.0f | %s: %.0f", localize("General", "sLevel", "Level"), player.level,
-            L("sHealthShort", "HP"), player.health, L("sActionPointsShort", "AP"), player.actionPoints);
+        ImGuiWidgetUtils::DrawStatusArea("##PlayerFeedback", [&] {
+            ActionFeedback::Draw(state.admission, localize);
+            if (player.ready && player.session == view.session) ImGui::Text("%s: %d | %s: %.0f | %s: %.0f", localize("General", "sLevel", "Level"), player.level,
+                L("sHealthShort", "HP"), player.health, L("sActionPointsShort", "AP"), player.actionPoints);
+        });
         ImGui::BeginDisabled(!view.gameplayReady);
         if (ImGui::Button(L("sRefillHealth", "Refill Health"))) emit({.kind = ActionKind::RestoreHealth});
         ImGuiWidgetUtils::DrawWrappedSameLine(L("sToggleNoClip", "Toggle Noclip"));

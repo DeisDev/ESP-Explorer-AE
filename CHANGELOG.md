@@ -97,6 +97,8 @@ Target version: **1.6.0**.
 
 ### Fixed
 
+- Search-scope notices, search errors, and action or validation feedback keep
+  nearby controls in place across browsers, dialogs, and tool windows.
 - Plugin Diagnostics opens at a readable width when no plugin is selected,
   and stays within the screen when showing long diagnostic lists.
 - Right-clicking a Plugin Browser record opens only that record's context menu,

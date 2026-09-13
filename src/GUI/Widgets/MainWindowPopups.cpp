@@ -197,7 +197,7 @@ namespace ESPExplorerAE
         ImGui::InputFloat("##GlobalValue", &globalValuePopup.value, 1.0f, 10.0f, "%.3f");
         ImGui::Spacing();
         if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
-        ActionFeedback::Draw(globalValuePopup.admission, L);
+        ImGuiWidgetUtils::DrawStatusArea("##GlobalFeedback", [&] { ActionFeedback::Draw(globalValuePopup.admission, L); });
         const bool canApply = view.gameplayReady && std::isfinite(globalValuePopup.value) && !globalValuePopup.pending;
         ImGui::BeginDisabled(!canApply);
         bool firstButton = true;

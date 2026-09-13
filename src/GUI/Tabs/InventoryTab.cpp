@@ -637,7 +637,6 @@ namespace ESPExplorerAE
                         }
                         ImGui::EndCombo();
                     }
-                    if (!SelectedInstance(entry)) ImGui::TextWrapped("%s", L(context, "Inventory", "sInstanceRequired", "Choose an instance to equip, use, or duplicate. Removal applies to the group."));
                 }
             }
 
@@ -1193,10 +1192,13 @@ namespace ESPExplorerAE
                 // Reserve the scrollbar from the first frame: changing detail
                 // length must not rewrap controls a frame after selection.
                 if (ImGui::BeginChild("InventoryDetailPane", detailPaneSize, sideBySide, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
-                    if (state.selectionChanged) ImGui::TextWrapped("%s", L(context, "Inventory", "sSelectionChanged", "Inventory changed. Select the items again."));
-                    const auto feedback = InventoryFeedback::Message(state.rejection, context.localize);
-                    if (!feedback.empty()) ImGui::TextWrapped("%s", feedback.c_str());
-                    ActionFeedback::Draw(state.admission, context.localize);
+                    ImGuiWidgetUtils::DrawStatusArea("##InventoryFeedback", [&] {
+                        if (state.selectionChanged) ImGui::TextWrapped("%s", L(context, "Inventory", "sSelectionChanged", "Inventory changed. Select the items again."));
+                        const auto feedback = InventoryFeedback::Message(state.rejection, context.localize);
+                        if (!feedback.empty()) ImGui::TextWrapped("%s", feedback.c_str());
+                        ActionFeedback::Draw(state.admission, context.localize);
+                        if (selectedEntry && !selectedInstance) ImGui::TextWrapped("%s", L(context, "Inventory", "sInstanceRequired", "Choose an instance to equip, use, or duplicate. Removal applies to the group."));
+                    });
                     if (selectedEntry) {
                         DrawInventoryDetails(*selectedEntry, context);
                     } else {

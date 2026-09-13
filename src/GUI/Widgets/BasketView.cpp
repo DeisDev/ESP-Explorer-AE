@@ -36,12 +36,6 @@ namespace ESPExplorerAE
         if (ImGui::Begin(title.c_str(), &open, ImGuiWindowFlags_NoCollapse)) {
             if (ModalUtils::EscapeClosesCurrentWindow()) open = false;
             ImGui::TextWrapped("%s", localize("Workspace", "sBasketHint", "Base items only. Ammo is added per weapon entry, not per copy."));
-            if (state.full) ImGui::TextWrapped("%s", IssueText(KitIssue::Capacity, view));
-            if (state.submitted) {
-                ImGui::TextWrapped("%s", localize("Workspace", "sKitSubmitted", "Kit queued. Check Action History for results."));
-                if (ImGui::Button(localize("General", "sActionHistory", "Action History"))) requests.history = true;
-            }
-            if (state.admission != ActionAdmission::Accepted) ImGui::TextWrapped("%s", localize("Workspace", "sKitRejected", "Kit not queued. Review the items and try again when pending actions finish."));
             auto preview = ReviewItemKit(kit, *view.catalog, view.session, view.gameplayReady, pending, view.componentSubstitution);
             bool edited{};
             std::optional<std::size_t> remove;
@@ -50,8 +44,6 @@ namespace ESPExplorerAE
                     auto& entry = kit.entries[i]; ImGui::PushID(static_cast<int>(i));
                     const auto* row = i < preview.rows.size() ? &preview.rows[i] : nullptr;
                     if (ImGui::Selectable((entry.record.name.empty() ? entry.record.identity : entry.record.name).c_str()) && row && row->formID) requests.inspect.push_back(row->formID);
-                    if (entry.record.identity.empty()) ImGui::TextDisabled("%s", localize("Workspace", "sSessionOnly", "Session only; not restored as a target"));
-                    if (row && row->issue != KitIssue::None) ImGui::TextWrapped("%s", IssueText(row->issue, view));
                     int quantity = static_cast<int>(entry.quantity);
                     ImGui::SetNextItemWidth(150);
                     if (ImGui::InputInt(localize("General", "sQuantity", "Quantity"), &quantity)) { entry.quantity = static_cast<std::uint32_t>((std::clamp)(quantity, 1, static_cast<int>(ActionQueue::MaxQuantity))); edited = true; }
@@ -64,6 +56,10 @@ namespace ESPExplorerAE
                         }
                     }
                     if (ImGui::SmallButton(localize("General", "sRemove", "Remove"))) remove = i;
+                    ImGuiWidgetUtils::DrawStatusArea("##EntryFeedback", [&] {
+                        if (row && row->issue != KitIssue::None) ImGui::TextWrapped("%s", IssueText(row->issue, view));
+                        if (entry.record.identity.empty()) ImGui::TextDisabled("%s", localize("Workspace", "sSessionOnly", "Session only; not restored as a target"));
+                    });
                     ImGui::Separator(); ImGui::PopID();
                 }
             }
@@ -73,7 +69,6 @@ namespace ESPExplorerAE
             ImGui::Text("%s: %zu | %s: %llu | %s: %llu", localize("Workspace", "sEntries", "Entries"), kit.entries.size(),
                 localize("Workspace", "sItemTotal", "Item Total"), static_cast<unsigned long long>(preview.itemTotal),
                 localize("Workspace", "sAmmoTotal", "Ammo Total"), static_cast<unsigned long long>(preview.ammoTotal));
-            if (!preview) ImGui::TextWrapped("%s", IssueText(preview.issue, view));
             ImGui::InputText(localize("Workspace", "sKitName", "Kit Name"), state.name.data(), state.name.size());
             SearchBar::ReadControllerText(localize("Workspace", "sKitName", "Kit Name"), state.name.data(), state.name.size());
             ImGui::BeginDisabled(!preview);
@@ -86,7 +81,15 @@ namespace ESPExplorerAE
                 if (ImGui::Button(localize("General", "sRemove", "Remove"))) { kit.entries.clear(); state.reviewed.reset(); state.submitted = false; ImGui::CloseCurrentPopup(); }
                 ImGui::EndPopup();
             }
-            if (state.saveFailed) ImGui::TextWrapped("%s", localize("Workspace", "sSaveFailed", "Changes could not be saved. Check names, input limits, and workspace file access."));
+            ImGuiWidgetUtils::DrawWrappedSameLine(localize("General", "sActionHistory", "Action History"));
+            if (ImGui::Button(localize("General", "sActionHistory", "Action History"))) requests.history = true;
+            ImGuiWidgetUtils::DrawStatusArea("##BasketFeedback", [&] {
+                if (state.full) ImGui::TextWrapped("%s", IssueText(KitIssue::Capacity, view));
+                if (state.submitted) ImGui::TextWrapped("%s", localize("Workspace", "sKitSubmitted", "Kit queued. Check Action History for results."));
+                if (state.admission != ActionAdmission::Accepted) ImGui::TextWrapped("%s", localize("Workspace", "sKitRejected", "Kit not queued. Review the items and try again when pending actions finish."));
+                if (!preview) ImGui::TextWrapped("%s", IssueText(preview.issue, view));
+                if (state.saveFailed) ImGui::TextWrapped("%s", localize("Workspace", "sSaveFailed", "Changes could not be saved. Check names, input limits, and workspace file access."));
+            });
             const auto* viewport = ImGui::GetMainViewport();
             const ImVec2 maximum{viewport->WorkSize.x - 24, viewport->WorkSize.y - 24};
             const ModalUtils::PopupSizing sizing({(std::min)(620.0f, maximum.x), (std::min)(500.0f, maximum.y)}, {(std::min)(400.0f, maximum.x), (std::min)(300.0f, maximum.y)}, maximum, false);

@@ -22,7 +22,6 @@ namespace ESPExplorerAE
         if (!view.records.catalog) return;
         Context context{ state, view, requests };
         const auto& snapshot = view.records.catalog;
-        ActionFeedback::Draw(state.admission, view.records.localize);
         const auto& cache = *snapshot;
         const auto& plugins = snapshot->plugins;
         bool listFilterSettingsChanged = false;
@@ -71,6 +70,10 @@ namespace ESPExplorerAE
         ImGui::Checkbox(allLabel, &state.allRuntimeRecords);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", view.records.localize("PluginBrowser", "sAllRuntimeRecordsHint",
             "Shows hidden and excluded records here. Search and scope still apply."));
+        ImGuiWidgetUtils::DrawStatusArea("##BrowserFeedback", [&] {
+            ActionFeedback::Draw(state.admission, view.records.localize);
+            DrawSearchFeedback(state.structuredSearch, state.scope, state.search, view.records.localize);
+        });
         filter.showPlayable = context.view.records.filters.showPlayableRecords;
         filter.showNonPlayable = context.view.records.filters.showNonPlayableRecords;
         filter.showNamed = context.view.records.filters.showNamedRecords;

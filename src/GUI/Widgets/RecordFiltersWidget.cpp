@@ -332,7 +332,6 @@ namespace ESPExplorerAE
                         const bool enter = ImGui::InputTextWithHint("##AdvancedValue", localize("General", "sAdvancedFilterValueHint", "Value or pattern"),
                             editor.newValue, sizeof(editor.newValue), ImGuiInputTextFlags_EnterReturnsTrue);
                         const bool invalid = match == AdvancedFilterMatch::Regex && editor.newValue[0] && !AdvancedRecordFilters::IsRegexValid(editor.newValue);
-                        if (invalid) ImGui::TextWrapped("%s", localize("General", "sAdvancedFilterInvalidDraft", "Invalid regex. Correct the pattern before adding this rule."));
                         ImGui::TextDisabled("%s", localize("General", "sAdvancedFilterScope", "Scope"));
                         ImGui::SetNextItemWidth(-FLT_MIN);
                         DrawRuleScopeCombo(localize, "##NewRuleScope", editor.newTargetPlugins, editor);
@@ -362,6 +361,9 @@ namespace ESPExplorerAE
                         ImGuiWidgetUtils::SameLineIfFits(ImGui::GetFontSize() * 17);
                         ImGui::SetNextItemWidth((std::min)(ImGui::GetContentRegionAvail().x, ImGui::GetFontSize() * 17));
                         changed = DrawKeywordPicker(localize, idSuffix, state, editor) || changed;
+                        ImGuiWidgetUtils::DrawStatusArea("##DraftFeedback", [&] {
+                            if (invalid) ImGui::TextWrapped("%s", localize("General", "sAdvancedFilterInvalidDraft", "Invalid regex. Correct the pattern before adding this rule."));
+                        });
                         if (editor.previewRule) {
                             ImGui::Text("%zu %s", editor.previewCount, localize("General", "sPreviewRuleCount", "matching runtime records"));
                             if (ImGui::TreeNode("##PreviewSamples", "%s", localize("General", "sPreviewRuleSamples", "Sample matches"))) {
@@ -422,11 +424,13 @@ namespace ESPExplorerAE
                                 std::copy(rule.value.begin(), rule.value.end(), buffer.begin());
                                 ImGui::SetNextItemWidth(-FLT_MIN);
                                 if (ImGui::InputText("##Value", buffer.data(), buffer.size())) { rule.value = buffer.data(); changed = true; }
-                                if (rule.value.empty()) ImGui::TextWrapped("%s", localize("General", "sAdvancedFilterEmptyRule", "Enter a value to activate this rule."));
-                                else if (rule.match == AdvancedFilterMatch::Regex && !AdvancedRecordFilters::IsRegexValid(rule.value))
-                                    ImGui::TextWrapped("%s", localize("General", "sAdvancedFilterInvalidRule", "Invalid regex. This rule is ignored until the pattern is corrected."));
                                 ImGui::SetNextItemWidth(-FLT_MIN);
                                 changed = DrawRuleScopeCombo(localize, "##Scope", rule.targetPlugins, editor) || changed;
+                                ImGuiWidgetUtils::DrawStatusArea("##RuleFeedback", [&] {
+                                    if (rule.value.empty()) ImGui::TextWrapped("%s", localize("General", "sAdvancedFilterEmptyRule", "Enter a value to activate this rule."));
+                                    else if (rule.match == AdvancedFilterMatch::Regex && !AdvancedRecordFilters::IsRegexValid(rule.value))
+                                        ImGui::TextWrapped("%s", localize("General", "sAdvancedFilterInvalidRule", "Invalid regex. This rule is ignored until the pattern is corrected."));
+                                });
                             }
                             ImGui::EndChild();
                             ImGui::PopStyleColor();

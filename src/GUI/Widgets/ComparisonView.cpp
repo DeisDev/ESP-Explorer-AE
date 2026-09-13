@@ -1,6 +1,7 @@
 #include "GUI/Widgets/ComparisonView.h"
 #include "GUI/Widgets/ModalUtils.h"
 #include "GUI/Widgets/FormatUtils.h"
+#include "GUI/Widgets/ImGuiWidgetUtils.h"
 #include "Core/Workspace.h"
 #include <imgui.h>
 
@@ -18,7 +19,9 @@ namespace ESPExplorerAE
             if (!state.a || !state.b) ImGui::TextWrapped("%s", localize("Comparison", "sChooseTargets", "Choose Pin A on one record, then Compare B on another."));
             if (state.a && state.b) {
                 const auto& a = *state.a; const auto& b = *state.b;
-                if (a.session != view.session || b.session != view.session) ImGui::TextWrapped("%s", localize("Comparison", "sExpired", "Previous game session. Select both targets again to follow links."));
+                ImGuiWidgetUtils::DrawStatusArea("##ComparisonFeedback", [&] {
+                    if (a.session != view.session || b.session != view.session) ImGui::TextWrapped("%s", localize("Comparison", "sExpired", "Previous game session. Select both targets again to follow links."));
+                });
                 ImGui::Checkbox(localize("Comparison", "sDifferencesOnly", "Differences Only"), &state.differencesOnly);
                 const auto label = [&](ComparisonField field) {
                     switch (field) {

@@ -120,7 +120,7 @@ namespace ESPExplorerAE
         }
 
         const auto& style = ImGui::GetStyle();
-        ActionFeedback::Draw(state.admission, L);
+        ImGuiWidgetUtils::DrawStatusArea("##GrantFeedback", [&] { ActionFeedback::Draw(state.admission, L); });
 
         const auto drawQuantityButtons = [&](const char* id, auto&& apply) {
             ImGui::PushID(id);

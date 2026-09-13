@@ -1,4 +1,5 @@
 #include "GUI/Widgets/FavoritesPanel.h"
+#include "GUI/Widgets/ImGuiWidgetUtils.h"
 #include <imgui.h>
 
 namespace ESPExplorerAE
@@ -32,8 +33,10 @@ namespace ESPExplorerAE
             state.tokens = std::move(tokens);
         }
         ImGui::TextWrapped("%s", localize("Favorites", "sPersistence", "Missing favorites are kept until their plugins return."));
-        if (review.temporaryCount) ImGui::TextWrapped("%s: %zu", localize("Favorites", "sSessionOnly", "Favorites kept only for this session"), review.temporaryCount);
-        if (state.stale) ImGui::TextWrapped("%s", localize("Favorites", "sReviewChanged", "The favorite review changed. Select the entries again."));
+        ImGuiWidgetUtils::DrawStatusArea("##FavoriteFeedback", [&] {
+            if (state.stale) ImGui::TextWrapped("%s", localize("Favorites", "sReviewChanged", "The favorite review changed. Select the entries again."));
+            if (review.temporaryCount) ImGui::TextWrapped("%s: %zu", localize("Favorites", "sSessionOnly", "Favorites kept only for this session"), review.temporaryCount);
+        });
         if (!review.legacy.empty()) {
             ImGui::Separator();
             ImGui::TextWrapped("%s", localize("Favorites", "sLegacyReview", "Older favorites may match different records after load-order changes. Select only matches you recognize. Unselected entries are kept; settings are backed up."));

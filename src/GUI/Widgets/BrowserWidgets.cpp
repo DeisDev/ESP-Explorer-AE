@@ -3,6 +3,7 @@
 #include "Core/RecordActions.h"
 #include "GUI/Widgets/ActionFeedback.h"
 #include "GUI/Widgets/FormatUtils.h"
+#include "GUI/Widgets/ImGuiWidgetUtils.h"
 #include "GUI/Widgets/RecordFiltersWidget.h"
 #include "GUI/Widgets/SearchBar.h"
 #include "GUI/Widgets/SearchControls.h"
@@ -32,7 +33,10 @@ namespace ESPExplorerAE::BrowserWidgets
         }
         RecordFiltersWidget::DrawWhyHidden(view.localize, id, {filters.showNonPlayableRecords, filters.showUnnamedRecords, filters.showDeletedRecords,
             filters.advancedRecordFilters, filters.hiddenPlugins}, state.filterEditor, explanation, view.catalog);
-        ActionFeedback::Draw(state.admission, view.localize);
+        ImGuiWidgetUtils::DrawStatusArea("##BrowserFeedback", [&] {
+            ActionFeedback::Draw(state.admission, view.localize);
+            DrawSearchFeedback(state.structuredSearch, state.scope, state.search, view.localize);
+        });
         ImGui::Separator();
     }
 
