@@ -9,6 +9,7 @@ namespace ESPExplorerAE
     {
     public:
         static SettingsResources Read();
+        static std::string ToggleKeyName();
         static void Apply(std::optional<Settings> settings, bool reloadThemes);
         static void PumpRender();
         static void OpenPage(SettingsPage page);

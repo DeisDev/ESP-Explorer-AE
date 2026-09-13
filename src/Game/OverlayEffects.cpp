@@ -71,7 +71,8 @@ namespace ESPExplorerAE
     {
         auto* ui = RE::UI::GetSingleton();
         static const RE::BSFixedString powerArmorHUD("PowerArmorHUDMenu");
-        OverlayController::SetWorldState(BlockingMenu(ui), worldReady, ui && ui->GetMenuOpen(powerArmorHUD));
+        OverlayController::SetWorldState(BlockingMenu(ui), worldReady, ui && ui->GetMenuOpen(powerArmorHUD),
+            ui && ui->GetMenuOpen<RE::MainMenu>());
         Apply(OverlayController::Decision());
     }
 

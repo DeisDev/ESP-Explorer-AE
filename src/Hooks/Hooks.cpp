@@ -3,16 +3,19 @@
 
 #include "Config/Config.h"
 #include "App/ActionService.h"
+#include "App/CatalogService.h"
 #include "App/Lifecycle.h"
 #include "App/Profiler.h"
 #include "Core/Profiling.h"
 #include "App/SettingsService.h"
 #include "App/OverlayController.h"
 #include "Core/ScopeExit.h"
+#include "Core/ToggleHint.h"
 #include "Platform/SteamKeyboard.h"
 #include "Platform/HookTransaction.h"
 #include "GUI/ImGuiRenderer.h"
 #include "GUI/MainWindow.h"
+#include "GUI/Widgets/ToggleHintView.h"
 #include "Input/GamepadInput.h"
 
 #include <RE/B/BSGraphics.h>
@@ -43,6 +46,7 @@ namespace ESPExplorerAE
         HookTransaction hookTransaction;
         IDXGISwapChain* hookedSwapChain{};
         DWORD renderThread{};
+        ToggleHint toggleHint;
         std::atomic<bool> hooksReady{};
         std::atomic<ClipCursor_t> originalClipCursor{};
 
@@ -408,9 +412,19 @@ namespace ESPExplorerAE
                         }
                     }
                     UpdateCursorState();
-                    if (decision.render) {
+                    const auto hintOpacity = shutdown.Requested() ? 0.0f : toggleHint.Update(
+                        OverlayController::Facts(), CatalogService::Read()->ready, std::chrono::steady_clock::now());
+                    if (decision.render || hintOpacity > 0.0f) {
                         ImGuiRenderer::BeginFrame();
-                        MainWindow::Draw();
+                        if (decision.render) MainWindow::Draw();
+                        if (hintOpacity > 0.0f) {
+                            const auto localize = [](std::string_view section, std::string_view key, const char* fallback) {
+                                const auto text = Language::FrameText(section, key);
+                                return text.empty() ? fallback : text.data();
+                            };
+                            const auto key = GamepadInput::IsUsingGamepad() ? std::string(localize("Settings", "sToggleCombo", "RB + X")) : SettingsService::ToggleKeyName();
+                            ToggleHintView::Draw(key, hintOpacity, localize);
+                        }
                         ImGuiRenderer::EndFrame();
                     }
                     Profiler::SampleImGui();

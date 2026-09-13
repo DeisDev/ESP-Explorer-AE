@@ -22,12 +22,13 @@ namespace ESPExplorerAE
         facts.keyboardDialog = keyboardDialog;
     }
     void OverlayController::Configure(OverlaySettings value) { std::lock_guard lock(mutex); settings = value; }
-    void OverlayController::SetWorldState(bool blocked, bool ready, bool powerArmor)
+    void OverlayController::SetWorldState(bool blocked, bool ready, bool powerArmor, bool mainMenu)
     {
         std::lock_guard lock(mutex);
         facts.blocked = blocked;
         facts.worldReady = ready;
         facts.powerArmorHUD = powerArmor;
+        facts.mainMenu = mainMenu;
     }
     OverlayFacts OverlayController::Facts() { std::lock_guard lock(mutex); return facts; }
     OverlayDecision OverlayController::Decision() { std::lock_guard lock(mutex); return DecideOverlay(facts, settings); }

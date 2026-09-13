@@ -21,6 +21,7 @@ namespace ESPExplorerAE
         bool blocked{};
         bool worldReady{};
         bool powerArmorHUD{};
+        bool mainMenu{};
     };
 
     struct OverlayDecision

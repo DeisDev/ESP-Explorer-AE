@@ -8,6 +8,7 @@
 #include "Input/GamepadInput.h"
 #include "Localization/FontManager.h"
 #include "Localization/Language.h"
+#include "Platform/KeyNames.h"
 #include <REL/Version.h>
 #include <spdlog/spdlog.h>
 
@@ -23,17 +24,22 @@ namespace ESPExplorerAE
             return version ? version->string() : std::string{};
         }();
         static const auto modVersion = F4SE::GetPluginVersion().string();
+        return { ThemeStore::Snapshot(ThemeDiagnostic), languages, SettingsReader::Color(), ToggleKeyName(), gameVersion, modVersion, GamepadInput::IsGamepadConnected() };
+    }
+
+    std::string SettingsService::ToggleKeyName()
+    {
         static std::uint32_t namedKey{};
+        static HKL namedLayout{};
         static std::string keyName;
         const auto key = Config::Get().toggleKey;
-        if (namedKey != key) {
+        const auto layout = GetKeyboardLayout(0);
+        if (namedKey != key || namedLayout != layout) {
             namedKey = key;
-            const auto scanCode = MapVirtualKeyA(key, MAPVK_VK_TO_VSC);
-            char name[128]{};
-            const auto keyData = static_cast<LONG>(static_cast<LPARAM>(scanCode) << 16);
-            keyName = GetKeyNameTextA(keyData, name, static_cast<int>(std::size(name))) > 0 ? std::string(name) : std::to_string(key);
+            namedLayout = layout;
+            keyName = KeyboardKeyName(key);
         }
-        return { ThemeStore::Snapshot(ThemeDiagnostic), languages, SettingsReader::Color(), keyName, gameVersion, modVersion, GamepadInput::IsGamepadConnected() };
+        return keyName;
     }
 
     void SettingsService::Apply(std::optional<Settings> value, bool reloadThemes)

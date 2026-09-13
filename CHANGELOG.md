@@ -13,6 +13,8 @@ Target version: **1.6.0**.
 
 ### Added
 
+- A brief corner hint showing the menu toggle key once per game launch, when
+  the explorer is ready at the main menu or in a loaded game.
 - An All runtime records option in Plugin Browser, covering every captured
   record type while preserving shared visibility settings. Unnamed records
   display their EditorID when available, and empty plugins remain selectable.
