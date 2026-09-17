@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "Input/GamepadInput.h"
 #include "Platform/SteamKeyboard.h"
 
@@ -49,7 +50,7 @@ namespace ESPExplorerAE
 
     }
 
-    void GamepadInput::Poll(bool allowInput)
+    void GamepadInput::Poll(bool allowInput, bool keyboardMouseActivity)
     {
         EnsureXInputLoaded();
 
@@ -57,6 +58,7 @@ namespace ESPExplorerAE
         static bool loggedUsingGamepadState = false;
 
         static bool waitForRelease{};
+        static XINPUT_GAMEPAD previousInput{};
         menuTogglePressed = false;
         tabNextPressed = false;
         tabPrevPressed = false;
@@ -69,6 +71,7 @@ namespace ESPExplorerAE
             }
             gamepadConnected = false;
             usingGamepad = false;
+            previousInput = {};
             loggedConnectedState = false;
             loggedUsingGamepadState = false;
             return;
@@ -85,6 +88,7 @@ namespace ESPExplorerAE
             }
             gamepadConnected = false;
             usingGamepad = false;
+            previousInput = {};
             ImGui::GetIO().BackendFlags &= ~ImGuiBackendFlags_HasGamepad;
             prevRB = false;
             prevLB = false;
@@ -103,6 +107,19 @@ namespace ESPExplorerAE
         ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_HasGamepad;
 
         const WORD buttons = state.Gamepad.wButtons;
+        const auto& input = state.Gamepad;
+        const auto changedAxis = [](SHORT current, SHORT previous, SHORT deadzone) {
+            return current != previous && std::abs(static_cast<int>(current)) > deadzone;
+        };
+        const bool controllerActivity = (buttons & ~previousInput.wButtons) != 0 ||
+            (input.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD && input.bLeftTrigger != previousInput.bLeftTrigger) ||
+            (input.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD && input.bRightTrigger != previousInput.bRightTrigger) ||
+            changedAxis(input.sThumbLX, previousInput.sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) ||
+            changedAxis(input.sThumbLY, previousInput.sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE) ||
+            changedAxis(input.sThumbRX, previousInput.sThumbRX, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE) ||
+            changedAxis(input.sThumbRY, previousInput.sThumbRY, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
+        previousInput = input;
+        if (allowInput && keyboardMouseActivity) usingGamepad = false;
         if (!allowInput || waitForRelease) {
             UpdateImGuiNavInputs({});
             prevRB = false;
@@ -112,22 +129,13 @@ namespace ESPExplorerAE
             waitForRelease = !allowInput || buttons != 0;
             return;
         }
-        const bool anyButton = buttons != 0 ||
-            state.Gamepad.bLeftTrigger > 30 ||
-            state.Gamepad.bRightTrigger > 30 ||
-            std::abs(static_cast<int>(state.Gamepad.sThumbLX)) > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE ||
-            std::abs(static_cast<int>(state.Gamepad.sThumbLY)) > XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE ||
-            std::abs(static_cast<int>(state.Gamepad.sThumbRX)) > XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE ||
-            std::abs(static_cast<int>(state.Gamepad.sThumbRY)) > XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE;
-
-        if (anyButton) {
-            usingGamepad = true;
-        }
+        // Desktop events win when both devices are observed in the same frame.
+        if (!keyboardMouseActivity && controllerActivity) usingGamepad = true;
 
         if (usingGamepad && !loggedUsingGamepadState) {
             REX::DEBUG("{}", "Input mode switched to gamepad");
-            loggedUsingGamepadState = true;
         }
+        loggedUsingGamepadState = usingGamepad;
 
         const bool currentRB = (buttons & XINPUT_GAMEPAD_RIGHT_SHOULDER) != 0;
         const bool currentLB = (buttons & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0;
@@ -149,7 +157,7 @@ namespace ESPExplorerAE
         prevLB = currentLB;
         prevX = currentX;
 
-        UpdateImGuiNavInputs(state);
+        UpdateImGuiNavInputs(usingGamepad ? state : XINPUT_STATE{});
     }
 
     void GamepadInput::UpdateImGuiNavInputs(const XINPUT_STATE& state)

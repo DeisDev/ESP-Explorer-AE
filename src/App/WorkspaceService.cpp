@@ -60,6 +60,7 @@ namespace ESPExplorerAE
         if (saved) storageError.clear();
         return saved;
     }
+    bool WorkspaceService::HasPendingSave() { std::lock_guard lock(workspaceMutex); return schedule.IsDirty(); }
     bool WorkspaceService::Writable() { std::lock_guard lock(workspaceMutex); return writable; }
     std::string WorkspaceService::Error() { std::lock_guard lock(workspaceMutex); return storageError; }
 }

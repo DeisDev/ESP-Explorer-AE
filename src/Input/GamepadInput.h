@@ -15,7 +15,7 @@ namespace ESPExplorerAE
     class GamepadInput
     {
     public:
-        static void Poll(bool allowInput = true);
+        static void Poll(bool allowInput = true, bool keyboardMouseActivity = false);
         static bool WasMenuTogglePressed();
         static bool WasTabNextPressed();
         static bool WasTabPrevPressed();

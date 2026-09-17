@@ -10,6 +10,7 @@ namespace ESPExplorerAE
         static std::shared_ptr<const WorkspaceDocument> Read();
         static bool Commit(WorkspaceDocument document);
         static bool Flush(bool force = false);
+        static bool HasPendingSave();
         static bool Writable();
         static std::string Error();
     };

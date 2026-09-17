@@ -100,10 +100,11 @@ F4SE_PLUGIN_LOAD(const F4SE::LoadInterface* a_f4se)
         REX::WARN("Failed to load language file");
     }
 
-    if (const auto* messaging = F4SE::GetMessagingInterface()) {
-        if (!messaging->RegisterListener(MessageHandler)) {
-            REX::WARN("Failed to register F4SE messaging listener");
-        }
+    const auto* messaging = F4SE::GetMessagingInterface();
+    if (!messaging || messaging->Version() < F4SE::MessagingInterface::kVersion ||
+        !messaging->RegisterListener(MessageHandler)) {
+        REX::WARN("Required F4SE messaging listener unavailable; plugin load failed");
+        return false;
     }
 
     if (!ESPExplorerAE::ActionService::Initialize()) {

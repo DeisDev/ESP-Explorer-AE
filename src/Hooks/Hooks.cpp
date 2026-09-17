@@ -8,6 +8,7 @@
 #include "App/Profiler.h"
 #include "Core/Profiling.h"
 #include "App/SettingsService.h"
+#include "App/WorkspaceService.h"
 #include "App/OverlayController.h"
 #include "Core/ScopeExit.h"
 #include "Core/ToggleHint.h"
@@ -27,6 +28,7 @@
 #include <cstdlib>
 #include <deque>
 #include <mutex>
+#include <optional>
 #include <chrono>
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -53,6 +55,8 @@ namespace ESPExplorerAE
         std::mutex inputMutex;
         std::deque<MSG> inputMessages;
         bool inputResetRequested{};
+        bool keyboardMouseActivity{};
+        std::optional<LPARAM> lastMousePosition;
         std::atomic<std::uint32_t> toggleKey{ VK_INSERT };
         constexpr ULONG_PTR kReleaseInputTag = 0x4553504145494E50;
         std::array<bool, 256> trackedKeys{};
@@ -96,6 +100,33 @@ namespace ESPExplorerAE
             case WM_CHAR:
             case WM_SYSCHAR:
                 return true;
+            default:
+                return false;
+            }
+        }
+
+        bool IsKeyboardMouseActivity(UINT msg, WPARAM wParam, LPARAM lParam)
+        {
+            if (msg == WM_MOUSEMOVE) {
+                const bool moved = lastMousePosition && *lastMousePosition != lParam;
+                lastMousePosition = lParam;
+                return moved;
+            }
+            switch (msg) {
+            case WM_KEYDOWN:
+            case WM_SYSKEYDOWN:
+            case WM_LBUTTONDOWN:
+            case WM_LBUTTONDBLCLK:
+            case WM_RBUTTONDOWN:
+            case WM_RBUTTONDBLCLK:
+            case WM_MBUTTONDOWN:
+            case WM_MBUTTONDBLCLK:
+            case WM_XBUTTONDOWN:
+            case WM_XBUTTONDBLCLK:
+                return true;
+            case WM_MOUSEWHEEL:
+            case WM_MOUSEHWHEEL:
+                return GET_WHEEL_DELTA_WPARAM(wParam) != 0;
             default:
                 return false;
             }
@@ -236,6 +267,8 @@ namespace ESPExplorerAE
             trackedKeys.fill(false);
             trackedMouseButtons.fill(false);
             inputMessages.clear();
+            keyboardMouseActivity = false;
+            lastMousePosition.reset();
             PerformanceProfile().Observe(ProfileGauge::InputQueue, 0);
             inputResetRequested = true;
         }
@@ -345,10 +378,13 @@ namespace ESPExplorerAE
                     UpdateCursorState();
                     if (previousContext == ImGuiRenderer::GetContext()) previousContext = nullptr;
                     ImGuiRenderer::Shutdown(); // Attempts the pending save immediately, once.
+                    if (Config::HasPendingSave() || WorkspaceService::HasPendingSave()) {
+                        REX::WARN("Shutdown persistence is pending; retries continue while Present runs. Process exit may discard unsaved changes. Workspace error: {}", WorkspaceService::Error());
+                    }
                     Profiler::Stop();
                 }, [] {
                     Config::FlushPendingSaveIfDue(); // Failed writes retain their normal retry schedule.
-                    return !Config::HasPendingSave();
+                    return !Config::HasPendingSave() && !WorkspaceService::HasPendingSave();
                 });
                 ImGui::SetCurrentContext(previousContext);
                 restoreContext.Release();
@@ -377,7 +413,13 @@ namespace ESPExplorerAE
                 if (ready) {
                     ImGui::SetCurrentContext(ImGuiRenderer::GetContext());
                     const auto facts = OverlayController::Facts();
-                    GamepadInput::Poll(facts.focused && !facts.modal && !facts.keyboardDialog);
+                    bool desktopActivity;
+                    {
+                        std::lock_guard lock(inputMutex);
+                        desktopActivity = keyboardMouseActivity;
+                        keyboardMouseActivity = false;
+                    }
+                    GamepadInput::Poll(facts.focused && !facts.modal && !facts.keyboardDialog, desktopActivity);
                     if (!shutdown.Requested() && GamepadInput::WasMenuTogglePressed()) OverlayController::Toggle();
 
                     static bool lastVisible{};
@@ -492,6 +534,10 @@ namespace ESPExplorerAE
         else if (msg == WM_KILLFOCUS) UpdateWindowFocus(false);
         else if (IsInputMessage(msg)) RefreshWindowFocus(hwnd);
         const auto facts = OverlayController::Facts();
+        if (facts.focused && !facts.modal && !facts.keyboardDialog) {
+            std::lock_guard lock(inputMutex);
+            keyboardMouseActivity |= IsKeyboardMouseActivity(msg, wParam, lParam);
+        }
         if (msg == WM_KEYUP && wParam == toggleKey && facts.focused && !facts.modal && !facts.keyboardDialog &&
             static_cast<ULONG_PTR>(GetMessageExtraInfo()) != kReleaseInputTag) {
             OverlayController::Toggle();

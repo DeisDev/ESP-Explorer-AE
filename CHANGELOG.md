@@ -9,7 +9,7 @@ not yet been reconstructed from verified release records.
 
 ## [Unreleased]
 
-Target version: **1.6.0**.
+Target version: **2.0.0**.
 
 ### Added
 
@@ -97,6 +97,10 @@ Target version: **1.6.0**.
 
 ### Fixed
 
+- Unsaved workspace changes retain shutdown retries after a failed write.
+- Switching from controller to mouse or keyboard restores cursor, search focus,
+  input hints, and text-entry behavior without disconnecting the controller.
+- Plugin loading stops if the required F4SE messaging listener is unavailable.
 - Search-scope notices, search errors, and action or validation feedback keep
   nearby controls in place across browsers, dialogs, and tool windows.
 - Plugin Diagnostics opens at a readable width when no plugin is selected,
