@@ -2,6 +2,7 @@
 
 #include "GUI/Widgets/BrowserWidgets.h"
 #include "GUI/Widgets/ActionFeedback.h"
+#include "GUI/Widgets/FormatUtils.h"
 #include "GUI/Widgets/ImGuiWidgetUtils.h"
 #include "GUI/Widgets/SearchBar.h"
 
@@ -50,14 +51,20 @@ namespace ESPExplorerAE
         ImGui::SetNextItemWidth(360);
         ImGui::InputTextWithHint("##WeatherSearch", localize("General", "sSearch", "Search"), state.weatherSearch.data(), state.weatherSearch.size());
         SearchBar::ReadControllerText(localize("General", "sSearch", "Search"), state.weatherSearch.data(), state.weatherSearch.size());
+        const auto weatherLabel = [&](const FormEntry& weather) {
+            const auto name = !weather.name.empty() ? weather.name : !weather.editorID.empty() ? weather.editorID :
+                std::string(localize("General", "sUnnamed", "<Unnamed>"));
+            return name + " [" + FormatUtils::FormID(weather.formID) + "] " + weather.sourcePlugin;
+        };
         const auto* selected = view.catalog->Find(state.weather);
+        const auto preview = selected ? weatherLabel(*selected) : std::string(localize("General", "sNone", "None"));
         ImGui::SetNextItemWidth(360);
-        if (ImGui::BeginCombo("##Weather", selected ? selected->name.c_str() : localize("General", "sNone", "None"))) {
+        if (ImGui::BeginCombo("##Weather", preview.c_str())) {
             if (const auto found = view.catalog->byType.find("WTHR"); found != view.catalog->byType.end()) for (const auto index : found->second) {
                 const auto& weather = view.catalog->records[index];
-                if (!SearchContains(weather.name, state.weatherSearch.data()) && !SearchContains(weather.editorID, state.weatherSearch.data())) continue;
-                const auto label = (weather.name.empty() ? weather.editorID : weather.name) + "###" + std::to_string(weather.formID);
-                if (ImGui::Selectable(label.c_str(), state.weather == weather.formID)) state.weather = weather.formID;
+                const auto label = weatherLabel(weather);
+                if (!SearchContains(label, state.weatherSearch.data()) && !SearchContains(weather.editorID, state.weatherSearch.data())) continue;
+                if (ImGui::Selectable((label + "###" + std::to_string(weather.formID)).c_str(), state.weather == weather.formID)) state.weather = weather.formID;
             }
             ImGui::EndCombo();
         }

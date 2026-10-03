@@ -467,6 +467,7 @@ namespace ESPExplorerAE
         ImGui::PushID(idSuffix.data());
         if (ImGui::Button(localize("Search", "sWhyHidden", "Why Hidden?"))) ImGui::OpenPopup("WhyHidden");
         if (ImGui::BeginPopup("WhyHidden")) {
+            ImGuiWidgetUtils::PushPopupTextWrap();
             ImGui::SetNextItemWidth(220);
             ImGui::InputTextWithHint("##HiddenID", localize("Search", "sExactID", "Eight-digit FormID"), editor.hiddenFormID, sizeof(editor.hiddenFormID), ImGuiInputTextFlags_CharsHexadecimal);
             const auto id = ParseExactFormID(editor.hiddenFormID);
@@ -500,6 +501,7 @@ namespace ESPExplorerAE
                 }
                 if (!blocked) ImGui::TextWrapped("%s", localize("Search", "sNoGlobalExclusion", "No shared visibility rule excludes this record."));
             } else ImGui::TextWrapped("%s", localize("Search", "sRecordNotFound", "Enter a valid ID present in the current runtime catalog."));
+            ImGui::PopTextWrapPos();
             ImGui::EndPopup();
         }
         ImGui::PopID();

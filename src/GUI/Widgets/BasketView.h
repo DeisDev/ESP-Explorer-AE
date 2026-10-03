@@ -2,6 +2,8 @@
 #include "Core/ItemKit.h"
 #include "GUI/BrowserState.h"
 
+#include <span>
+
 namespace ESPExplorerAE
 {
     struct BasketViewState
@@ -18,8 +20,11 @@ namespace ESPExplorerAE
     {
         std::optional<KitReview> execute;
         std::optional<ItemKit> save;
+        std::optional<ItemKit> load;
+        bool replace{};
+        std::optional<std::string> removeKit;
         std::vector<std::uint32_t> inspect;
-        bool history{};
     };
-    void DrawBasketWindow(bool& open, BasketViewState& state, ItemKit& kit, const BrowserView& view, std::size_t pending, BasketRequests& requests);
+    void DrawBasketWindow(bool& open, BasketViewState& state, ItemKit& kit, std::span<const ItemKit> savedKits, bool writable,
+        const BrowserView& view, std::size_t pending, BasketRequests& requests);
 }

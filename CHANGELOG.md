@@ -25,11 +25,12 @@ Target version: **2.0.0**.
 - Structured search with explicit multi-plugin/collection scope, field and
   value suggestions, exact FormID and keyword lookup, numeric predicates,
   Unicode-aware ordinary search, and Why Hidden? explanations.
-- Saved Explore views, named collections with notes, and clipboard workspace
-  import/export with a missing-record preview. Portable record identities
-  survive load-order changes and retain unresolved entries.
-- A cross-page item basket and saved base-item kits with quantities, per-entry
-  ammunition, aggregate review, and grouped results in Action History.
+- Saved Explore views in the toolbar, named collections with notes and an Add
+  to Collection picker, and clipboard workspace import/export with a
+  missing-record preview. Portable record identities survive load-order
+  changes and retain unresolved entries.
+- A cross-page item basket with quantities, per-entry ammunition, Give All with
+  one confirmation, saved kits, and grouped results in Action History.
 - A Ctrl+K command palette and searchable keyboard/controller shortcut reference.
 - Base-record and chosen inventory-instance comparison with Differences Only
   and copying, plus navigable outfit, container, recipe, quest objective/alias,
@@ -94,9 +95,14 @@ Target version: **2.0.0**.
 - Status information and Action History share a compact footer.
 - Favorites now use plugin-relative identities. Legacy entries require review,
   with configuration backups before migration; unresolved favorites are retained.
+- The Getting Started guide now explains how to find records, use record
+  actions, and use keyboard and controller shortcuts.
 
 ### Fixed
 
+- Set Weather lists each weather by FormID and plugin instead of blank entries.
+- Short popups, such as Clear Basket, Delete Collection, and Why Hidden?, wrap
+  text at a readable width instead of growing tall and narrow.
 - Unsaved workspace changes retain shutdown retries after a failed write.
 - Switching from controller to mouse or keyboard restores cursor, search focus,
   input hints, and text-entry behavior without disconnecting the controller.

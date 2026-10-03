@@ -16,7 +16,7 @@ namespace ESPExplorerAE::MenuChrome
     struct ToolbarRequests
     {
         std::string_view page;
-        bool commands{}, basket{}, compare{}, sources{}, inspector{}, diagnostics{}, refresh{}, reset{};
+        bool views{}, commands{}, basket{}, compare{}, sources{}, inspector{}, diagnostics{}, refresh{}, reset{};
     };
     ToolbarRequests WorkspaceToolbar(std::span<const ToolbarPage> pages, std::size_t basketCount,
         bool explore, bool sourcesShown, bool inspectorShown, bool refreshing,

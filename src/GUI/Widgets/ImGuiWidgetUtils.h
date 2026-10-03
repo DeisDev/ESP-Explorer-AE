@@ -37,6 +37,8 @@ namespace ESPExplorerAE::ImGuiWidgetUtils
         float buttonWidth{ 0.0f };
     };
 
+    // Auto-sized popups have no width for wrapped text; pair with ImGui::PopTextWrapPos().
+    void PushPopupTextWrap();
     void DrawWrappedBullet(std::string_view text);
     bool DrawWrappedButton(const char* label, bool& firstInRow);
     bool DrawFixedGridButton(const char* label, bool& firstInRow, FixedGridButtonRow& row, int buttonsPerRow = 3, float minButtonWidth = 96.0f);

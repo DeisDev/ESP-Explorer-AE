@@ -37,6 +37,7 @@ namespace ESPExplorerAE::MenuChrome
             first = false;
         }
         const auto button = [&](const char* label) { return ImGuiWidgetUtils::DrawWrappedButton(label, first); };
+        if (explore) requests.views = button(localize("Workspace", "sSavedViews", "Saved Views"));
         requests.commands = button(localize("Workspace", "sCommandPalette", "Commands & Shortcuts"));
         requests.basket = button((std::string(localize("Workspace", "sBasket", "Basket")) + " (" + std::to_string(basketCount) + ")###OpenBasket").c_str());
         requests.compare = button(localize("Comparison", "sCompare", "Compare"));

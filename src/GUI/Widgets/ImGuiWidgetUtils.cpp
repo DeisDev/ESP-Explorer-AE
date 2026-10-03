@@ -29,6 +29,12 @@ namespace ESPExplorerAE::ImGuiWidgetUtils
             vertical ? ImVec2(center.x + 1.5f, center.y + half) : ImVec2(center.x + half, center.y + 1.5f), color, 2.0f);
     }
 
+    void PushPopupTextWrap()
+    {
+        const float available = ImGui::GetMainViewport()->WorkSize.x - ImGui::GetStyle().WindowPadding.x * 2.0f - 32.0f;
+        ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + (std::max)(1.0f, (std::min)(ImGui::GetFontSize() * 26.0f, available)));
+    }
+
     void DrawWrappedBullet(std::string_view text)
     {
         ImGui::Bullet();

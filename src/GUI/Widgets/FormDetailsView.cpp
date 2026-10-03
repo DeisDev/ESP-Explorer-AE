@@ -2,6 +2,7 @@
 #include "Core/Workspace.h"
 #include "GUI/Widgets/FormDetailsView.h"
 #include "GUI/Widgets/FormatUtils.h"
+#include "GUI/Widgets/ImGuiWidgetUtils.h"
 #include "Input/GamepadInput.h"
 
 #include <imgui.h>
@@ -101,7 +102,11 @@ namespace ESPExplorerAE
                 if (ImGui::BeginPopupContextItem("ReferenceMenu")) {
                     if (ImGui::MenuItem(context.localize("General", "sOpen", "Open"), nullptr, false, available)) context.open(form.formID);
                     if (context.pin && ImGui::MenuItem(context.localize("General", "sPin", "Pin"), nullptr, false, available && context.canPin)) context.pin(form.formID);
-                    if (context.pin && !context.canPin) ImGui::TextWrapped("%s", context.localize("FormDetails", "sPinLimit", "Three inspectors are pinned. Close one before pinning another."));
+                    if (context.pin && !context.canPin) {
+                        ImGuiWidgetUtils::PushPopupTextWrap();
+                        ImGui::TextWrapped("%s", context.localize("FormDetails", "sPinLimit", "Three inspectors are pinned. Close one before pinning another."));
+                        ImGui::PopTextWrapPos();
+                    }
                     if (ImGui::MenuItem(context.localize("General", "sCopyIdentity", "Copy Identity"))) {
                         const auto target = context.catalog ? FavoriteIdentity(*context.catalog).Capture(form.formID) : FavoriteTarget{};
                         const auto identity = target.key ? SerializeFavoriteKey(*target.key) : std::string(context.localize("Workspace", "sSessionOnly", "Session only; not restored as a target")) + ": " + FormatUtils::FormID(form.formID);

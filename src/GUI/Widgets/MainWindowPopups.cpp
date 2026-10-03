@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 #include <utility>
 
 namespace ESPExplorerAE
@@ -242,49 +243,49 @@ namespace ESPExplorerAE
             return;
         }
 
-        const auto toggleKeyName = view.toggleKeyName;
-        const auto toggleHelp = ResolveString(view.localize, "Settings", "sToggleKey", "Toggle Key");
-        const auto helpTitle = ResolveString(view.localize, "General", "sHelpOverlayTitle", "Getting Started");
-        const auto closeLabel = ResolveString(view.localize, "General", "sCloseHelpOverlay", "Start Exploring");
-        ImGui::TextUnformatted(helpTitle);
+        const auto L = [&](std::string_view key, const char* fallback) { return ResolveString(view.localize, "General", key, fallback); };
+        const auto closeLabel = L("sCloseHelpOverlay", "Start Exploring");
+        ImGui::TextUnformatted(L("sHelpOverlayTitle", "Getting Started"));
+        ImGui::PushTextWrapPos(0.0f);
+        ImGui::TextDisabled("%s", L("sHelpOverlayIntro", "Browse the records in your load order, then inspect, give, or spawn them."));
+        ImGui::PopTextWrapPos();
         ImGui::Separator();
+
+        std::string toggle = L("sHelpOverlayToggleBody", "{key} or {pad}: Open or close the menu");
+        const auto replace = [&](std::string_view token, std::string_view value) {
+            for (std::size_t offset = 0; (offset = toggle.find(token, offset)) != std::string::npos; offset += value.size()) toggle.replace(offset, token.size(), value);
+        };
+        replace("{key}", view.toggleKeyName);
+        replace("{pad}", ResolveString(view.localize, "Settings", "sToggleCombo", "RB + X"));
 
         const float buttonHeight = ImGui::GetFrameHeightWithSpacing();
         const float contentHeight = (std::max)(1.0f, ImGui::GetContentRegionAvail().y - buttonHeight - ImGui::GetStyle().ItemSpacing.y * 2.0f);
         if (ImGui::BeginChild("##HelpOverlayContent", ImVec2(0.0f, contentHeight), false, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
-            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x);
-            ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlayHotkeys", "Hotkeys"));
-            ImGuiWidgetUtils::DrawWrappedBullet(std::string(toggleHelp) + ": " + toggleKeyName);
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayFocusSearch", "Ctrl+F: Focus the active search field"));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayHotkeysBody", "Press the toggle key to open or close the menu."));
+            ImGui::SeparatorText(L("sHelpOverlayFind", "Find Records"));
+            ImGuiWidgetUtils::DrawWrappedBullet(L("sHelpOverlaySectionsBody", "Pick Explore, Inventory, Player & World, or Tools at the top."));
+            ImGuiWidgetUtils::DrawWrappedBullet(L("sHelpOverlayBrowserBody", "In Explore, use the list below the sections to pick a browser, such as Items or NPCs."));
+            ImGuiWidgetUtils::DrawWrappedBullet(L("sHelpOverlayTypeSearchBody", "Type in the search bar to filter the results."));
+            ImGuiWidgetUtils::DrawWrappedBullet(L("sHelpOverlaySearchBody", "Search all plugins, selected plugins, or a collection using the scope menu."));
 
-            ImGui::Spacing();
-            ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlayFilters", "Filters"));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayFiltersBody", "Plugin filters choose sources; record filters control which records appear."));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlaySearchBody", "Search all plugins, selected plugins, or a collection using the scope menu."));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayRuntimeRecordsBody", "Shows loaded game data, which may differ from xEdit."));
+            ImGui::SeparatorText(L("sHelpOverlayUse", "Use Records"));
+            ImGuiWidgetUtils::DrawWrappedBullet(L("sHelpOverlayInspectBody", "Click a record to see its details in the inspector."));
+            ImGuiWidgetUtils::DrawWrappedBullet(L("sHelpOverlayContextBody", "Right-click a record for actions such as Give Item, Spawn At Player, or Add Favorite."));
+            ImGuiWidgetUtils::DrawWrappedBullet(L("sHelpOverlayBasketBody", "Add to Basket collects items so you can give them together."));
+            ImGuiWidgetUtils::DrawWrappedBullet(L("sHelpOverlayConfirmBody", "Important actions ask you to confirm first."));
+            ImGuiWidgetUtils::DrawWrappedBullet(L("sHelpOverlayHistoryBody", "Action History shows recent requests and their observed results."));
 
-            ImGui::Spacing();
-            ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlayFavorites", "Favorites And Recent"));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayFavoritesBody", "Right-click a record to save it as a favorite."));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayRecentBody", "Recent Records lets you revisit recently inspected records."));
+            ImGui::SeparatorText(L("sHelpOverlayHotkeys", "Hotkeys"));
+            ImGuiWidgetUtils::DrawWrappedBullet(toggle);
+            ImGuiWidgetUtils::DrawWrappedBullet(L("sHelpOverlayCommandsBody", "Ctrl+K: Open commands and shortcuts"));
+            ImGuiWidgetUtils::DrawWrappedBullet(L("sHelpOverlayFocusSearch", "Ctrl+F: Focus the active search field"));
+            ImGuiWidgetUtils::DrawWrappedBullet(L("sHelpOverlayRowMenuBody", "Shift+F10 or X: Open actions for the selected row"));
+            ImGuiWidgetUtils::DrawWrappedBullet(L("sHelpOverlayGamepadTabsBody", "LB / RB: Switch sections with a controller"));
 
-            ImGui::Spacing();
-            ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlayAdvancedFilters", "Advanced Filters"));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayAdvancedFiltersBody", "Use Advanced Filters to hide matching records across browsers. Rules can target specific plugins."));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayAdvancedFiltersExampleBody", "Example: hide records containing 'SS2_Tag_'."));
-
-            ImGui::Spacing();
-            ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlayInventory", "Inventory Tab"));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayInventoryBody", "Filter and sort your inventory. Choose an instance to equip or use; open Actions to change quantities, drop, or remove."));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayInventoryComponentBody", "Components are given as crafting scrap. Change this in Settings > Gameplay."));
-
-            ImGui::Spacing();
-            ImGui::TextDisabled("%s", ResolveString(view.localize, "General", "sHelpOverlaySafeActions", "Safe Actions"));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlaySafeActionsBody", "Viewing details, copying IDs, and filtering are safe. Give, spawn, and teleport actions are explicit and important actions ask for confirmation."));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayMainMenuActionsBody", "Main menu gameplay actions are disabled by default; enabling them may cause crashes."));
-            ImGuiWidgetUtils::DrawWrappedBullet(ResolveString(view.localize, "General", "sHelpOverlayHistoryBody", "Action History shows recent requests and their observed results."));
-            ImGui::PopTextWrapPos();
+            ImGui::SeparatorText(L("sHelpOverlayTips", "Good to Know"));
+            ImGuiWidgetUtils::DrawWrappedBullet(L("sHelpOverlayLoadSaveBody", "Load a save to use gameplay actions."));
+            ImGuiWidgetUtils::DrawWrappedBullet(L("sHelpOverlayRuntimeRecordsBody", "Shows loaded game data, which may differ from xEdit."));
+            ImGuiWidgetUtils::DrawWrappedBullet(L("sHelpOverlayAdvancedFiltersBody", "Use Advanced Filters to hide matching records across browsers. Rules can target specific plugins."));
+            ImGuiWidgetUtils::DrawWrappedBullet(L("sHelpOverlayReopenBody", "Reopen this guide anytime from Settings."));
         }
         ImGui::EndChild();
 

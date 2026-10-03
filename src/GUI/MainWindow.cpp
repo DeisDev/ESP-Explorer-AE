@@ -137,6 +137,7 @@ namespace ESPExplorerAE
             basketView.reviewed.reset();
             basketView.submitted = false;
             workspaceView.collect.clear();
+            workspaceView.collectRequested = false;
             playerWorld = {};
         }
 
@@ -199,7 +200,7 @@ namespace ESPExplorerAE
             ImGui::TextUnformatted(L("General", "sSourcesViews", "Sources/Views"));
             auto& scope = ActiveScope();
             WorkspaceViewRequests requests;
-            DrawWorkspaceSources(workspaceView, *WorkspaceService::Read(), scope, InspectorContext(CatalogService::Read()), requests);
+            DrawWorkspaceSources(workspaceView, *WorkspaceService::Read(), scope, InspectorContext(CatalogService::Read()), WorkspaceService::Writable(), requests);
             HandleWorkspaceRequests(requests);
             if (ImGui::Selectable(L("Search", "sAllPlugins", "All Plugins"), scope.kind == SearchScope::AllPlugins)) scope.kind = SearchScope::AllPlugins;
             ImGui::SetNextItemWidth(-1);
@@ -513,19 +514,32 @@ namespace ESPExplorerAE
 
         void HandleWorkspaceRequests(WorkspaceViewRequests& requests)
         {
+            if (requests.update) workspaceView.failed = !WorkspaceService::Commit(std::move(*requests.update));
             if (requests.restore) RestoreLocation(*requests.restore);
             for (auto id : requests.inspect) { OpenInspector(id); inspectorTool = true; inspector.focusPending = true; }
-            if (requests.loadKit) {
-                if (basket.entries.size() + requests.loadKit->entries.size() > ActionQueue::Capacity) {
-                    basketView.full = true; basketOpen = true; return;
-                }
-                if (basket.entries.empty()) {
-                    basket = std::move(*requests.loadKit);
-                    std::snprintf(basketView.name.data(), basketView.name.size(), "%s", basket.name.c_str());
-                }
-                else basket.entries.insert(basket.entries.end(), requests.loadKit->entries.begin(), requests.loadKit->entries.end());
-                basketOpen = true; basketView.submitted = false; basketView.reviewed.reset(); basketView.focusPending = true;
+            for (auto* scope : {&pluginBrowser.scope, &itemBrowser.scope, &npcBrowser.browser.scope, &cellBrowser.scope, &objectBrowser.scope, &spellPerkBrowser.scope}) {
+                if (scope->kind != SearchScope::Collection) continue;
+                if (requests.renamedCollection && scope->collection == requests.renamedCollection->first) scope->collection = requests.renamedCollection->second;
+                if (requests.deletedCollection && scope->collection == *requests.deletedCollection) { scope->kind = SearchScope::AllPlugins; scope->collection.clear(); scope->records.clear(); }
             }
+            if (requests.searchCollection) {
+                if (DestinationFor(activeMainTab) != WorkspaceDestination::Explore) requestedMainTab = "Plugin Browser";
+                auto& scope = ActiveScope();
+                scope.kind = SearchScope::Collection;
+                scope.collection = *requests.searchCollection;
+                ResolveCollectionScope(scope, *WorkspaceService::Read(), *CatalogService::Read(), ActionService::Session());
+            }
+            if (requests.manage) { workspaceView.open = true; workspaceView.focusPending = true; }
+        }
+
+        void LoadKit(const ItemKit& kit, bool replace)
+        {
+            if ((replace ? 0 : basket.entries.size()) + kit.entries.size() > ActionQueue::Capacity) { basketView.full = true; return; }
+            if (replace) {
+                basket = kit;
+                std::snprintf(basketView.name.data(), basketView.name.size(), "%s", kit.name.c_str());
+            } else basket.entries.insert(basket.entries.end(), kit.entries.begin(), kit.entries.end());
+            basketView.full = false; basketView.submitted = false; basketView.reviewed.reset();
         }
 
         void HandleBrowserRequests(BrowserRequests& requests, ActionAdmission& admission)
@@ -564,7 +578,7 @@ namespace ESPExplorerAE
             }
             if (!requests.collections.empty()) {
                 workspaceView.collect = requests.collections;
-                workspaceView.open = true; workspaceView.focusPending = true;
+                workspaceView.collectRequested = true;
             }
             for (auto id : requests.basket) {
                 auto record = CaptureWorkspaceRecord(*workspaceCatalog, id, workspaceSession);
@@ -1085,6 +1099,12 @@ namespace ESPExplorerAE
                 if (toolbar.diagnostics) { diagnosticsOpen = true; diagnosticsFocus = true; }
                 if (toolbar.refresh) refreshDataRequested = true;
                 if (toolbar.reset) ResetCurrentView();
+                if (toolbar.views) ImGui::OpenPopup("SavedViewsMenu");
+                if (ImGui::IsPopupOpen("SavedViewsMenu")) {
+                    WorkspaceViewRequests requests;
+                    DrawSavedViewsMenu(workspaceView, *WorkspaceService::Read(), CaptureLocation(), InspectorContext(catalog), WorkspaceService::Writable(), requests);
+                    HandleWorkspaceRequests(requests);
+                }
                 if (DestinationFor(activeMainTab) == WorkspaceDestination::Explore) {
                     const bool sourcePane = sourcesOpen && ImGui::GetContentRegionAvail().x >= 1000.0f;
                     if (sourcePane) {
@@ -1257,10 +1277,13 @@ namespace ESPExplorerAE
 
             if (workspaceView.open) {
                 workspaceView.storageFailed = WorkspaceService::Writable() && !WorkspaceService::Error().empty();
-                auto document = *WorkspaceService::Read();
                 WorkspaceViewRequests requests;
-                DrawWorkspaceWindow(workspaceView, document, CaptureLocation(), InspectorContext(catalog), WorkspaceService::Writable(), requests);
-                if (requests.changed) workspaceView.failed = !WorkspaceService::Commit(std::move(document));
+                DrawCollectionsWindow(workspaceView, *WorkspaceService::Read(), InspectorContext(catalog), WorkspaceService::Writable(), requests);
+                HandleWorkspaceRequests(requests);
+            }
+            {
+                WorkspaceViewRequests requests;
+                DrawAddToCollectionPopup(workspaceView, *WorkspaceService::Read(), InspectorContext(catalog), WorkspaceService::Writable(), requests);
                 HandleWorkspaceRequests(requests);
             }
             {
@@ -1273,7 +1296,7 @@ namespace ESPExplorerAE
                 commands.push_back({WorkspaceCommandKind::Destination, L("General", "sPlayerWorld", "Player & World"), "", "Player & World"});
                 for (const auto& saved : commandWorkspace->views) commands.push_back({WorkspaceCommandKind::SavedView, saved.name, "", saved.name});
                 commands.push_back({WorkspaceCommandKind::Basket, L("Workspace", "sBasket", "Basket")});
-                commands.push_back({WorkspaceCommandKind::Collections, L("Workspace", "sManage", "Views & Collections")});
+                commands.push_back({WorkspaceCommandKind::Collections, L("Workspace", "sCollections", "Collections")});
                 commands.push_back({WorkspaceCommandKind::History, L("General", "sActionHistory", "Action History")});
                 commands.push_back({WorkspaceCommandKind::AddSelection, L("Workspace", "sAddToBasket", "Add to Basket"), "", "",
                     !CaptureLocation().selection.empty(), L("Workspace", "sSelectResults", "Select records in the current results first.")});
@@ -1325,14 +1348,21 @@ namespace ESPExplorerAE
             }
             if (basketOpen) {
                 BasketRequests requests;
-                DrawBasketWindow(basketOpen, basketView, basket, InspectorContext(catalog), ActionService::PendingCount(), requests);
+                const auto basketWorkspace = WorkspaceService::Read();
+                DrawBasketWindow(basketOpen, basketView, basket, basketWorkspace->kits, WorkspaceService::Writable(), InspectorContext(catalog), ActionService::PendingCount(), requests);
                 for (auto id : requests.inspect) { OpenInspector(id); inspectorTool = true; inspector.focusPending = true; }
-                if (requests.history) { actionHistory.open = true; actionHistory.focusPending = true; }
+                if (requests.load) LoadKit(*requests.load, requests.replace);
                 if (requests.save) {
-                    auto document = *WorkspaceService::Read();
-                    const bool unique = std::ranges::none_of(document.kits, [&](const auto& kit) { return FoldSearchText(kit.name) == FoldSearchText(requests.save->name); });
-                    if (unique) document.kits.push_back(std::move(*requests.save));
-                    basketView.saveFailed = !unique || !WorkspaceService::Commit(std::move(document));
+                    auto document = *basketWorkspace;
+                    const auto found = std::ranges::find_if(document.kits, [&](const auto& kit) { return FoldSearchText(kit.name) == FoldSearchText(requests.save->name); });
+                    if (found != document.kits.end()) *found = std::move(*requests.save);
+                    else document.kits.push_back(std::move(*requests.save));
+                    basketView.saveFailed = !WorkspaceService::Commit(std::move(document));
+                }
+                if (requests.removeKit) {
+                    auto document = *basketWorkspace;
+                    std::erase_if(document.kits, [&](const auto& kit) { return kit.name == *requests.removeKit; });
+                    basketView.saveFailed = !WorkspaceService::Commit(std::move(document));
                 }
                 if (requests.execute && !basketView.submitted) {
                     const auto review = ReviewItemKit(basket, *CatalogService::Read(), ActionService::Session(), ActionService::IsReady(), ActionService::PendingCount(), settings.componentSubstitution);
